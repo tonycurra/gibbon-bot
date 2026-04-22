@@ -13,38 +13,38 @@
   <hfield name="terrain" nrow="64" ncol="64" size="5 5 0.5 0.05" /><texture name="grass" type="2d" builtin="checker" rgb1="0.18 0.42 0.09" rgb2="0.28 0.55 0.14" width="512" height="512" /><material name="grass_mat" texture="grass" texrepeat="6 6" reflectance="0.05" /></asset>
 
   <worldbody>
-    <geom name="terrain" type="hfield" hfield="terrain" material="grass_mat" condim="3" friction="1.2 0.005 0.0001" /><body name="torso">
+    <geom name="terrain" type="hfield" hfield="terrain" material="grass_mat" condim="4" friction="2.0 0.01 0.001" /><body name="torso">
       <inertial pos="-0.0287489 0 -0.0151843" quat="0.698768 0.698768 0.108273 -0.108273" mass="2.02487" diaginertia="0.031335 0.0283449 0.0218356" />
       <joint name="world_to_torso" type="free" />
-      <geom size="0.15 0.1 0.05" type="box" rgba="0.3 0.3 0.3 1" />
-      <geom pos="0.12 0.1 -0.05" quat="0.707105 0 0.707108 0" type="mesh" rgba="0.75 0.75 0.75 1" mesh="base_link" />
-      <geom pos="0.12 -0.1 -0.05" quat="0.707105 0 0.707108 0" type="mesh" rgba="0.75 0.75 0.75 1" mesh="base_link" />
-      <geom pos="-0.12 0.1 -0.05" quat="0.707105 0 -0.707108 0" type="mesh" rgba="0.75 0.75 0.75 1" mesh="base_link" />
-      <geom pos="-0.12 -0.1 -0.05" quat="0.707105 0 -0.707108 0" type="mesh" rgba="0.75 0.75 0.75 1" mesh="base_link" />
+      <geom size="0.15 0.1 0.05" type="box" rgba="0.3 0.3 0.3 1" class="robot" />
+      <geom pos="0.12 0.1 -0.05" quat="0.707105 0 0.707108 0" type="mesh" rgba="0.75 0.75 0.75 1" mesh="base_link" class="robot" />
+      <geom pos="0.12 -0.1 -0.05" quat="0.707105 0 0.707108 0" type="mesh" rgba="0.75 0.75 0.75 1" mesh="base_link" class="robot" />
+      <geom pos="-0.12 0.1 -0.05" quat="0.707105 0 -0.707108 0" type="mesh" rgba="0.75 0.75 0.75 1" mesh="base_link" class="robot" />
+      <geom pos="-0.12 -0.1 -0.05" quat="0.707105 0 -0.707108 0" type="mesh" rgba="0.75 0.75 0.75 1" mesh="base_link" class="robot" />
       <body name="fl_link1" pos="0.12 0.1 -0.05" quat="0.707105 0 0.707108 0">
         <inertial pos="0 0 0.037" quat="0.5 0.5 -0.5 0.5" mass="0.0729177" diaginertia="5.01023e-05 4.68465e-05 3.32107e-05" />
         <joint name="fl_base_link_to_link1" pos="0 0 0" axis="0 0 1" range="-3.1416 3.1416" actuatorfrcrange="-2.94 2.94" damping="2" />
-        <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link1" />
+        <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link1" class="robot" />
         <body name="fl_link2" pos="0 0 0.051959" quat="0.499998 -0.5 -0.5 -0.500002">
           <inertial pos="0.119 0.012247 -0.0001" quat="0.5 0.5 0.5 0.5" mass="0.0703216" diaginertia="0.000423091 0.000404557 5.46501e-05" />
           <joint name="fl_link1_to_link2" pos="0 0 0" axis="0 0 1" range="-1.5708 1.5708" actuatorfrcrange="-2.94 2.94" damping="2" />
-          <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link2" />
+          <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link2" class="robot" />
           <body name="fl_link3" pos="0.236815 0.030002 0" quat="0.707105 0 0 0.707108">
             <inertial pos="-0.0015 -0.0765 0.00505" quat="0.707107 0.707107 0 0" mass="0.021608" diaginertia="6.37699e-05 6.28965e-05 3.67026e-06" />
             <joint name="fl_link2_to_link3" pos="0 0 0" axis="0 0 1" range="-1 2.95" actuatorfrcrange="-2.94 2.94" damping="2" />
-            <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link3" />
+            <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link3" class="robot" />
             <body name="fl_link4" pos="0 -0.144586 0">
               <inertial pos="-0.0015 -0.022 -0.00075" quat="0.5 0.5 -0.5 0.5" mass="0.0099933" diaginertia="5.60238e-06 4.53979e-06 3.78103e-06" />
               <joint name="fl_link3_to_link4" pos="0 0 0" axis="0 0 1" range="-1.5708 1.5708" actuatorfrcrange="-2.94 2.94" damping="2" />
-              <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link4" />
+              <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link4" class="robot" />
               <body name="fl_link5" pos="0.015147 -0.053653 0" quat="0.499998 0.5 0.5 -0.500002">
                 <inertial pos="-0.0078 0 0.0595" quat="0.707107 0 0 0.707107" mass="0.0153928" diaginertia="2.14427e-05 2.02869e-05 4.39495e-06" />
                 <joint name="fl_link4_to_link5" pos="0 0 0" axis="0 0 1" range="-3.1416 3.1416" actuatorfrcrange="-2.94 2.94" damping="2" />
-                <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link5" />
+                <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link5" class="robot" />
                 <body name="fl_gripper_link" pos="0 0.018821 0.052035" quat="0.499998 -0.5 -0.5 -0.500002">
                   <inertial pos="0.027 0.0027 -0.018935" quat="0.5 0.5 0.5 0.5" mass="0.0028708" diaginertia="1.82071e-06 1.60231e-06 5.23216e-07" />
                   <joint name="fl_link5_to_gripper_link" pos="0 0 0" axis="0 0 1" range="0 1.5" actuatorfrcrange="-1.47 1.47" damping="2" />
-                  <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="gripper_link" />
+                  <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="gripper_link" class="robot" />
                 </body>
               </body>
             </body>
@@ -54,27 +54,27 @@
       <body name="fr_link1" pos="0.12 -0.1 -0.05" quat="0.707105 0 0.707108 0">
         <inertial pos="0 0 0.037" quat="0.5 0.5 -0.5 0.5" mass="0.0729177" diaginertia="5.01023e-05 4.68465e-05 3.32107e-05" />
         <joint name="fr_base_link_to_link1" pos="0 0 0" axis="0 0 1" range="-3.1416 3.1416" actuatorfrcrange="-2.94 2.94" damping="2" />
-        <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link1" />
+        <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link1" class="robot" />
         <body name="fr_link2" pos="0 0 0.051959" quat="0.499998 -0.5 -0.5 -0.500002">
           <inertial pos="0.119 0.012247 -0.0001" quat="0.5 0.5 0.5 0.5" mass="0.0703216" diaginertia="0.000423091 0.000404557 5.46501e-05" />
           <joint name="fr_link1_to_link2" pos="0 0 0" axis="0 0 1" range="-1.5708 1.5708" actuatorfrcrange="-2.94 2.94" damping="2" />
-          <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link2" />
+          <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link2" class="robot" />
           <body name="fr_link3" pos="0.236815 0.030002 0" quat="0.707105 0 0 0.707108">
             <inertial pos="-0.0015 -0.0765 0.00505" quat="0.707107 0.707107 0 0" mass="0.021608" diaginertia="6.37699e-05 6.28965e-05 3.67026e-06" />
             <joint name="fr_link2_to_link3" pos="0 0 0" axis="0 0 1" range="-1 2.95" actuatorfrcrange="-2.94 2.94" damping="2" />
-            <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link3" />
+            <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link3" class="robot" />
             <body name="fr_link4" pos="0 -0.144586 0">
               <inertial pos="-0.0015 -0.022 -0.00075" quat="0.5 0.5 -0.5 0.5" mass="0.0099933" diaginertia="5.60238e-06 4.53979e-06 3.78103e-06" />
               <joint name="fr_link3_to_link4" pos="0 0 0" axis="0 0 1" range="-1.5708 1.5708" actuatorfrcrange="-2.94 2.94" damping="2" />
-              <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link4" />
+              <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link4" class="robot" />
               <body name="fr_link5" pos="0.015147 -0.053653 0" quat="0.499998 0.5 0.5 -0.500002">
                 <inertial pos="-0.0078 0 0.0595" quat="0.707107 0 0 0.707107" mass="0.0153928" diaginertia="2.14427e-05 2.02869e-05 4.39495e-06" />
                 <joint name="fr_link4_to_link5" pos="0 0 0" axis="0 0 1" range="-3.1416 3.1416" actuatorfrcrange="-2.94 2.94" damping="2" />
-                <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link5" />
+                <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link5" class="robot" />
                 <body name="fr_gripper_link" pos="0 0.018821 0.052035" quat="0.499998 -0.5 -0.5 -0.500002">
                   <inertial pos="0.027 0.0027 -0.018935" quat="0.5 0.5 0.5 0.5" mass="0.0028708" diaginertia="1.82071e-06 1.60231e-06 5.23216e-07" />
                   <joint name="fr_link5_to_gripper_link" pos="0 0 0" axis="0 0 1" range="0 1.5" actuatorfrcrange="-1.47 1.47" damping="2" />
-                  <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="gripper_link" />
+                  <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="gripper_link" class="robot" />
                 </body>
               </body>
             </body>
@@ -84,27 +84,27 @@
       <body name="bl_link1" pos="-0.12 0.1 -0.05" quat="0.707105 0 -0.707108 0">
         <inertial pos="0 0 0.037" quat="0.5 0.5 -0.5 0.5" mass="0.0729177" diaginertia="5.01023e-05 4.68465e-05 3.32107e-05" />
         <joint name="bl_base_link_to_link1" pos="0 0 0" axis="0 0 1" range="-3.1416 3.1416" actuatorfrcrange="-2.94 2.94" damping="2" />
-        <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link1" />
+        <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link1" class="robot" />
         <body name="bl_link2" pos="0 0 0.051959" quat="0.499998 -0.5 -0.5 -0.500002">
           <inertial pos="0.119 0.012247 -0.0001" quat="0.5 0.5 0.5 0.5" mass="0.0703216" diaginertia="0.000423091 0.000404557 5.46501e-05" />
           <joint name="bl_link1_to_link2" pos="0 0 0" axis="0 0 1" range="-1.5708 1.5708" actuatorfrcrange="-2.94 2.94" damping="2" />
-          <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link2" />
+          <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link2" class="robot" />
           <body name="bl_link3" pos="0.236815 0.030002 0" quat="0.707105 0 0 0.707108">
             <inertial pos="-0.0015 -0.0765 0.00505" quat="0.707107 0.707107 0 0" mass="0.021608" diaginertia="6.37699e-05 6.28965e-05 3.67026e-06" />
             <joint name="bl_link2_to_link3" pos="0 0 0" axis="0 0 1" range="-1 2.95" actuatorfrcrange="-2.94 2.94" damping="2" />
-            <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link3" />
+            <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link3" class="robot" />
             <body name="bl_link4" pos="0 -0.144586 0">
               <inertial pos="-0.0015 -0.022 -0.00075" quat="0.5 0.5 -0.5 0.5" mass="0.0099933" diaginertia="5.60238e-06 4.53979e-06 3.78103e-06" />
               <joint name="bl_link3_to_link4" pos="0 0 0" axis="0 0 1" range="-1.5708 1.5708" actuatorfrcrange="-2.94 2.94" damping="2" />
-              <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link4" />
+              <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link4" class="robot" />
               <body name="bl_link5" pos="0.015147 -0.053653 0" quat="0.499998 0.5 0.5 -0.500002">
                 <inertial pos="-0.0078 0 0.0595" quat="0.707107 0 0 0.707107" mass="0.0153928" diaginertia="2.14427e-05 2.02869e-05 4.39495e-06" />
                 <joint name="bl_link4_to_link5" pos="0 0 0" axis="0 0 1" range="-3.1416 3.1416" actuatorfrcrange="-2.94 2.94" damping="2" />
-                <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link5" />
+                <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link5" class="robot" />
                 <body name="bl_gripper_link" pos="0 0.018821 0.052035" quat="0.499998 -0.5 -0.5 -0.500002">
                   <inertial pos="0.027 0.0027 -0.018935" quat="0.5 0.5 0.5 0.5" mass="0.0028708" diaginertia="1.82071e-06 1.60231e-06 5.23216e-07" />
                   <joint name="bl_link5_to_gripper_link" pos="0 0 0" axis="0 0 1" range="0 1.5" actuatorfrcrange="-1.47 1.47" damping="2" />
-                  <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="gripper_link" />
+                  <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="gripper_link" class="robot" />
                 </body>
               </body>
             </body>
@@ -114,27 +114,27 @@
       <body name="br_link1" pos="-0.12 -0.1 -0.05" quat="0.707105 0 -0.707108 0">
         <inertial pos="0 0 0.037" quat="0.5 0.5 -0.5 0.5" mass="0.0729177" diaginertia="5.01023e-05 4.68465e-05 3.32107e-05" />
         <joint name="br_base_link_to_link1" pos="0 0 0" axis="0 0 1" range="-3.1416 3.1416" actuatorfrcrange="-2.94 2.94" damping="2" />
-        <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link1" />
+        <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link1" class="robot" />
         <body name="br_link2" pos="0 0 0.051959" quat="0.499998 -0.5 -0.5 -0.500002">
           <inertial pos="0.119 0.012247 -0.0001" quat="0.5 0.5 0.5 0.5" mass="0.0703216" diaginertia="0.000423091 0.000404557 5.46501e-05" />
           <joint name="br_link1_to_link2" pos="0 0 0" axis="0 0 1" range="-1.5708 1.5708" actuatorfrcrange="-2.94 2.94" damping="2" />
-          <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link2" />
+          <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link2" class="robot" />
           <body name="br_link3" pos="0.236815 0.030002 0" quat="0.707105 0 0 0.707108">
             <inertial pos="-0.0015 -0.0765 0.00505" quat="0.707107 0.707107 0 0" mass="0.021608" diaginertia="6.37699e-05 6.28965e-05 3.67026e-06" />
             <joint name="br_link2_to_link3" pos="0 0 0" axis="0 0 1" range="-1 2.95" actuatorfrcrange="-2.94 2.94" damping="2" />
-            <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link3" />
+            <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link3" class="robot" />
             <body name="br_link4" pos="0 -0.144586 0">
               <inertial pos="-0.0015 -0.022 -0.00075" quat="0.5 0.5 -0.5 0.5" mass="0.0099933" diaginertia="5.60238e-06 4.53979e-06 3.78103e-06" />
               <joint name="br_link3_to_link4" pos="0 0 0" axis="0 0 1" range="-1.5708 1.5708" actuatorfrcrange="-2.94 2.94" damping="2" />
-              <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link4" />
+              <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link4" class="robot" />
               <body name="br_link5" pos="0.015147 -0.053653 0" quat="0.499998 0.5 0.5 -0.500002">
                 <inertial pos="-0.0078 0 0.0595" quat="0.707107 0 0 0.707107" mass="0.0153928" diaginertia="2.14427e-05 2.02869e-05 4.39495e-06" />
                 <joint name="br_link4_to_link5" pos="0 0 0" axis="0 0 1" range="-3.1416 3.1416" actuatorfrcrange="-2.94 2.94" damping="2" />
-                <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link5" />
+                <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link5" class="robot" />
                 <body name="br_gripper_link" pos="0 0.018821 0.052035" quat="0.499998 -0.5 -0.5 -0.500002">
                   <inertial pos="0.027 0.0027 -0.018935" quat="0.5 0.5 0.5 0.5" mass="0.0028708" diaginertia="1.82071e-06 1.60231e-06 5.23216e-07" />
                   <joint name="br_link5_to_gripper_link" pos="0 0 0" axis="0 0 1" range="0 1.5" actuatorfrcrange="-1.47 1.47" damping="2" />
-                  <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="gripper_link" />
+                  <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="gripper_link" class="robot" />
                 </body>
               </body>
             </body>
@@ -143,4 +143,4 @@
       </body>
     </body>
   </worldbody>
-<actuator><position name="act_fl_base_link_to_link1" joint="fl_base_link_to_link1" kp="50" ctrlrange="-3.1416 3.1416" forcelimited="true" forcerange="-2.94 2.94" /><position name="act_fl_link1_to_link2" joint="fl_link1_to_link2" kp="50" ctrlrange="-1.5708 1.5708" forcelimited="true" forcerange="-2.94 2.94" /><position name="act_fl_link2_to_link3" joint="fl_link2_to_link3" kp="50" ctrlrange="-1 2.95" forcelimited="true" forcerange="-2.94 2.94" /><position name="act_fl_link3_to_link4" joint="fl_link3_to_link4" kp="50" ctrlrange="-1.5708 1.5708" forcelimited="true" forcerange="-2.94 2.94" /><position name="act_fl_link4_to_link5" joint="fl_link4_to_link5" kp="50" ctrlrange="-3.1416 3.1416" forcelimited="true" forcerange="-2.94 2.94" /><position name="act_fl_link5_to_gripper_link" joint="fl_link5_to_gripper_link" kp="50" ctrlrange="0 1.5" forcelimited="true" forcerange="-1.47 1.47" /><position name="act_fr_base_link_to_link1" joint="fr_base_link_to_link1" kp="50" ctrlrange="-3.1416 3.1416" forcelimited="true" forcerange="-2.94 2.94" /><position name="act_fr_link1_to_link2" joint="fr_link1_to_link2" kp="50" ctrlrange="-1.5708 1.5708" forcelimited="true" forcerange="-2.94 2.94" /><position name="act_fr_link2_to_link3" joint="fr_link2_to_link3" kp="50" ctrlrange="-1 2.95" forcelimited="true" forcerange="-2.94 2.94" /><position name="act_fr_link3_to_link4" joint="fr_link3_to_link4" kp="50" ctrlrange="-1.5708 1.5708" forcelimited="true" forcerange="-2.94 2.94" /><position name="act_fr_link4_to_link5" joint="fr_link4_to_link5" kp="50" ctrlrange="-3.1416 3.1416" forcelimited="true" forcerange="-2.94 2.94" /><position name="act_fr_link5_to_gripper_link" joint="fr_link5_to_gripper_link" kp="50" ctrlrange="0 1.5" forcelimited="true" forcerange="-1.47 1.47" /><position name="act_bl_base_link_to_link1" joint="bl_base_link_to_link1" kp="50" ctrlrange="-3.1416 3.1416" forcelimited="true" forcerange="-2.94 2.94" /><position name="act_bl_link1_to_link2" joint="bl_link1_to_link2" kp="50" ctrlrange="-1.5708 1.5708" forcelimited="true" forcerange="-2.94 2.94" /><position name="act_bl_link2_to_link3" joint="bl_link2_to_link3" kp="50" ctrlrange="-1 2.95" forcelimited="true" forcerange="-2.94 2.94" /><position name="act_bl_link3_to_link4" joint="bl_link3_to_link4" kp="50" ctrlrange="-1.5708 1.5708" forcelimited="true" forcerange="-2.94 2.94" /><position name="act_bl_link4_to_link5" joint="bl_link4_to_link5" kp="50" ctrlrange="-3.1416 3.1416" forcelimited="true" forcerange="-2.94 2.94" /><position name="act_bl_link5_to_gripper_link" joint="bl_link5_to_gripper_link" kp="50" ctrlrange="0 1.5" forcelimited="true" forcerange="-1.47 1.47" /><position name="act_br_base_link_to_link1" joint="br_base_link_to_link1" kp="50" ctrlrange="-3.1416 3.1416" forcelimited="true" forcerange="-2.94 2.94" /><position name="act_br_link1_to_link2" joint="br_link1_to_link2" kp="50" ctrlrange="-1.5708 1.5708" forcelimited="true" forcerange="-2.94 2.94" /><position name="act_br_link2_to_link3" joint="br_link2_to_link3" kp="50" ctrlrange="-1 2.95" forcelimited="true" forcerange="-2.94 2.94" /><position name="act_br_link3_to_link4" joint="br_link3_to_link4" kp="50" ctrlrange="-1.5708 1.5708" forcelimited="true" forcerange="-2.94 2.94" /><position name="act_br_link4_to_link5" joint="br_link4_to_link5" kp="50" ctrlrange="-3.1416 3.1416" forcelimited="true" forcerange="-2.94 2.94" /><position name="act_br_link5_to_gripper_link" joint="br_link5_to_gripper_link" kp="50" ctrlrange="0 1.5" forcelimited="true" forcerange="-1.47 1.47" /></actuator><keyframe><key name="home" qpos="0 0 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0" /></keyframe></mujoco>
+<default><default class="robot"><geom friction="2.0 0.01 0.001" condim="4" /></default></default><actuator><position name="act_fl_base_link_to_link1" joint="fl_base_link_to_link1" kp="50" ctrlrange="-3.1416 3.1416" forcelimited="true" forcerange="-2.94 2.94" /><position name="act_fl_link1_to_link2" joint="fl_link1_to_link2" kp="50" ctrlrange="-1.5708 1.5708" forcelimited="true" forcerange="-2.94 2.94" /><position name="act_fl_link2_to_link3" joint="fl_link2_to_link3" kp="50" ctrlrange="-1 2.95" forcelimited="true" forcerange="-2.94 2.94" /><position name="act_fl_link3_to_link4" joint="fl_link3_to_link4" kp="50" ctrlrange="-1.5708 1.5708" forcelimited="true" forcerange="-2.94 2.94" /><position name="act_fl_link4_to_link5" joint="fl_link4_to_link5" kp="50" ctrlrange="-3.1416 3.1416" forcelimited="true" forcerange="-2.94 2.94" /><position name="act_fl_link5_to_gripper_link" joint="fl_link5_to_gripper_link" kp="50" ctrlrange="0 1.5" forcelimited="true" forcerange="-1.47 1.47" /><position name="act_fr_base_link_to_link1" joint="fr_base_link_to_link1" kp="50" ctrlrange="-3.1416 3.1416" forcelimited="true" forcerange="-2.94 2.94" /><position name="act_fr_link1_to_link2" joint="fr_link1_to_link2" kp="50" ctrlrange="-1.5708 1.5708" forcelimited="true" forcerange="-2.94 2.94" /><position name="act_fr_link2_to_link3" joint="fr_link2_to_link3" kp="50" ctrlrange="-1 2.95" forcelimited="true" forcerange="-2.94 2.94" /><position name="act_fr_link3_to_link4" joint="fr_link3_to_link4" kp="50" ctrlrange="-1.5708 1.5708" forcelimited="true" forcerange="-2.94 2.94" /><position name="act_fr_link4_to_link5" joint="fr_link4_to_link5" kp="50" ctrlrange="-3.1416 3.1416" forcelimited="true" forcerange="-2.94 2.94" /><position name="act_fr_link5_to_gripper_link" joint="fr_link5_to_gripper_link" kp="50" ctrlrange="0 1.5" forcelimited="true" forcerange="-1.47 1.47" /><position name="act_bl_base_link_to_link1" joint="bl_base_link_to_link1" kp="50" ctrlrange="-3.1416 3.1416" forcelimited="true" forcerange="-2.94 2.94" /><position name="act_bl_link1_to_link2" joint="bl_link1_to_link2" kp="50" ctrlrange="-1.5708 1.5708" forcelimited="true" forcerange="-2.94 2.94" /><position name="act_bl_link2_to_link3" joint="bl_link2_to_link3" kp="50" ctrlrange="-1 2.95" forcelimited="true" forcerange="-2.94 2.94" /><position name="act_bl_link3_to_link4" joint="bl_link3_to_link4" kp="50" ctrlrange="-1.5708 1.5708" forcelimited="true" forcerange="-2.94 2.94" /><position name="act_bl_link4_to_link5" joint="bl_link4_to_link5" kp="50" ctrlrange="-3.1416 3.1416" forcelimited="true" forcerange="-2.94 2.94" /><position name="act_bl_link5_to_gripper_link" joint="bl_link5_to_gripper_link" kp="50" ctrlrange="0 1.5" forcelimited="true" forcerange="-1.47 1.47" /><position name="act_br_base_link_to_link1" joint="br_base_link_to_link1" kp="50" ctrlrange="-3.1416 3.1416" forcelimited="true" forcerange="-2.94 2.94" /><position name="act_br_link1_to_link2" joint="br_link1_to_link2" kp="50" ctrlrange="-1.5708 1.5708" forcelimited="true" forcerange="-2.94 2.94" /><position name="act_br_link2_to_link3" joint="br_link2_to_link3" kp="50" ctrlrange="-1 2.95" forcelimited="true" forcerange="-2.94 2.94" /><position name="act_br_link3_to_link4" joint="br_link3_to_link4" kp="50" ctrlrange="-1.5708 1.5708" forcelimited="true" forcerange="-2.94 2.94" /><position name="act_br_link4_to_link5" joint="br_link4_to_link5" kp="50" ctrlrange="-3.1416 3.1416" forcelimited="true" forcerange="-2.94 2.94" /><position name="act_br_link5_to_gripper_link" joint="br_link5_to_gripper_link" kp="50" ctrlrange="0 1.5" forcelimited="true" forcerange="-1.47 1.47" /></actuator><keyframe><key name="home" qpos="0 0 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0" /></keyframe></mujoco>

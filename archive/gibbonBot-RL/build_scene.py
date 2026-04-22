@@ -31,6 +31,26 @@ if compiler is None:
     compiler = ET.SubElement(mjcf, "compiler")
 compiler.set("meshdir", str(ROOT / "roarm_ws/roarm_description"))
 
+# ── contact defaults ─────────────────────────────────────────────────────────
+# MuJoCo default friction is 1.0 sliding / 0.005 torsional / 0.0001 rolling.
+# Effective friction at contact = min(geom_a, geom_b), so robot geoms need to
+# be at least as high as terrain to avoid the terrain value being dragged down.
+# condim=4 enables the full friction pyramid (sliding + spinning) vs basic condim=3.
+default = mjcf.find("default")
+if default is None:
+    default = ET.SubElement(mjcf, "default")
+robot_default = ET.SubElement(default, "default", {"class": "robot"})
+ET.SubElement(robot_default, "geom", {
+    "friction": "2.0 0.01 0.001",
+    "condim":   "4",
+})
+
+# tag every robot geom with class="robot" so the default applies
+worldbody = mjcf.find("worldbody")
+for geom in worldbody.iter("geom"):
+    if geom.get("name") != "terrain":
+        geom.set("class", "robot")
+
 # ── grass terrain (heightfield) ──────────────────────────────────────────────
 # Heightfield dimensions: 64×64 grid, 10×10 m, max height 0.5 m, base 0.05 m.
 # The actual height data is written at runtime by terrain.py (model.hfield_data).
@@ -67,8 +87,8 @@ terrain_geom = ET.Element("geom", {
     "type":     "hfield",
     "hfield":   "terrain",
     "material": "grass_mat",
-    "condim":   "3",
-    "friction": "1.2 0.005 0.0001",   # slightly more grip on grass than concrete
+    "condim":   "4",
+    "friction": "2.0 0.01 0.001",
 })
 worldbody.insert(0, terrain_geom)
 
