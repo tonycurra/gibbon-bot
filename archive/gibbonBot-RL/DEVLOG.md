@@ -95,3 +95,70 @@ One-shot converter: loads `ape.urdf` → saves MJCF → patches XML to add:
 ```
 edit ape.urdf  →  python build_scene.py  →  python view_robot.py
 ```
+
+---
+
+## 2026-04-22 — Position actuators + checkerboard floor (commit `a404e0b`)
+
+**Problem**: `model.nu=0` — no actuators, so the viewer's Ctrl+A panel was empty and joints
+couldn't be driven manually.
+
+**Fix**: `build_scene.py` now iterates all revolute joints and emits a `<position>` actuator
+for each one:
+- `kp=50` (proportional gain)
+- `ctrlrange` from `jnt_range` (position limits)
+- `forcerange` from `jnt_actfrcrange` (effort limits already stored from URDF `<limit effort>`)
+- Result: `nu=24`, one actuator per joint, correct torque limits wired in
+
+**Also**: replaced the grey plane with a black/white checkerboard texture for easier visual
+reference. `scene.xml` gets a `<texture builtin="checker">` + `<material>` + floor geom with
+`material="floor_mat"`.
+
+---
+
+## 2026-04-22 — Agricultural terrain + test_joints.py (commit `0dcff40`)
+
+**New file: `terrain.py`**
+Generates a 64×64 heightfield that looks like plowed farmland:
+- `hills`: two overlapping low-frequency sine waves
+- `furrows`: medium-frequency ridges along one axis (`0.5 * sin(X * 2.5)`)
+- `noise`: small gaussian noise for surface texture
+- Values normalized to [0, 1]; MuJoCo scales by `max_height=0.5 m`
+
+`terrain.apply(model)` writes the array into `model.hfield_data` at runtime.
+Must be called after `from_xml_path` and before `MjData` is created.
+
+**`build_scene.py` changes**:
+- Removed flat plane, added `<hfield name="terrain">` asset (64×64, 10×10 m, max 0.5 m)
+- Added grass checker texture: two shades of green (`rgb1=0.18 0.42 0.09`, `rgb2=0.28 0.55 0.14`)
+- Home keyframe z raised `0.5 → 1.0 m` (must clear 0.5 m max terrain height)
+
+**New file: `test_joints.py`**
+Dedicated manual joint tester:
+- Gravity off (`model.opt.gravity[:] = 0`)
+- `kp` overridden to 200 for crisp slider response
+- Torso velocity zeroed each step (pins base in place)
+- Prints all 24 actuator names + ranges on launch
+- Usage: `python test_joints.py` → Ctrl+A in viewer → drag sliders
+
+---
+
+## 2026-04-22 — Friction fix: robot sliding on terrain (commit `ba8d127`)
+
+**Problem**: robot was visibly sliding on the grass terrain even after landing.
+
+**Root cause**: MuJoCo computes effective contact friction as `min(geom_A, geom_B)`.
+The terrain had `friction=1.2` but robot geoms inherited MuJoCo's default of `1.0`,
+so effective friction was `1.0`. At oblique contact angles (arms landing at ~90° from
+torso, gripper tips hitting sloped terrain), lateral forces exceed what 1.0 can resist.
+
+**Fix in `build_scene.py`**:
+- Added `<default class="robot"><geom friction="2.0 0.01 0.001" condim="4"/></default>`
+- Tagged all non-terrain geoms with `class="robot"` in post-processing loop
+- Terrain friction also raised to `2.0 0.01 0.001`
+- `condim` raised `3 → 4` on both sides: condim=4 adds spinning friction (resists torque
+  at contact point), condim=3 only handles sliding
+
+**Note**: some residual sliding remains — this is expected without an active stance
+controller. The robot has no policy telling feet to stay planted. Friction fix reduces
+passive drift; active control is needed to fully eliminate it (RL phase).

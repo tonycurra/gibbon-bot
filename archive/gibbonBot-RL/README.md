@@ -62,10 +62,11 @@ gb2.1/
 ├── DEVLOG.md               ← full change history with rationale
 ├── QUICKSTART.md           ← original project roadmap (read this)
 │
-├── ape.urdf  (→ in roarm_ws/roarm_description/)
-├── build_scene.py          ← converts ape.urdf → scene.xml (run after editing URDF)
-├── scene.xml               ← generated MJCF: floor + freejoint + keyframe (do not edit by hand)
-├── view_robot.py           ← launches MuJoCo viewer
+├── build_scene.py          ← converts ape.urdf → scene.xml (run after any URDF edit)
+├── scene.xml               ← generated MJCF — do NOT edit by hand, always regenerate
+├── terrain.py              ← generates 64×64 agricultural heightfield at runtime
+├── view_robot.py           ← launches MuJoCo viewer (full physics, grass terrain)
+├── test_joints.py          ← manual joint tester (gravity off, torso pinned, Ctrl+A sliders)
 │
 └── roarm_ws/
     └── roarm_description/
@@ -87,8 +88,11 @@ source .venv/bin/activate
 # 2. (first time only) install mujoco
 pip install mujoco
 
-# 3. view the robot
+# 3. view the robot dropping onto grass terrain
 python view_robot.py
+
+# 4. test joints manually (gravity off, torso fixed)
+python test_joints.py
 ```
 
 ### After editing ape.urdf
@@ -107,19 +111,27 @@ python view_robot.py
 | Scroll | zoom |
 | Space | pause / resume |
 | Backspace | reset to home pose |
+| Ctrl+A | open actuator slider panel (joint control) |
+
+### Manual joint testing (`test_joints.py`)
+
+Opens the viewer with gravity off and the torso pinned. Press **Ctrl+A** to open the
+actuator panel and drag sliders to move individual joints. Each slider is named
+`act_{prefix}_{joint}`, e.g. `act_fl_link1_to_link2` = front-left shoulder pitch.
 
 ---
 
 ## How the pipeline works
 
 ```
-ape.urdf  ──(build_scene.py)──►  scene.xml  ──(view_robot.py)──►  MuJoCo viewer
+ape.urdf ──(build_scene.py)──► scene.xml ──(terrain.py)──► MuJoCo viewer
 ```
 
-1. **`ape.urdf`** — standalone URDF, no ROS/xacro. Defines the torso + 4 arms with a `floating` joint at the root so MuJoCo gives the torso 6 DOF.
-2. **`build_scene.py`** — loads the URDF, dumps it as MJCF via `mj_saveLastXML`, then post-processes the XML to add: floor plane, `meshdir` compiler path, and a `home` keyframe (torso at z=0.5 m, all joints at 0).
-3. **`scene.xml`** — the generated MJCF ready for simulation. Load this in MuJoCo, not the URDF directly.
-4. **`view_robot.py`** — passive viewer: loads `scene.xml`, resets to the `home` keyframe, steps physics in a loop.
+1. **`ape.urdf`** — standalone URDF (no ROS/xacro). Floating base via `<joint type="floating">`. All 24 joints have real motor limits (STS3215 servo datasheet).
+2. **`build_scene.py`** — loads URDF, dumps MJCF via `mj_saveLastXML`, then patches the XML: meshdir, contact defaults (friction 2.0, condim 4), grass terrain asset, 24 position actuators, home keyframe.
+3. **`terrain.py`** — generates the 64×64 heightfield at runtime and writes it into `model.hfield_data`. Called by `view_robot.py` after loading.
+4. **`scene.xml`** — generated MJCF. Never edit by hand; always regenerate with `build_scene.py`.
+5. **`view_robot.py`** — loads scene, applies terrain, resets to home keyframe, runs physics loop.
 
 ---
 
@@ -134,8 +146,8 @@ ape.urdf  ──(build_scene.py)──►  scene.xml  ──(view_robot.py)─�
 
 ## Known gaps / roadmap
 
-- [ ] **Tune mount angles** — arms currently point straight down (90°). Adjust `rpy` in the 4 `torso_to_*_base_link` joints in `ape.urdf` until stance looks right.
-- [ ] **Actuators** — no actuators in `scene.xml` yet. Add `<actuator>` block to MJCF for RL.
+- [ ] **Tune mount angles** — arms point straight down (90°). Adjust `rpy` in the 4 `torso_to_*_base_link` joints in `ape.urdf` for a better quadruped stance.
+- [ ] **Sliding** — some residual sliding on terrain without an active controller. Friction is maxed; needs a stance policy to fully eliminate.
 - [ ] **RL environment** — Gymnasium wrapper + PPO (see QUICKSTART.md step 5).
-- [ ] **Real motor specs** — STS3215 values are estimates; get exact torque curve from hardware docs.
+- [ ] **Real motor specs** — STS3215 values are estimates; verify torque curve from hardware docs.
 - [ ] **AMP** — motion priors from ape video (QUICKSTART step 7).
