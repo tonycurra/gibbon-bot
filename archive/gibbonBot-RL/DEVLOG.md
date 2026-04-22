@@ -162,3 +162,15 @@ torso, gripper tips hitting sloped terrain), lateral forces exceed what 1.0 can 
 **Note**: some residual sliding remains — this is expected without an active stance
 controller. The robot has no policy telling feet to stay planted. Friction fix reduces
 passive drift; active control is needed to fully eliminate it (RL phase).
+
+---
+
+## 2026-04-22 — Static tree obstacle (commit after ba8d127)
+
+Added a simple tree 5 m from the robot spawn at world pos (5, 0, 0).
+Implemented as a static body (no joint = welded to world) with two geoms:
+- `trunk`: brown cylinder, radius 0.12 m, 2 m tall (half-height 1.0), centre at z=1.0
+- `canopy`: dark green sphere, radius 1.3 m, centre at z=3.0
+
+Added in `build_scene.py` via `ET.SubElement(worldbody, "body", ...)` after the terrain geom.
+The tree is a solid collision object — the robot will bump into it.
