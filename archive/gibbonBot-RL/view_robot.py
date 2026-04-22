@@ -16,12 +16,14 @@ Controls (MuJoCo viewer):
 import pathlib
 import mujoco
 import mujoco.viewer
+import terrain
 
 SCENE = pathlib.Path(__file__).parent / "scene.xml"
 
 model = mujoco.MjModel.from_xml_path(str(SCENE))
+terrain.apply(model)                          # fill heightfield with generated terrain
 data = mujoco.MjData(model)
-mujoco.mj_resetDataKeyframe(model, data, 0)  # "home": torso at z=0.5, arms at 0
+mujoco.mj_resetDataKeyframe(model, data, 0)  # "home": torso at z=1.0, arms at 0
 
 print(f"Loaded: {SCENE.name}")
 print(f"  bodies:  {model.nbody}")

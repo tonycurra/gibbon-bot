@@ -2,9 +2,9 @@
 Convert ape.urdf → scene.xml (native MJCF).
 
 Adds:
-  - checkerboard floor with friction
+  - agricultural grass terrain (heightfield, filled at runtime by terrain.py)
   - position actuators for all 24 arm joints (torque limits from URDF)
-  - "home" keyframe: torso at z=0.5, all joints at 0
+  - "home" keyframe: torso at z=1.0 (above max terrain height), all joints at 0
 
 Run once whenever ape.urdf changes:
     python build_scene.py
@@ -31,38 +31,46 @@ if compiler is None:
     compiler = ET.SubElement(mjcf, "compiler")
 compiler.set("meshdir", str(ROOT / "roarm_ws/roarm_description"))
 
-# ── checkerboard floor ───────────────────────────────────────────────────────
+# ── grass terrain (heightfield) ──────────────────────────────────────────────
+# Heightfield dimensions: 64×64 grid, 10×10 m, max height 0.5 m, base 0.05 m.
+# The actual height data is written at runtime by terrain.py (model.hfield_data).
+from terrain import NROW, NCOL
 asset = mjcf.find("asset")
 if asset is None:
     asset = ET.SubElement(mjcf, "asset")
+
+ET.SubElement(asset, "hfield", {
+    "name":  "terrain",
+    "nrow":  str(NROW),
+    "ncol":  str(NCOL),
+    "size":  "5 5 0.5 0.05",      # half-x, half-y, max-height, base-thickness
+})
 ET.SubElement(asset, "texture", {
-    "name":    "checker",
+    "name":    "grass",
     "type":    "2d",
     "builtin": "checker",
-    "rgb1":    "0.15 0.15 0.15",
-    "rgb2":    "0.9 0.9 0.9",
+    "rgb1":    "0.18 0.42 0.09",   # dark grass
+    "rgb2":    "0.28 0.55 0.14",   # light grass
     "width":   "512",
     "height":  "512",
-    "mark":    "edge",
-    "markrgb": "0.1 0.1 0.1",
 })
 ET.SubElement(asset, "material", {
-    "name":        "floor_mat",
-    "texture":     "checker",
-    "texrepeat":   "4 4",
-    "reflectance": "0.1",
+    "name":        "grass_mat",
+    "texture":     "grass",
+    "texrepeat":   "6 6",
+    "reflectance": "0.05",
 })
 
 worldbody = mjcf.find("worldbody")
-floor = ET.Element("geom", {
-    "name":     "floor",
-    "type":     "plane",
-    "size":     "5 5 0.05",
-    "material": "floor_mat",
+terrain_geom = ET.Element("geom", {
+    "name":     "terrain",
+    "type":     "hfield",
+    "hfield":   "terrain",
+    "material": "grass_mat",
     "condim":   "3",
-    "friction": "1 0.005 0.0001",
+    "friction": "1.2 0.005 0.0001",   # slightly more grip on grass than concrete
 })
-worldbody.insert(0, floor)
+worldbody.insert(0, terrain_geom)
 
 # ── position actuators (one per revolute joint) ──────────────────────────────
 # Torque limits come straight from the URDF <limit effort="..."> via jnt_actfrcrange.
@@ -91,7 +99,7 @@ for i in range(model.njnt):
 # ── home keyframe ────────────────────────────────────────────────────────────
 # model.nq = 31 total: 7 (freejoint: x y z qw qx qy qz) + 24 arm joints
 qpos = [0.0] * model.nq
-qpos[2] = 0.5   # z
+qpos[2] = 1.0   # z — above max terrain height (0.5 m)
 qpos[3] = 1.0   # qw
 key_str = " ".join(f"{v:.6g}" for v in qpos)
 keyframe = mjcf.find("keyframe")
