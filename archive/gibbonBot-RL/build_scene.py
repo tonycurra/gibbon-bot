@@ -127,6 +127,26 @@ if keyframe is None:
     keyframe = ET.SubElement(mjcf, "keyframe")
 ET.SubElement(keyframe, "key", {"name": "home", "qpos": key_str})
 
+# ── tree (static obstacle, 5 m from robot spawn) ────────────────────────────
+# Robot starts at (0,0); tree at (5,0). Body with no joint = welded to world.
+# Trunk: cylinder radius 0.12 m, 2 m tall (half-height=1.0).
+# Canopy: sphere radius 1.3 m centred 3 m up.
+tree_body = ET.SubElement(worldbody, "body", {"name": "tree", "pos": "5 0 0"})
+ET.SubElement(tree_body, "geom", {
+    "name":  "trunk",
+    "type":  "cylinder",
+    "size":  "0.12 1.0",
+    "pos":   "0 0 1.0",
+    "rgba":  "0.38 0.22 0.08 1",
+})
+ET.SubElement(tree_body, "geom", {
+    "name":  "canopy",
+    "type":  "sphere",
+    "size":  "1.3",
+    "pos":   "0 0 3.0",
+    "rgba":  "0.12 0.45 0.08 1",
+})
+
 tree.write(str(OUT), xml_declaration=True, encoding="unicode")
 print(f"Written: {OUT}")
 print(f"  nq={model.nq}  nv={model.nv}  nbody={model.nbody}  nu={model.nu}")
