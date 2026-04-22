@@ -26,6 +26,7 @@ Reward per step:
 
 import numpy as np
 import mujoco
+import mujoco.viewer
 import gymnasium as gym
 from gymnasium import spaces
 import pathlib
@@ -114,10 +115,12 @@ class ApeEnv(gym.Env):
         fallen     = torso_z < MIN_HEIGHT
         success    = dist < SUCCESS_DIST
 
+        jvel       = self.data.qvel[6:]
         reward = (
               progress * 2.0
             + 0.1                                    # alive bonus
-            - 1e-4 * float(np.sum(ctrl ** 2))        # energy penalty
+            - 5e-4 * float(np.sum(ctrl ** 2))        # energy penalty
+            - 1e-3 * float(np.sum(jvel ** 2))        # velocity penalty (discourages flailing)
         )
         if fallen:
             reward -= 10.0

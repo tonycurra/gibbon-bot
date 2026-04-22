@@ -17,16 +17,16 @@
 
   <!-- ================================================================
        TORSO  (root link — MuJoCo gives it a freejoint automatically)
-       box 30 × 20 × 10 cm, 1.0 kg
+       box 30 × 20 × 10 cm, 2.0 kg
   ================================================================ -->
   <link name="torso">
     <inertial>
       <origin xyz="0 0 0" rpy="0 0 0"/>
-      <mass value="1.0"/>
+      <mass value="2.0"/>
       <!-- solid box: ixx=(m/12)(h²+d²), iyy=(m/12)(l²+d²), izz=(m/12)(l²+h²) -->
-      <inertia ixx="0.00417" ixy="0" ixz="0"
-               iyy="0.00833" iyz="0"
-               izz="0.01083"/>
+      <inertia ixx="0.00833" ixy="0" ixz="0"
+               iyy="0.01667" iyz="0"
+               izz="0.02167"/>
     </inertial>
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>

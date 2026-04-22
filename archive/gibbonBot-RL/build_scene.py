@@ -110,7 +110,7 @@ for i in range(model.njnt):
     ET.SubElement(actuator, "position", {
         "name":          f"act_{name}",
         "joint":         name,
-        "kp":            "50",
+        "kp":            "20",
         "ctrlrange":     f"{lo:.6g} {hi:.6g}",
         "forcelimited":  "true",
         "forcerange":    f"{flo:.6g} {fhi:.6g}",

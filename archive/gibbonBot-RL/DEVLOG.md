@@ -174,3 +174,66 @@ Implemented as a static body (no joint = welded to world) with two geoms:
 
 Added in `build_scene.py` via `ET.SubElement(worldbody, "body", ...)` after the terrain geom.
 The tree is a solid collision object — the robot will bump into it.
+
+---
+
+## 2026-04-22 — RL environment + PPO training + eval
+
+**New files**: `ape_env.py`, `train.py`, `eval.py`
+
+**`ape_env.py`**: Gymnasium environment wrapping MuJoCo.
+- 63-dim observation: torso z, quat, lin/ang vel, 24 joint pos/vel, unit vector to tree, distance
+- 24-dim action: joint position targets in [-1, 1], remapped to joint ranges
+- Reward: `progress×2 + 0.1 alive - 1e-4×ctrl² - 10 fall + 50 success`
+- Termination: torso < 0.15m (fallen) or dist < 1.5m (success), timeout 2000 steps
+- 5 physics steps per RL action
+
+**`train.py`**: SB3 PPO, 8 parallel envs, 10M steps. Checkpoint + EvalCallback to `runs/ape_reach/`.
+
+**`eval.py`**: loads checkpoint, runs episodes silently (no viewer), prints closest approach + status.
+
+---
+
+## 2026-04-22 — Physics tuning: heavier torso, softer actuators, velocity penalty
+
+**Problem**: robot movements were rapid and jerky — didn't look physical.
+
+**Changes**:
+1. `ape.urdf`: torso mass 1.0 kg → 2.0 kg, inertia tensors updated accordingly.
+   Total robot mass: ~3.8 kg (2 kg torso + ~0.45 kg × 4 arms from URDF inertials).
+2. `build_scene.py`: actuator kp 50 → 20. Joints now respond sluggishly, like real servo motors under load.
+3. `ape_env.py`: energy penalty 1e-4 → 5e-4; added joint velocity penalty 1e-3×sum(qvel²).
+   Velocity penalty directly discourages flailing — the dominant source of rapid movements.
+
+Rebuilt `scene.xml` after these changes.
+
+---
+
+## 2026-04-22 — Persistent live viewer + split-screen multi-env viewer
+
+**Problem**: `mujoco.viewer` not accessible as attribute — needed explicit `import mujoco.viewer`.
+Also viewer window was closing and reopening between episodes (jarring UX).
+
+**`watch.py`** (rewritten): opens one persistent MuJoCo passive viewer window, runs episodes
+back-to-back, hot-swaps the PPO policy when a newer checkpoint appears. Window never closes.
+
+**`watch_multi.py`** (new): off-screen renders N envs via `mujoco.Renderer`, tiles frames into
+a single OpenCV window (split-screen). Policy is batched across all N envs simultaneously.
+- Default: 4 envs in a 2×2 grid
+- `--n 8` for 2×4, etc.
+- Labels show per-env distance to tree, step count; colour-coded (green=success, red=fallen)
+- Hot-swaps policy on new checkpoint, same as `watch.py`
+
+---
+
+## 2026-04-22 — GPU enabled (PyTorch cu121 for CUDA 12.2 driver)
+
+**Problem**: PyTorch 2.11.0+cu130 was installed (needs CUDA 13.0 driver) but WSL2 driver
+only supports CUDA 12.2 (driver version 12020 = 12.2.0). CUDA unavailable, training on CPU.
+
+**Fix**: reinstalled PyTorch 2.5.1+cu121, which is compatible with CUDA ≥ 12.1 drivers.
+```
+pip install "torch==2.5.1" --index-url https://download.pytorch.org/whl/cu121 --force-reinstall
+```
+Result: `cuda available: True`, `GPU: NVIDIA GeForce RTX 4070 Laptop GPU`.
+Expected training speedup: 10–20× vs CPU.

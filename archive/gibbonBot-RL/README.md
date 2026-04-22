@@ -1,30 +1,28 @@
 # Robotic Ape Project
 
-A 4-limb robotic ape built from **4x RoArm M3 Pro** arms (used as both arms and legs), trained with reinforcement learning to walk, climb, and eventually brachiate — using real ape video as motion reference.
+A 4-limb robotic ape built from **4x RoArm M3 Pro** arms, trained with reinforcement learning to walk, climb, and eventually brachiate — using real ape video as motion reference.
 
 ---
 
-## What this repo is
+## Status
 
 | Layer | Tool | Status |
 |-------|------|--------|
 | Physics sim | MuJoCo 3.x | ✅ Working |
 | Robot description | URDF → MJCF | ✅ Working |
-| Viewer | `view_robot.py` | ✅ Working |
-| RL training | MJX + JAX + PPO | ⬜ Next |
-| Motion reference | MediaPipe / ViTPose | ⬜ Later |
+| RL training | SB3 PPO + GPU | ✅ Working |
+| Live viewer | `watch_multi.py` | ✅ Working |
+| Motion reference | AMP / ViTPose | ⬜ Next |
 | Real hardware | ROS2 / MoveIt | ⬜ Later |
 
 ---
 
 ## The robot
 
-- **Torso**: floating base (6 DOF free joint)
+- **Torso**: 2 kg floating base (6 DOF free joint), 30×20×10 cm
 - **4 limbs**: RoArm M3 Pro, each with 5 DOF + gripper = **24 actuated joints**
-- **Total DOF**: 30 (6 base + 24 joints)
-- **Foot contact**: gripper tip of each arm
-
-### Arm layout
+- **Total mass**: ~3.8 kg (2 kg torso + ~0.45 kg × 4 arms)
+- **Actuators**: position-controlled, kp=20, torque limits from STS3215 servo datasheet
 
 ```
         [fl_]  [fr_]
@@ -36,21 +34,6 @@ A 4-limb robotic ape built from **4x RoArm M3 Pro** arms (used as both arms and 
         [bl_]  [br_]
 ```
 
-Prefixes: `fl_` front-left · `fr_` front-right · `bl_` back-left · `br_` back-right
-
-### Joint limits (per arm)
-
-| Joint | Range | Effort | Velocity |
-|-------|-------|--------|----------|
-| Base yaw (`base_link_to_link1`) | ±180° | 2.94 Nm | 6.28 rad/s |
-| Shoulder (`link1_to_link2`) | ±90° | 2.94 Nm | 6.28 rad/s |
-| Elbow (`link2_to_link3`) | -57° to +169° | 2.94 Nm | 6.28 rad/s |
-| Wrist pitch (`link3_to_link4`) | ±90° | 2.94 Nm | 6.28 rad/s |
-| Wrist roll (`link4_to_link5`) | ±180° | 2.94 Nm | 6.28 rad/s |
-| Gripper (`link5_to_gripper_link`) | 0° to 86° | 1.47 Nm | 6.28 rad/s |
-
-Motor specs from STS3215 servo datasheet (12V). Joint damping: 2.0 Nm·s/rad.
-
 ---
 
 ## File map
@@ -60,21 +43,31 @@ gb2.1/
 │
 ├── README.md               ← you are here
 ├── DEVLOG.md               ← full change history with rationale
-├── QUICKSTART.md           ← original project roadmap (read this)
+├── PLAN.md                 ← next steps and ideas
+├── QUICKSTART.md           ← original project roadmap
 │
-├── build_scene.py          ← converts ape.urdf → scene.xml (run after any URDF edit)
-├── scene.xml               ← generated MJCF — do NOT edit by hand, always regenerate
+│── Training & eval
+├── train.py                ← PPO training (GPU auto-detected), saves to runs/ape_reach/
+├── eval.py                 ← evaluate a saved checkpoint, prints episode stats
+├── watch.py                ← persistent single-env viewer, hot-swaps checkpoints
+├── watch_multi.py          ← split-screen viewer (N envs in a grid), hot-swaps policy
+│
+│── Simulation core
+├── ape_env.py              ← Gymnasium environment (obs, action, reward)
 ├── terrain.py              ← generates 64×64 agricultural heightfield at runtime
-├── view_robot.py           ← launches MuJoCo viewer (full physics, grass terrain)
-├── test_joints.py          ← manual joint tester (gravity off, torso pinned, Ctrl+A sliders)
+├── build_scene.py          ← converts ape.urdf → scene.xml (run after any URDF edit)
+├── scene.xml               ← generated MJCF — do NOT edit by hand
+│
+│── Dev tools
+├── view_robot.py           ← MuJoCo viewer (full physics, grass terrain)
+├── test_joints.py          ← manual joint tester (gravity off, torso pinned, Ctrl+A)
 │
 └── roarm_ws/
     └── roarm_description/
         ├── ape.urdf            ← EDIT THIS to change the robot
         ├── urdf/roarm_m3/
-        │   └── roarm_m3.xacro  ← original single-arm description (DO NOT EDIT)
-        └── meshes/roarm_m3/    ← STL files for all links (DO NOT EDIT)
-            base_link.stl · link1-5.stl · gripper_link.stl · ...
+        │   └── roarm_m3.xacro  ← original single-arm URDF (DO NOT EDIT)
+        └── meshes/roarm_m3/    ← STL mesh files (DO NOT EDIT)
 ```
 
 ---
@@ -82,56 +75,51 @@ gb2.1/
 ## Quick start
 
 ```bash
-# 1. activate the venv
 source .venv/bin/activate
 
-# 2. (first time only) install mujoco
-pip install mujoco
-
-# 3. view the robot dropping onto grass terrain
+# View the robot on terrain
 python view_robot.py
 
-# 4. test joints manually (gravity off, torso fixed)
-python test_joints.py
+# Train (uses GPU if available, CPU otherwise)
+python train.py
+
+# Watch training live — split screen, N parallel envs
+python watch_multi.py           # 2×2 grid
+python watch_multi.py --n 8     # 2×4 grid
+
+# Evaluate a checkpoint
+python eval.py
+python eval.py --model runs/ape_reach/ape_reach_50000_steps.zip
 ```
+
+### Two-terminal workflow
+
+```
+Terminal 1:  python train.py
+Terminal 2:  python watch_multi.py --n 4
+```
+
+The viewer auto-loads new checkpoints as training saves them.
 
 ### After editing ape.urdf
 
 ```bash
 python build_scene.py   # regenerates scene.xml
-python view_robot.py
+python view_robot.py    # verify visually
 ```
-
-### Viewer controls
-
-| Key / action | Effect |
-|---|---|
-| Left-drag | rotate camera |
-| Right-drag | pan |
-| Scroll | zoom |
-| Space | pause / resume |
-| Backspace | reset to home pose |
-| Ctrl+A | open actuator slider panel (joint control) |
-
-### Manual joint testing (`test_joints.py`)
-
-Opens the viewer with gravity off and the torso pinned. Press **Ctrl+A** to open the
-actuator panel and drag sliders to move individual joints. Each slider is named
-`act_{prefix}_{joint}`, e.g. `act_fl_link1_to_link2` = front-left shoulder pitch.
 
 ---
 
-## How the pipeline works
+## Environment details
 
-```
-ape.urdf ──(build_scene.py)──► scene.xml ──(terrain.py)──► MuJoCo viewer
-```
-
-1. **`ape.urdf`** — standalone URDF (no ROS/xacro). Floating base via `<joint type="floating">`. All 24 joints have real motor limits (STS3215 servo datasheet).
-2. **`build_scene.py`** — loads URDF, dumps MJCF via `mj_saveLastXML`, then patches the XML: meshdir, contact defaults (friction 2.0, condim 4), grass terrain asset, 24 position actuators, home keyframe.
-3. **`terrain.py`** — generates the 64×64 heightfield at runtime and writes it into `model.hfield_data`. Called by `view_robot.py` after loading.
-4. **`scene.xml`** — generated MJCF. Never edit by hand; always regenerate with `build_scene.py`.
-5. **`view_robot.py`** — loads scene, applies terrain, resets to home keyframe, runs physics loop.
+| Item | Value |
+|------|-------|
+| Observation | 63-dim: torso z/quat/vel + 24 joint pos/vel + tree direction + distance |
+| Action | 24-dim joint position targets, normalised to [-1, 1] |
+| Reward | `progress×2 + 0.1 - 5e-4×ctrl² - 1e-3×jvel²` |
+| Termination | Fallen (torso < 0.15m) or success (dist < 1.5m) |
+| Timeout | 2000 steps |
+| Goal | Reach the tree at (5, 0, 0) — 5m from spawn |
 
 ---
 
@@ -139,15 +127,5 @@ ape.urdf ──(build_scene.py)──► scene.xml ──(terrain.py)──► M
 
 | Branch | Purpose |
 |--------|---------|
-| `master` | baseline snapshot of the original ROS2 package — nothing changed here |
-| `sim/mujoco-setup` | all simulation work so far |
-
----
-
-## Known gaps / roadmap
-
-- [ ] **Tune mount angles** — arms point straight down (90°). Adjust `rpy` in the 4 `torso_to_*_base_link` joints in `ape.urdf` for a better quadruped stance.
-- [ ] **Sliding** — some residual sliding on terrain without an active controller. Friction is maxed; needs a stance policy to fully eliminate.
-- [ ] **RL environment** — Gymnasium wrapper + PPO (see QUICKSTART.md step 5).
-- [ ] **Real motor specs** — STS3215 values are estimates; verify torque curve from hardware docs.
-- [ ] **AMP** — motion priors from ape video (QUICKSTART step 7).
+| `master` | baseline snapshot of original ROS2 package — nothing changed |
+| `sim/mujoco-setup` | all simulation and RL work |
