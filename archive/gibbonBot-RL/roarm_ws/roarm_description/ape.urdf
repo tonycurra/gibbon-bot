@@ -37,7 +37,7 @@
        FRONT-LEFT ARM  (fl_)
   ================================================================ -->
   <joint name="torso_to_fl_base_link" type="fixed">
-    <origin xyz="0.12 0.10 -0.05" rpy="0 0.785 0"/>
+    <origin xyz="0.12 0.10 -0.05" rpy="0 1.5708 0"/>
     <parent link="torso"/>
     <child link="fl_base_link"/>
   </joint>
@@ -222,7 +222,7 @@
        FRONT-RIGHT ARM  (fr_)
   ================================================================ -->
   <joint name="torso_to_fr_base_link" type="fixed">
-    <origin xyz="0.12 -0.10 -0.05" rpy="0 0.785 0"/>
+    <origin xyz="0.12 -0.10 -0.05" rpy="0 1.5708 0"/>
     <parent link="torso"/>
     <child link="fr_base_link"/>
   </joint>
@@ -407,7 +407,7 @@
        BACK-LEFT ARM  (bl_)
   ================================================================ -->
   <joint name="torso_to_bl_base_link" type="fixed">
-    <origin xyz="-0.12 0.10 -0.05" rpy="0 -0.785 0"/>
+    <origin xyz="-0.12 0.10 -0.05" rpy="0 -1.5708 0"/>
     <parent link="torso"/>
     <child link="bl_base_link"/>
   </joint>
@@ -592,7 +592,7 @@
        BACK-RIGHT ARM  (br_)
   ================================================================ -->
   <joint name="torso_to_br_base_link" type="fixed">
-    <origin xyz="-0.12 -0.10 -0.05" rpy="0 -0.785 0"/>
+    <origin xyz="-0.12 -0.10 -0.05" rpy="0 -1.5708 0"/>
     <parent link="torso"/>
     <child link="br_base_link"/>
   </joint>
