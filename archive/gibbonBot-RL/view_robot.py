@@ -17,23 +17,16 @@ import pathlib
 import mujoco
 import mujoco.viewer
 
-URDF = pathlib.Path(__file__).parent / "roarm_ws/roarm_description/ape.urdf"
+SCENE = pathlib.Path(__file__).parent / "scene.xml"
 
-model = mujoco.MjModel.from_xml_path(str(URDF))
+model = mujoco.MjModel.from_xml_path(str(SCENE))
 data = mujoco.MjData(model)
+mujoco.mj_resetDataKeyframe(model, data, 0)  # "home": torso at z=0.5, arms at 0
 
-print(f"Loaded: {URDF.name}")
+print(f"Loaded: {SCENE.name}")
 print(f"  bodies:  {model.nbody}")
-print(f"  joints:  {model.njnt}")
+print(f"  joints:  {model.njnt}  (incl. freejoint)")
 print(f"  DOF:     {model.nv}")
-print(f"  actuators: {model.nu}  (0 = none yet, add in MJCF for RL)")
-
-# Freejoint qpos layout: [x, y, z, qw, qx, qy, qz, ...arm joints...]
-# Default spawn is torso at z=0 (ground level) which causes immediate arm-ground collision.
-# Raise torso to z=0.5 m so the robot falls cleanly onto its feet.
-TORSO_Z = 0.5
-data.qpos[2] = TORSO_Z
-mujoco.mj_forward(model, data)
 
 with mujoco.viewer.launch_passive(model, data) as viewer:
     while viewer.is_running():

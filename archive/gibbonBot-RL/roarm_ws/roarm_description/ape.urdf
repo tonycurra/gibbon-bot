@@ -1,5 +1,12 @@
 <?xml version="1.0"?>
 <robot name="ape_robot">
+  <!-- world link + floating joint so MuJoCo doesn't weld torso to the world -->
+  <link name="world"/>
+  <joint name="world_to_torso" type="floating">
+    <parent link="world"/>
+    <child link="torso"/>
+  </joint>
+
   <!--
     Ape robot: floating torso + 4x RoArm M3 Pro limbs
     Prefixes: fl_ (front-left)  fr_ (front-right)
@@ -65,7 +72,7 @@
     <child link="fl_link1"/>
     <axis xyz="0.0 0.0 1.0"/>
     <limit lower="-3.1416" upper="3.1416" effort="2.94" velocity="6.28"/>
-    <dynamics damping="0.5"/>
+    <dynamics damping="2.0"/>
   </joint>
 
   <link name="fl_link1">
@@ -91,7 +98,7 @@
     <child link="fl_link2"/>
     <axis xyz="-0.0 0 1.0"/>
     <limit lower="-1.5708" upper="1.5708" effort="2.94" velocity="6.28"/>
-    <dynamics damping="0.5"/>
+    <dynamics damping="2.0"/>
   </joint>
 
   <link name="fl_link2">
@@ -117,7 +124,7 @@
     <child link="fl_link3"/>
     <axis xyz="0.0 0.0 1.0"/>
     <limit lower="-1" upper="2.95" effort="2.94" velocity="6.28"/>
-    <dynamics damping="0.5"/>
+    <dynamics damping="2.0"/>
   </joint>
 
   <link name="fl_link3">
@@ -143,7 +150,7 @@
     <child link="fl_link4"/>
     <axis xyz="0.0 0.0 1.0"/>
     <limit lower="-1.5708" upper="1.5708" effort="2.94" velocity="6.28"/>
-    <dynamics damping="0.5"/>
+    <dynamics damping="2.0"/>
   </joint>
 
   <link name="fl_link4">
@@ -169,7 +176,7 @@
     <child link="fl_link5"/>
     <axis xyz="0.0 0.0 1.0"/>
     <limit lower="-3.1416" upper="3.1416" effort="2.94" velocity="6.28"/>
-    <dynamics damping="0.5"/>
+    <dynamics damping="2.0"/>
   </joint>
 
   <link name="fl_link5">
@@ -195,7 +202,7 @@
     <child link="fl_gripper_link"/>
     <axis xyz="0.0 0.0 1.0"/>
     <limit lower="0" upper="1.5" effort="1.47" velocity="6.28"/>
-    <dynamics damping="0.5"/>
+    <dynamics damping="2.0"/>
   </joint>
 
   <link name="fl_gripper_link">
@@ -256,7 +263,7 @@
     <child link="fr_link1"/>
     <axis xyz="0.0 0.0 1.0"/>
     <limit lower="-3.1416" upper="3.1416" effort="2.94" velocity="6.28"/>
-    <dynamics damping="0.5"/>
+    <dynamics damping="2.0"/>
   </joint>
 
   <link name="fr_link1">
@@ -282,7 +289,7 @@
     <child link="fr_link2"/>
     <axis xyz="-0.0 0 1.0"/>
     <limit lower="-1.5708" upper="1.5708" effort="2.94" velocity="6.28"/>
-    <dynamics damping="0.5"/>
+    <dynamics damping="2.0"/>
   </joint>
 
   <link name="fr_link2">
@@ -308,7 +315,7 @@
     <child link="fr_link3"/>
     <axis xyz="0.0 0.0 1.0"/>
     <limit lower="-1" upper="2.95" effort="2.94" velocity="6.28"/>
-    <dynamics damping="0.5"/>
+    <dynamics damping="2.0"/>
   </joint>
 
   <link name="fr_link3">
@@ -334,7 +341,7 @@
     <child link="fr_link4"/>
     <axis xyz="0.0 0.0 1.0"/>
     <limit lower="-1.5708" upper="1.5708" effort="2.94" velocity="6.28"/>
-    <dynamics damping="0.5"/>
+    <dynamics damping="2.0"/>
   </joint>
 
   <link name="fr_link4">
@@ -360,7 +367,7 @@
     <child link="fr_link5"/>
     <axis xyz="0.0 0.0 1.0"/>
     <limit lower="-3.1416" upper="3.1416" effort="2.94" velocity="6.28"/>
-    <dynamics damping="0.5"/>
+    <dynamics damping="2.0"/>
   </joint>
 
   <link name="fr_link5">
@@ -386,7 +393,7 @@
     <child link="fr_gripper_link"/>
     <axis xyz="0.0 0.0 1.0"/>
     <limit lower="0" upper="1.5" effort="1.47" velocity="6.28"/>
-    <dynamics damping="0.5"/>
+    <dynamics damping="2.0"/>
   </joint>
 
   <link name="fr_gripper_link">
@@ -447,7 +454,7 @@
     <child link="bl_link1"/>
     <axis xyz="0.0 0.0 1.0"/>
     <limit lower="-3.1416" upper="3.1416" effort="2.94" velocity="6.28"/>
-    <dynamics damping="0.5"/>
+    <dynamics damping="2.0"/>
   </joint>
 
   <link name="bl_link1">
@@ -473,7 +480,7 @@
     <child link="bl_link2"/>
     <axis xyz="-0.0 0 1.0"/>
     <limit lower="-1.5708" upper="1.5708" effort="2.94" velocity="6.28"/>
-    <dynamics damping="0.5"/>
+    <dynamics damping="2.0"/>
   </joint>
 
   <link name="bl_link2">
@@ -499,7 +506,7 @@
     <child link="bl_link3"/>
     <axis xyz="0.0 0.0 1.0"/>
     <limit lower="-1" upper="2.95" effort="2.94" velocity="6.28"/>
-    <dynamics damping="0.5"/>
+    <dynamics damping="2.0"/>
   </joint>
 
   <link name="bl_link3">
@@ -525,7 +532,7 @@
     <child link="bl_link4"/>
     <axis xyz="0.0 0.0 1.0"/>
     <limit lower="-1.5708" upper="1.5708" effort="2.94" velocity="6.28"/>
-    <dynamics damping="0.5"/>
+    <dynamics damping="2.0"/>
   </joint>
 
   <link name="bl_link4">
@@ -551,7 +558,7 @@
     <child link="bl_link5"/>
     <axis xyz="0.0 0.0 1.0"/>
     <limit lower="-3.1416" upper="3.1416" effort="2.94" velocity="6.28"/>
-    <dynamics damping="0.5"/>
+    <dynamics damping="2.0"/>
   </joint>
 
   <link name="bl_link5">
@@ -577,7 +584,7 @@
     <child link="bl_gripper_link"/>
     <axis xyz="0.0 0.0 1.0"/>
     <limit lower="0" upper="1.5" effort="1.47" velocity="6.28"/>
-    <dynamics damping="0.5"/>
+    <dynamics damping="2.0"/>
   </joint>
 
   <link name="bl_gripper_link">
@@ -638,7 +645,7 @@
     <child link="br_link1"/>
     <axis xyz="0.0 0.0 1.0"/>
     <limit lower="-3.1416" upper="3.1416" effort="2.94" velocity="6.28"/>
-    <dynamics damping="0.5"/>
+    <dynamics damping="2.0"/>
   </joint>
 
   <link name="br_link1">
@@ -664,7 +671,7 @@
     <child link="br_link2"/>
     <axis xyz="-0.0 0 1.0"/>
     <limit lower="-1.5708" upper="1.5708" effort="2.94" velocity="6.28"/>
-    <dynamics damping="0.5"/>
+    <dynamics damping="2.0"/>
   </joint>
 
   <link name="br_link2">
@@ -690,7 +697,7 @@
     <child link="br_link3"/>
     <axis xyz="0.0 0.0 1.0"/>
     <limit lower="-1" upper="2.95" effort="2.94" velocity="6.28"/>
-    <dynamics damping="0.5"/>
+    <dynamics damping="2.0"/>
   </joint>
 
   <link name="br_link3">
@@ -716,7 +723,7 @@
     <child link="br_link4"/>
     <axis xyz="0.0 0.0 1.0"/>
     <limit lower="-1.5708" upper="1.5708" effort="2.94" velocity="6.28"/>
-    <dynamics damping="0.5"/>
+    <dynamics damping="2.0"/>
   </joint>
 
   <link name="br_link4">
@@ -742,7 +749,7 @@
     <child link="br_link5"/>
     <axis xyz="0.0 0.0 1.0"/>
     <limit lower="-3.1416" upper="3.1416" effort="2.94" velocity="6.28"/>
-    <dynamics damping="0.5"/>
+    <dynamics damping="2.0"/>
   </joint>
 
   <link name="br_link5">
@@ -768,7 +775,7 @@
     <child link="br_gripper_link"/>
     <axis xyz="0.0 0.0 1.0"/>
     <limit lower="0" upper="1.5" effort="1.47" velocity="6.28"/>
-    <dynamics damping="0.5"/>
+    <dynamics damping="2.0"/>
   </joint>
 
   <link name="br_gripper_link">
