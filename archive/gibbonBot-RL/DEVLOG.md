@@ -25,7 +25,7 @@
 
 4. **Original files untouched**: `roarm_m3.xacro`, all STL meshes, launch files.
 
-### Mount orientations
+### Mount orientations (initial)
 | Arm | xyz on torso | rpy |
 |-----|-------------|-----|
 | fl_ | 0.12  0.10 -0.05 | 0  0.785 0 |
@@ -33,18 +33,65 @@
 | bl_ |-0.12  0.10 -0.05 | 0 -0.785 0 |
 | br_ |-0.12 -0.10 -0.05 | 0 -0.785 0 |
 
-These are from QUICKSTART.md step 3. Adjust after viewing in step 4.
+---
 
-### Known gaps / next steps
-- [ ] Run `python view_robot.py` and check that the stance looks right. Tweak mount angles if
-      arms clip through the torso or the robot falls badly.
-- [ ] Convert `ape.urdf` → `ape.xml` (native MJCF) for actuator/contact/sensor control.
-      Use: `mujoco.mj_saveLastXML("ape.xml", model)` after loading the URDF.
-- [ ] Add actuators to MJCF (position or torque) for RL training.
-- [ ] Set up Gymnasium environment + PPO (Step 5 in QUICKSTART).
+## 2026-04-22 — Fix spawn angle (commit `56cb352`)
 
-### How to check if mujoco is installed
-```bash
-python -c "import mujoco; print(mujoco.__version__)"
+**Problem**: torso spawned at z=0 (ground level); arms immediately collided with the floor,
+producing a violent sideways shove — robot appeared at an angle on launch.
+
+**Fix**: added `data.qpos[2] = 0.5` + `mj_forward()` in `view_robot.py` before the viewer
+loop to lift the torso 0.5 m above ground at t=0.
+
+---
+
+## 2026-04-22 — Arm mount angle 45° → 90° (commit `ac41507`)
+
+Changed `rpy` pitch on all 4 mount joints from `±0.785` rad (45°) to `±1.5708` rad (90°).
+Arms now point straight down from the torso instead of angled forward/backward.
+
+Joints changed: `torso_to_fl_base_link`, `torso_to_fr_base_link`, `torso_to_bl_base_link`,
+`torso_to_br_base_link` in `ape.urdf`.
+
+---
+
+## 2026-04-22 — Joint damping added (commit `62e6b88`)
+
+**Problem**: all joints had no `<dynamics>` element → zero damping in MuJoCo → frictionless
+hinges that oscillate forever (energy never dissipates).
+
+**Fix**: added `<dynamics damping="0.5"/>` to all 24 revolute joints via `replace_all` on the
+`velocity="6.28"/>` pattern.
+
+---
+
+## 2026-04-22 — Floor, gravity, freejoint, build pipeline (commit `1e388fd`)
+
+Three separate problems fixed together:
+
+**1. No floor / robot falling forever**
+MuJoCo has gravity by default but no ground plane unless you define one. Added a floor geom
+(`type="plane"`) in `build_scene.py` post-processing.
+
+**2. Torso fixed to world (not free-floating)**
+MuJoCo's URDF loader welds the root link to the world by default. Confirmed by checking
+`model.nq=24` (should be 31 for 6DOF base + 24 arm joints).
+Fix: added `<link name="world"/>` + `<joint type="floating">` from world → torso in `ape.urdf`.
+Result: `nq=31, nv=30` — torso is now free-floating.
+
+**3. Damping raised 0.5 → 2.0**
+0.5 was still too low; joints continued to oscillate visibly. Bumped to 2.0 Nm·s/rad.
+
+**New file: `build_scene.py`**
+One-shot converter: loads `ape.urdf` → saves MJCF → patches XML to add:
+- floor geom with friction
+- `meshdir` compiler attribute (fixes mesh path resolution when scene.xml is at repo root)
+- `home` keyframe (torso z=0.5, qw=1, all arm joints=0)
+
+`scene.xml` is the generated output. `view_robot.py` now loads `scene.xml` and resets to the
+`home` keyframe instead of manually setting `data.qpos`.
+
+**Workflow going forward**:
 ```
-If not: `pip install mujoco`
+edit ape.urdf  →  python build_scene.py  →  python view_robot.py
+```
