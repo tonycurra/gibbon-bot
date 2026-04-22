@@ -28,6 +28,13 @@ print(f"  joints:  {model.njnt}")
 print(f"  DOF:     {model.nv}")
 print(f"  actuators: {model.nu}  (0 = none yet, add in MJCF for RL)")
 
+# Freejoint qpos layout: [x, y, z, qw, qx, qy, qz, ...arm joints...]
+# Default spawn is torso at z=0 (ground level) which causes immediate arm-ground collision.
+# Raise torso to z=0.5 m so the robot falls cleanly onto its feet.
+TORSO_Z = 0.5
+data.qpos[2] = TORSO_Z
+mujoco.mj_forward(model, data)
+
 with mujoco.viewer.launch_passive(model, data) as viewer:
     while viewer.is_running():
         mujoco.mj_step(model, data)
