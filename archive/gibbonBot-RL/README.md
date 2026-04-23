@@ -10,8 +10,9 @@ A 4-limb robotic ape built from **4x RoArm M3 Pro** arms, trained with reinforce
 |-------|------|--------|
 | Physics sim | MuJoCo 3.x | ✅ Working |
 | Robot description | URDF → MJCF | ✅ Working |
-| RL training | SB3 PPO + GPU | ✅ Working |
-| Live viewer | `watch_multi.py` | ✅ Working |
+| RL — reach tree | `ape_env.py` + PPO | ✅ Working |
+| RL — stand up | `stand_env.py` + PPO | ✅ Training |
+| Live viewer | `watch.py` | ✅ Working |
 | Motion reference | AMP / ViTPose | ⬜ Next |
 | Real hardware | ROS2 / MoveIt | ⬜ Later |
 
@@ -47,14 +48,17 @@ gb2.1/
 ├── QUICKSTART.md           ← original project roadmap
 │
 │── Training & eval
-├── train.py                ← PPO training (GPU auto-detected), saves to runs/ape_reach/
-├── eval.py                 ← evaluate a saved checkpoint, prints episode stats
-├── watch.py                ← persistent single-env viewer, hot-swaps checkpoints
-├── watch_multi.py          ← split-screen viewer (N envs in a grid), hot-swaps policy
+├── train.py                ← PPO training (--task reach|stand), saves to runs/<task>/
+├── eval.py                 ← evaluate a checkpoint (--task reach|stand)
+├── watch.py                ← live viewer, hot-swaps checkpoints (--task reach|stand)
+├── watch_multi.py          ← split-screen viewer (N envs in a grid) — reach task only
+│
+│── Environments
+├── ape_env.py              ← reach task: walk to tree 5m away
+├── stand_env.py            ← stand task: lift torso to 0.30m, hold stable
+├── terrain.py              ← generates 64×64 agricultural heightfield at runtime
 │
 │── Simulation core
-├── ape_env.py              ← Gymnasium environment (obs, action, reward)
-├── terrain.py              ← generates 64×64 agricultural heightfield at runtime
 ├── build_scene.py          ← converts ape.urdf → scene.xml (run after any URDF edit)
 ├── scene.xml               ← generated MJCF — do NOT edit by hand
 │
@@ -80,23 +84,30 @@ source .venv/bin/activate
 # View the robot on terrain
 python view_robot.py
 
-# Train (uses GPU if available, CPU otherwise)
-python train.py
+# Train — reach task (default) or stand task
+python train.py                   # reach: walk to tree
+python train.py --task stand      # stand: lift and hold height
+python train.py --task stand --resume   # continue from last checkpoint
 
-# Watch training live — split screen, N parallel envs
-python watch_multi.py           # 2×2 grid
-python watch_multi.py --n 8     # 2×4 grid
+# Watch training live
+python watch.py                   # reach task
+python watch.py --task stand      # stand task
+
+# Split-screen multi-env viewer (reach task)
+python watch_multi.py             # 2×2 grid
+python watch_multi.py --n 8       # 2×4 grid
 
 # Evaluate a checkpoint
 python eval.py
-python eval.py --model runs/ape_reach/ape_reach_50000_steps.zip
+python eval.py --task stand
+python eval.py --task stand --model runs/ape_stand/ape_stand_final.zip
 ```
 
 ### Two-terminal workflow
 
 ```
-Terminal 1:  python train.py
-Terminal 2:  python watch_multi.py --n 4
+Terminal 1:  python train.py --task stand
+Terminal 2:  python watch.py --task stand
 ```
 
 The viewer auto-loads new checkpoints as training saves them.
@@ -112,14 +123,29 @@ python view_robot.py    # verify visually
 
 ## Environment details
 
+### Reach task (`ape_env.py`)
+
 | Item | Value |
 |------|-------|
 | Observation | 63-dim: torso z/quat/vel + 24 joint pos/vel + tree direction + distance |
 | Action | 24-dim joint position targets, normalised to [-1, 1] |
-| Reward | `progress×2 + 0.1 - 5e-4×ctrl² - 1e-3×jvel²` |
-| Termination | Fallen (torso < 0.15m) or success (dist < 1.5m) |
+| Reward | `progress×2 + 0.1 alive − 5e-4×ctrl² − 1e-3×jvel²` |
+| Termination | Fallen (torso < 0.15m above terrain) or success (dist < 1.5m to tree) |
 | Timeout | 2000 steps |
-| Goal | Reach the tree at (5, 0, 0) — 5m from spawn |
+| Goal | Reach the tree at (5, 0, 0) |
+
+### Stand task (`stand_env.py`)
+
+| Item | Value |
+|------|-------|
+| Observation | 59-dim: torso z/quat/vel + 24 joint pos/vel |
+| Action | 24-dim joint position targets, normalised to [-1, 1] |
+| Reward | `height_reward + upright_reward + 0.05 alive − 5e-4×ctrl² − 1e-3×jvel²` |
+| height_reward | Gaussian peak 1.0 at 0.30m above terrain (σ=0.08m) |
+| upright_reward | 0.3 × quat_w² — penalises torso tilt |
+| Termination | Fallen (torso < 3cm above terrain surface) |
+| Timeout | 2000 steps |
+| Goal | Lift torso to 30cm and hold it stably |
 
 ---
 

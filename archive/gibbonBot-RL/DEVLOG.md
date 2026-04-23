@@ -226,6 +226,46 @@ a single OpenCV window (split-screen). Policy is batched across all N envs simul
 
 ---
 
+## 2026-04-23 — Stand task: lift and hold stable height
+
+**Goal**: teach the robot to push itself off the ground and hold a comfortable standing height — a prerequisite for locomotion and reaching behaviour.
+
+**New file: `stand_env.py`**
+Separate Gymnasium environment for the standing task.
+- 59-dim observation: torso z, quat, lin/ang vel, 24 joint pos/vel (no tree signal needed)
+- 24-dim action: same joint position targets as `ape_env`
+- Start pose: torso 7 cm above terrain surface, arms in splayed-down init pose (`link2` angle −0.4 rad, `link3` 1.2 rad) + uniform noise ±0.1
+- Reward: `height_reward + upright_reward + 0.05 alive − 5e-4×ctrl² − 1e-3×jvel²`
+  - `height_reward`: Gaussian centred on `TARGET_Z=0.30 m` above terrain, max 1.0 (σ=0.08 m)
+  - `upright_reward`: `0.3 × w²` where w is torso quaternion scalar — penalises tilt
+- Termination: torso < 3 cm above terrain (fallen); timeout 2000 steps
+- No success terminal state — reward is dense, agent learns to hold height indefinitely
+
+**Terrain-aware spawn (`_terrain_z`)**: the terrain heightfield reaches 0.43 m at origin (seed=42).
+Without this fix the robot spawned 0.36 m underground. `_terrain_z(x, y)` reads `hfield_data`
+directly, converting pixel coordinates from world XY. Fall detection is now relative to terrain
+surface, not absolute world Z.
+
+**`train.py`**: added `--task reach|stand` flag. Checkpoints go to `runs/ape_reach/` or
+`runs/ape_stand/` depending on task. Defaults to `reach` so existing workflow is unchanged.
+
+**`watch.py`** (rewritten): now task-aware (`--task stand|reach`). Uses the env directly
+instead of duplicating obs-building logic — one source of truth. Added `viewer_alive()` check
+inside both the episode and outer loops so closing the window exits cleanly rather than crashing.
+Catches and reports exceptions instead of killing silently. Prints `height=` and `h_rew=` for
+the stand task.
+
+**`eval.py`** (rewritten): same task flag, same env-direct approach. Tracks `best_z` per episode
+for the stand task.
+
+**Two-terminal workflow for stand training**:
+```
+Terminal 1:  python train.py --task stand
+Terminal 2:  python watch.py --task stand
+```
+
+---
+
 ## 2026-04-22 — GPU enabled (PyTorch cu121 for CUDA 12.2 driver)
 
 **Problem**: PyTorch 2.11.0+cu130 was installed (needs CUDA 13.0 driver) but WSL2 driver
