@@ -103,14 +103,35 @@ python eval.py --task stand
 python eval.py --task stand --model runs/ape_stand/ape_stand_final.zip
 ```
 
-### Two-terminal workflow
+### One-command workflow (recommended)
+
+```bash
+python run.py              # stand task — starts training + viewer together
+python run.py --task reach
+python run.py --resume
+```
+
+Close the viewer window or Ctrl+C to stop both.
+
+### Interactive hints
+
+While training runs, edit `hints.py` to encourage specific behaviours.
+Changes are picked up automatically at the start of the next episode — no restart needed.
+
+```python
+# hints.py — set weight > 0 to activate
+"spread_legs":      0.3   # wider base
+"front_arms_down":  0.2   # keep front grippers planted
+"symmetry":         0.1   # discourage leaning
+"stillness":        0.0   # (off) slow deliberate movement
+```
+
+### Two-terminal workflow (alternative)
 
 ```
 Terminal 1:  python train.py --task stand
 Terminal 2:  python watch.py --task stand
 ```
-
-The viewer auto-loads new checkpoints as training saves them.
 
 ### After editing ape.urdf
 

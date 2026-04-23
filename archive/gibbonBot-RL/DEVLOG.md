@@ -226,6 +226,30 @@ a single OpenCV window (split-screen). Policy is batched across all N envs simul
 
 ---
 
+## 2026-04-23 — Interactive reward hints + one-command launcher
+
+**Goal**: be able to watch training live and inject behavioural hints mid-run without restarting.
+
+**`hints.py`**: plain Python dict of named reward terms with float weights.
+All weights start at 0.0 (disabled). Edit and save while training; picked up next episode.
+Available hints: `upright`, `spread_legs`, `front_arms_down`, `back_arms_down`, `symmetry`, `stillness`.
+
+**`stand_env.py` changes**:
+- `_reload_hints()` called every `reset()` — checks `hints.py` file mtime, `importlib.reload`s only when changed. Prints active hints to terminal on change.
+- `_hints_reward()` computes per-step bonus from active hints using body positions (`xpos`) and joint arrays.
+
+**`run.py`**: one command launches both training (subprocess) and viewer (foreground).
+Closing the viewer or Ctrl+C terminates the trainer cleanly.
+```
+python run.py              # stand task
+python run.py --task reach
+python run.py --resume
+```
+
+**Workflow**: `python run.py` → watch → tell Claude what to encourage → Claude edits `hints.py` → next episode picks it up automatically.
+
+---
+
 ## 2026-04-23 — Stand task: lift and hold stable height
 
 **Goal**: teach the robot to push itself off the ground and hold a comfortable standing height — a prerequisite for locomotion and reaching behaviour.

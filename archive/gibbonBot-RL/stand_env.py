@@ -23,6 +23,7 @@ Reward per step:
   - fall      -10 on termination if torso too low
 """
 
+import importlib
 import numpy as np
 import mujoco
 import mujoco.viewer
@@ -30,8 +31,10 @@ import gymnasium as gym
 from gymnasium import spaces
 import pathlib
 import terrain as terrain_mod
+import hints as hints_mod
 
 SCENE      = pathlib.Path(__file__).parent / "scene.xml"
+HINTS_FILE = pathlib.Path(__file__).parent / "hints.py"
 TARGET_Z   = 0.30   # comfortable standing height above terrain (metres)
 MIN_HEIGHT = 0.03   # torso this far below terrain surface → fallen
 SPAWN_CLEARANCE = 0.07  # start this far above terrain
@@ -77,7 +80,9 @@ class StandEnv(gym.Env):
             low=-1.0, high=1.0, shape=(24,), dtype=np.float32
         )
 
-        self._step_count = 0
+        self._step_count  = 0
+        self._hints_mtime = 0.0
+        self._hints       = dict(hints_mod.HINTS)
 
         if render_mode == "human":
             self._viewer = mujoco.viewer.launch_passive(self.model, self.data)
@@ -105,8 +110,9 @@ class StandEnv(gym.Env):
         self.data.qpos[7:] = _STAND_INIT + rng.uniform(-0.1, 0.1, size=24)
 
         mujoco.mj_forward(self.model, self.data)
-        self._ground_z   = ground_z   # store for fall detection
+        self._ground_z   = ground_z
         self._step_count = 0
+        self._reload_hints()
 
         return self._get_obs(), {}
 
@@ -146,12 +152,15 @@ class StandEnv(gym.Env):
         if fallen:
             reward -= 10.0
 
+        reward += self._hints_reward()
+
         terminated = fallen
         truncated  = self._step_count >= MAX_STEPS
 
         info = {"torso_z": torso_z, "above_ground": above_ground,
                 "fallen": fallen, "height_reward": height_reward,
-                "upright_reward": upright_reward}
+                "upright_reward": upright_reward,
+                "active_hints": [k for k, v in self._hints.items() if v != 0.0]}
         return obs, reward, terminated, truncated, info
 
     def close(self):
@@ -159,6 +168,63 @@ class StandEnv(gym.Env):
             self._viewer.close()
 
     # ── helpers ───────────────────────────────────────────────────────────────
+
+    def _reload_hints(self):
+        try:
+            mtime = HINTS_FILE.stat().st_mtime
+            if mtime != self._hints_mtime:
+                importlib.reload(hints_mod)
+                self._hints = dict(hints_mod.HINTS)
+                self._hints_mtime = mtime
+                active = {k: v for k, v in self._hints.items() if v != 0.0}
+                print(f"[hints] reloaded — active: {active or 'none'}")
+        except Exception as e:
+            print(f"[hints] reload error: {e}")
+
+    def _hints_reward(self) -> float:
+        h = self._hints
+        r = 0.0
+        qpos = self.data.qpos
+        qvel = self.data.qvel
+
+        if h.get("upright", 0.0) != 0.0:
+            w = float(qpos[3])
+            # 1 - w^2: 0 when upright, up to 1 when tipped — negate for reward
+            r += h["upright"] * (w * w - 1.0 + 1.0)   # = w^2, same as base but user-weighted
+
+        if h.get("spread_legs", 0.0) != 0.0:
+            # base joints are indices 0,6,12,18 in the arm joint array (qpos[7:])
+            base_joints = qpos[7:][::6]
+            r += h["spread_legs"] * float(np.mean(np.abs(base_joints)))
+
+        if h.get("front_arms_down", 0.0) != 0.0:
+            # fl gripper = body "fl_gripper_link", fr gripper = "fr_gripper_link"
+            fl_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "fl_gripper_link")
+            fr_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "fr_gripper_link")
+            if fl_id >= 0 and fr_id >= 0:
+                fl_z = float(self.data.xpos[fl_id][2]) - self._ground_z
+                fr_z = float(self.data.xpos[fr_id][2]) - self._ground_z
+                r -= h["front_arms_down"] * (fl_z + fr_z)   # lower = better
+
+        if h.get("back_arms_down", 0.0) != 0.0:
+            bl_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "bl_gripper_link")
+            br_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "br_gripper_link")
+            if bl_id >= 0 and br_id >= 0:
+                bl_z = float(self.data.xpos[bl_id][2]) - self._ground_z
+                br_z = float(self.data.xpos[br_id][2]) - self._ground_z
+                r -= h["back_arms_down"] * (bl_z + br_z)
+
+        if h.get("symmetry", 0.0) != 0.0:
+            jpos = qpos[7:]
+            # compare fl vs fr (indices 0:6 vs 6:12) and bl vs br (12:18 vs 18:24)
+            lr_diff = float(np.mean(np.abs(jpos[0:6] - jpos[6:12]))) \
+                    + float(np.mean(np.abs(jpos[12:18] - jpos[18:24])))
+            r -= h["symmetry"] * lr_diff
+
+        if h.get("stillness", 0.0) != 0.0:
+            r -= h["stillness"] * float(np.sum(qvel[6:] ** 2))
+
+        return r
 
     def _terrain_z(self, x: float, y: float) -> float:
         """World-space terrain height at (x, y). Returns 0.0 if no hfield."""
