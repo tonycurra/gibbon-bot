@@ -48,7 +48,6 @@ class ApeEnv(gym.Env):
         self.render_mode = render_mode
 
         self.model = mujoco.MjModel.from_xml_path(str(SCENE))
-        terrain_mod.apply(self.model)
         self.data  = mujoco.MjData(self.model)
 
         # joint position ranges for action rescaling

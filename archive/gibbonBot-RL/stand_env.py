@@ -30,7 +30,6 @@ import mujoco.viewer
 import gymnasium as gym
 from gymnasium import spaces
 import pathlib
-import terrain as terrain_mod
 import hints as hints_mod
 
 SCENE      = pathlib.Path(__file__).parent / "scene.xml"
@@ -64,7 +63,6 @@ class StandEnv(gym.Env):
         self.render_mode = render_mode
 
         self.model = mujoco.MjModel.from_xml_path(str(SCENE))
-        terrain_mod.apply(self.model)
         self.data  = mujoco.MjData(self.model)
 
         self._jnt_lo = np.array([self.model.jnt_range[i][0]
@@ -97,12 +95,9 @@ class StandEnv(gym.Env):
 
         mujoco.mj_resetData(self.model, self.data)
 
-        # start torso just above terrain at spawn XY
-        spawn_x, spawn_y = 0.0, 0.0
-        ground_z = self._terrain_z(spawn_x, spawn_y)
-        self.data.qpos[0] = spawn_x
-        self.data.qpos[1] = spawn_y
-        self.data.qpos[2] = ground_z + SPAWN_CLEARANCE
+        self.data.qpos[0] = 0.0
+        self.data.qpos[1] = 0.0
+        self.data.qpos[2] = SPAWN_CLEARANCE  # ground is always z=0
         self.data.qpos[3] = 1.0   # quat w (upright)
         self.data.qpos[4:7] = 0.0
 
@@ -110,7 +105,6 @@ class StandEnv(gym.Env):
         self.data.qpos[7:] = _STAND_INIT + rng.uniform(-0.1, 0.1, size=24)
 
         mujoco.mj_forward(self.model, self.data)
-        self._ground_z   = ground_z
         self._step_count = 0
         self._reload_hints()
 
@@ -129,9 +123,9 @@ class StandEnv(gym.Env):
         self._step_count += 1
         obs = self._get_obs()
 
-        torso_z  = float(self.data.qpos[2])
-        above_ground = torso_z - self._ground_z
-        fallen   = above_ground < MIN_HEIGHT
+        torso_z      = float(self.data.qpos[2])
+        above_ground = torso_z  # ground is z=0
+        fallen       = above_ground < MIN_HEIGHT
 
         # height reward: Gaussian around TARGET_Z above terrain, max 1.0
         height_err    = (above_ground - TARGET_Z) / 0.08
@@ -225,19 +219,6 @@ class StandEnv(gym.Env):
             r -= h["stillness"] * float(np.sum(qvel[6:] ** 2))
 
         return r
-
-    def _terrain_z(self, x: float, y: float) -> float:
-        """World-space terrain height at (x, y). Returns 0.0 if no hfield."""
-        hid = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_HFIELD, "terrain")
-        if hid < 0:
-            return 0.0
-        size  = self.model.hfield_size[hid]   # [x_half, y_half, z_scale, base]
-        nrow  = self.model.hfield_nrow[hid]
-        ncol  = self.model.hfield_ncol[hid]
-        col   = int(np.clip((x + size[0]) / (2 * size[0]) * (ncol - 1), 0, ncol - 1))
-        row   = int(np.clip((y + size[1]) / (2 * size[1]) * (nrow - 1), 0, nrow - 1))
-        h_norm = float(self.model.hfield_data[row * ncol + col])
-        return h_norm * float(size[2])   # z_scale; base already in geom pos
 
     def _get_obs(self):
         qpos = self.data.qpos

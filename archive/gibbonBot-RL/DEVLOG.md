@@ -290,6 +290,24 @@ Terminal 2:  python watch.py --task stand
 
 ---
 
+## 2026-04-24 — Flat ground + one-command training
+
+**Problems fixed**:
+1. `watch.py` printed FALLEN constantly even when the robot looked fine visually. Root cause: the terrain heightfield peaks at ~0.43 m at the spawn point, so `_terrain_z` was returning a high value and `above_ground = torso_z - ground_z` was near zero immediately after spawn.
+2. Bumpy grass terrain made early training harder with no benefit at this stage.
+
+**Changes**:
+- `scene.xml`: replaced the hfield + grass texture with a flat grey `plane` geom. Ground is exactly z=0 everywhere.
+- `stand_env.py`: removed `terrain_mod` dependency entirely. `above_ground` is now just `torso_z` directly. Removed `_terrain_z()` method and `_ground_z` instance variable. Reset no longer looks up terrain height — just sets `qpos[2] = SPAWN_CLEARANCE`.
+- `ape_env.py`: removed `terrain_mod.apply()` call (no hfield to fill).
+- `sim.py`: removed `terrain_mod` import and call (added this session as a simple interactive viewer).
+- `train.py`: `--envs` flag (default 1) replaces the hardcoded `N_ENVS=8`. Added `--watch` flag that spawns `watch.py` as a subprocess so training + live viewer runs from a single command:
+  ```
+  python train.py --task stand --watch
+  ```
+
+---
+
 ## 2026-04-22 — GPU enabled (PyTorch cu121 for CUDA 12.2 driver)
 
 **Problem**: PyTorch 2.11.0+cu130 was installed (needs CUDA 13.0 driver) but WSL2 driver
