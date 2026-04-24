@@ -290,6 +290,17 @@ Terminal 2:  python watch.py --task stand
 
 ---
 
+## 2026-04-24 — Slower, wider movements
+
+**Goal**: reduce the quick twitchy motions and encourage slower, more deliberate arm sweeps.
+
+Three changes:
+1. `PHYSICS_STEPS_PER_ACTION` 5 → 12: each policy decision plays out over more physics time, so the robot can't jerk between poses rapidly.
+2. Action-delta penalty `−2e-2 × Σ(aₜ − aₜ₋₁)²` added to reward: directly penalises large jumps between consecutive actions. `_prev_action` tracked in env state, reset to zeros on episode start.
+3. Servo `kp` 20 → 8 in scene.xml: position-control gains halved, so joints respond more gradually rather than snapping to targets.
+
+---
+
 ## 2026-04-24 — Flat ground + one-command training
 
 **Problems fixed**:

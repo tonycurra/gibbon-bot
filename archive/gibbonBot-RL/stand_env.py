@@ -38,7 +38,7 @@ TARGET_Z   = 0.30   # comfortable standing height above terrain (metres)
 MIN_HEIGHT = 0.03   # torso this far below terrain surface → fallen
 SPAWN_CLEARANCE = 0.07  # start this far above terrain
 MAX_STEPS  = 2000
-PHYSICS_STEPS_PER_ACTION = 5
+PHYSICS_STEPS_PER_ACTION = 12  # longer per-action window → slower, more deliberate motion
 
 # Arms splayed down — a reasonable starting pose for learning to stand.
 # Each leg: base(link1) rotated outward, link2 angled down, rest relaxed.
@@ -79,6 +79,7 @@ class StandEnv(gym.Env):
         )
 
         self._step_count  = 0
+        self._prev_action = np.zeros(24, dtype=np.float32)
         self._hints_mtime = 0.0
         self._hints       = dict(hints_mod.HINTS)
 
@@ -105,12 +106,14 @@ class StandEnv(gym.Env):
         self.data.qpos[7:] = _STAND_INIT + rng.uniform(-0.1, 0.1, size=24)
 
         mujoco.mj_forward(self.model, self.data)
-        self._step_count = 0
+        self._step_count  = 0
+        self._prev_action = np.zeros(24, dtype=np.float32)
         self._reload_hints()
 
         return self._get_obs(), {}
 
     def step(self, action):
+        action = np.asarray(action, dtype=np.float32)
         ctrl = 0.5 * (action + 1.0) * (self._jnt_hi - self._jnt_lo) + self._jnt_lo
         self.data.ctrl[:] = ctrl
 
@@ -135,13 +138,17 @@ class StandEnv(gym.Env):
         w = float(self.data.qpos[3])
         upright_reward = 0.3 * w * w
 
-        jvel   = self.data.qvel[6:]
+        jvel        = self.data.qvel[6:]
+        action_delta = float(np.sum((action - self._prev_action) ** 2))
+        self._prev_action = action.copy()
+
         reward = (
               height_reward
             + upright_reward
             + 0.05                                    # alive bonus
             - 5e-4 * float(np.sum(ctrl ** 2))        # energy
-            - 1e-3 * float(np.sum(jvel ** 2))        # velocity / flailing
+            - 1e-3 * float(np.sum(jvel ** 2))        # joint velocity / flailing
+            - 2e-2 * action_delta                     # action smoothness
         )
         if fallen:
             reward -= 10.0
