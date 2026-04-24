@@ -29,13 +29,15 @@ _STAND_INIT = np.array([
 
 
 def load_model():
-    """Load MuJoCo model and put onto GPU via MJX."""
+    """Load MuJoCo model and put onto GPU via MJX.
+
+    Also reads envs/hints.py once at startup and baked its weights + gripper
+    body IDs into a `hints` dict that step() adds to the reward.
+    Changing hints.py requires restarting training (JIT won't pick up changes).
+    """
     mj_model = mujoco.MjModel.from_xml_path(str(SCENE))
     mj_model.opt.timestep = 0.002
 
-    # Disable collision on STL mesh geoms — they're visual only.
-    # MJX compiles a kernel per geometry pair; mesh geoms cause combinatorial explosion.
-    # Collision is handled by the torso box + gripper approximate geoms.
     for i in range(mj_model.ngeom):
         if mj_model.geom_type[i] == mujoco.mjtGeom.mjGEOM_MESH:
             mj_model.geom_contype[i] = 0
@@ -44,7 +46,30 @@ def load_model():
     mx = mjx.put_model(mj_model)
     jnt_lo = jnp.array([mj_model.jnt_range[i][0] for i in range(1, mj_model.njnt)])
     jnt_hi = jnp.array([mj_model.jnt_range[i][1] for i in range(1, mj_model.njnt)])
-    return mx, jnt_lo, jnt_hi
+
+    # Read hints.py once and resolve gripper body IDs
+    from . import hints as hints_mod
+    h = hints_mod.HINTS
+
+    def body_id(name):
+        return mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_BODY, name)
+
+    hints = {
+        "upright":         float(h.get("upright", 0.0)),
+        "spread_legs":     float(h.get("spread_legs", 0.0)),
+        "front_arms_down": float(h.get("front_arms_down", 0.0)),
+        "back_arms_down":  float(h.get("back_arms_down", 0.0)),
+        "stillness":       float(h.get("stillness", 0.0)),
+        "symmetry":        float(h.get("symmetry", 0.0)),
+        # static body indices
+        "fl_id": body_id("fl_gripper_link"),
+        "fr_id": body_id("fr_gripper_link"),
+        "bl_id": body_id("bl_gripper_link"),
+        "br_id": body_id("br_gripper_link"),
+    }
+    active = [k for k, v in hints.items() if isinstance(v, float) and v != 0.0]
+    print(f"[mjx] hints baked in: {active or 'none'}")
+    return mx, jnt_lo, jnt_hi, hints
 
 
 def reset(mx, jnt_lo, jnt_hi, rng):
@@ -70,12 +95,13 @@ def reset(mx, jnt_lo, jnt_hi, rng):
     return dx, obs, prev_action
 
 
-def step(mx, jnt_lo, jnt_hi, dx, action, prev_action):
-    """Step one environment. Returns (dx, obs, reward, done, prev_action)."""
-    ctrl = 0.5 * (action + 1.0) * (jnt_hi - jnt_lo) + jnt_lo
+def step(mx, jnt_lo, jnt_hi, hints, dx, action, prev_action):
+    """Step one environment. Returns (dx, obs, reward, done, prev_action).
 
-    def physics_step(dx, _):
-        return dx.replace(ctrl=ctrl), None
+    `hints` is a dict of scalar weights baked in at load time (see load_model).
+    Non-scalar entries (body IDs) are used to look up gripper positions.
+    """
+    ctrl = 0.5 * (action + 1.0) * (jnt_hi - jnt_lo) + jnt_lo
 
     dx = dx.replace(ctrl=ctrl)
     dx, _ = jax.lax.scan(
@@ -108,7 +134,27 @@ def step(mx, jnt_lo, jnt_hi, dx, action, prev_action):
         - 10.0 * fallen
     )
 
-    return dx, obs, reward, fallen, action.copy()
+    # ── hint rewards (weights baked in at load time) ─────────────────────────
+    reward += hints["upright"] * w * w
+
+    base_joints = dx.qpos[7:][::6]
+    reward += hints["spread_legs"] * jnp.mean(jnp.abs(base_joints))
+
+    fl_z = dx.xpos[hints["fl_id"]][2]
+    fr_z = dx.xpos[hints["fr_id"]][2]
+    reward -= hints["front_arms_down"] * (fl_z + fr_z)
+
+    bl_z = dx.xpos[hints["bl_id"]][2]
+    br_z = dx.xpos[hints["br_id"]][2]
+    reward -= hints["back_arms_down"] * (bl_z + br_z)
+
+    reward -= hints["stillness"] * jnp.sum(jvel ** 2)
+
+    jpos = dx.qpos[7:]
+    sym_diff = jnp.mean(jnp.abs(jpos[0:6] - jpos[6:12])) + jnp.mean(jnp.abs(jpos[12:18] - jpos[18:24]))
+    reward -= hints["symmetry"] * sym_diff
+
+    return dx, obs, reward, fallen, action
 
 
 def _get_obs(dx):

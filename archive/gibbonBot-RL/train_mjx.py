@@ -180,11 +180,11 @@ def main():
 
     print(f"JAX devices: {jax.devices()}")
     print(f"Loading model...")
-    mx, jnt_lo, jnt_hi = load_model()
+    mx, jnt_lo, jnt_hi, hints = load_model()
 
     # vmapped env functions
     v_reset = jax.jit(jax.vmap(lambda rng: reset(mx, jnt_lo, jnt_hi, rng)))
-    v_step  = jax.jit(jax.vmap(lambda dx, a, pa: step(mx, jnt_lo, jnt_hi, dx, a, pa)))
+    v_step  = jax.jit(jax.vmap(lambda dx, a, pa: step(mx, jnt_lo, jnt_hi, hints, dx, a, pa)))
 
     rng = jax.random.PRNGKey(42)
     rng, init_rng, env_rng = jax.random.split(rng, 3)
