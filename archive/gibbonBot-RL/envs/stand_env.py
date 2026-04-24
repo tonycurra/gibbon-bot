@@ -30,9 +30,10 @@ import mujoco.viewer
 import gymnasium as gym
 from gymnasium import spaces
 import pathlib
-import hints as hints_mod
+from . import hints as hints_mod
 
-SCENE      = pathlib.Path(__file__).parent / "scene.xml"
+ROOT       = pathlib.Path(__file__).parent.parent
+SCENE      = ROOT / "scene.xml"
 HINTS_FILE = pathlib.Path(__file__).parent / "hints.py"
 TARGET_Z   = 0.30   # comfortable standing height above terrain (metres)
 MIN_HEIGHT = 0.03   # torso this far below terrain surface → fallen

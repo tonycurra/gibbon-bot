@@ -10,14 +10,15 @@ Usage:
     python watch_multi.py --n 9 --width 320 --height 240
 """
 
+import sys, pathlib
+sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
+
 import argparse
 import math
-import pathlib
 import time
 import numpy as np
 import cv2
 import mujoco
-import terrain as terrain_mod
 from stable_baselines3 import PPO
 
 RUNS          = pathlib.Path("runs/ape_reach")
@@ -64,7 +65,7 @@ def main():
     cols = math.ceil(math.sqrt(N))
     rows = math.ceil(N / cols)
 
-    scene = pathlib.Path(__file__).parent / "scene.xml"
+    scene = pathlib.Path(__file__).parent.parent / "scene.xml"
 
     print(f"Waiting for first checkpoint ({N} envs, {cols}×{rows} grid)...")
     while True:
@@ -79,7 +80,6 @@ def main():
 
     # shared model (read-only), separate data per env
     mjmodel = mujoco.MjModel.from_xml_path(str(scene))
-    terrain_mod.apply(mjmodel)
 
     datas     = [mujoco.MjData(mjmodel) for _ in range(N)]
     renderers = [mujoco.Renderer(mjmodel, height=args.height, width=args.width) for _ in range(N)]

@@ -8,8 +8,10 @@ Usage:
     python eval.py --episodes 10
 """
 
+import sys, pathlib
+sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
+
 import argparse
-import pathlib
 import numpy as np
 from stable_baselines3 import PPO
 
@@ -33,9 +35,9 @@ def main():
         return
 
     if args.task == "reach":
-        from ape_env import ApeEnv as EnvClass
+        from envs import ApeEnv as EnvClass
     else:
-        from stand_env import StandEnv as EnvClass
+        from envs import StandEnv as EnvClass
 
     model = PPO.load(model_path)
     env   = EnvClass(render_mode="human")

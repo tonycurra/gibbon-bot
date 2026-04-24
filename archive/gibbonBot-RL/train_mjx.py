@@ -28,7 +28,7 @@ import mujoco
 from flax.training.train_state import TrainState
 from flax import struct
 import lineage as lineage_mod
-from stand_env_mjx import (
+from envs.stand_env_mjx import (
     load_model, reset, step,
     OBS_DIM, ACT_DIM, MAX_STEPS,
 )
@@ -202,7 +202,7 @@ def main():
 
     lineage_mod.record(RUNS, "stand_mjx", N_ENVS,
                        "inherited" if args.inherit else None,
-                       SCENE, pathlib.Path("stand_env_mjx.py"))
+                       SCENE, pathlib.Path("envs/stand_env_mjx.py"))
 
     total_env_steps = 0
     update_count    = 0
@@ -301,7 +301,7 @@ def _save(train_state, steps):
     # also export as SB3-compatible zip so watch.py can load it
     try:
         from stable_baselines3 import PPO
-        from stand_env import StandEnv
+        from envs import StandEnv
         env = StandEnv()
         sb3 = PPO("MlpPolicy", env, verbose=0)
         _copy_weights_to_sb3(train_state, sb3)

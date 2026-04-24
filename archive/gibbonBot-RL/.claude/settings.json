@@ -5,7 +5,8 @@
       "Bash(.venv/bin/python -c \"import torch; print\\('torch:', torch.__version__\\); print\\('cuda available:', torch.cuda.is_available\\(\\)\\)\")",
       "Bash(.venv/bin/python -c \"import torch; print\\('torch:', torch.__version__\\); print\\('cuda available:', torch.cuda.is_available\\(\\)\\); print\\('GPU:', torch.cuda.get_device_name\\(0\\) if torch.cuda.is_available\\(\\) else 'none'\\)\")",
       "Bash(.venv/bin/pip install *)",
-      "Bash(.venv/bin/python -c ' *)"
+      "Bash(.venv/bin/python -c ' *)",
+      "Bash(git mv *)"
     ]
   }
 }

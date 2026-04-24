@@ -12,7 +12,7 @@ import mujoco.mjx as mjx
 import numpy as np
 import pathlib
 
-SCENE      = pathlib.Path(__file__).parent / "scene.xml"
+SCENE      = pathlib.Path(__file__).parent.parent / "scene.xml"
 TARGET_Z   = 0.30
 MIN_HEIGHT = 0.03
 SPAWN_CLEARANCE = 0.07

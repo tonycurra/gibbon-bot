@@ -12,7 +12,7 @@ import mujoco
 import mujoco.viewer
 import pathlib
 
-SCENE = pathlib.Path(__file__).parent / "scene.xml"
+SCENE = pathlib.Path(__file__).parent.parent / "scene.xml"
 
 
 def main():

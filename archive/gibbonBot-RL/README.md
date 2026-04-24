@@ -46,34 +46,26 @@ gb2.1/
 │
 ├── README.md               ← you are here
 ├── DEVLOG.md               ← full change history with rationale
-├── FUTURE.md               ← AMP, MJX, video tracking pipeline plans
-├── QUICKSTART.md           ← original project roadmap
+├── FUTURE.md               ← AMP, video tracking, MJX pipeline plans
+├── scene.xml               ← MJCF scene (flat ground, capsule tree for MJX compat)
+├── lineage.py              ← records hardware params + inheritance chain per run
 │
-│── Training (CPU — SB3)
-├── train.py                ← PPO via SB3 (--task reach|stand, --resume, --inherit, --watch)
-├── eval.py                 ← evaluate a checkpoint
-├── watch.py                ← live viewer, hot-swaps checkpoints (--task reach|stand)
-├── run.py                  ← one-command launcher (training + viewer)
+├── envs/                   ← Gymnasium environments + reward shaping
+│   ├── ape_env.py          ← reach task: walk to tree 5m away
+│   ├── stand_env.py        ← stand task: lift torso to 0.30m, hold stable
+│   ├── stand_env_mjx.py    ← MJX version: pure JAX, GPU-parallel
+│   └── hints.py            ← live reward shaping (hot-reloaded each episode)
 │
-│── Training (GPU — MJX)
-├── train_mjx.py            ← JAX PPO, 1024 parallel envs on GPU, ~46M steps/hr
-├── stand_env_mjx.py        ← pure-JAX MJX environment (stateless reset/step)
+├── train.py                ← CPU PPO via SB3 (--task, --resume, --inherit, --watch)
+├── train_mjx.py            ← GPU PPO via JAX/MJX, 1024 envs, ~46M steps/hr
 │
-│── Environments (CPU)
-├── ape_env.py              ← reach task: walk to tree 5m away
-├── stand_env.py            ← stand task: lift torso to 0.30m, hold stable
-│
-│── Simulation core
-├── scene.xml               ← MJCF scene (flat ground, capsule tree trunk for MJX compat)
-├── lineage.py              ← records hardware params + inheritance chain per training run
-├── hints.py                ← live reward shaping (hot-reloaded each episode)
-├── build_scene.py          ← converts ape.urdf → scene.xml
-│
-│── Dev tools
-├── sim.py                  ← interactive viewer, physics only (no policy)
-├── view_robot.py           ← MuJoCo viewer
-├── test_joints.py          ← manual joint tester (gravity off, Ctrl+A)
-├── watch_multi.py          ← split-screen viewer (reach task)
+├── tools/
+│   ├── sim.py              ← interactive viewer, physics only (no policy)
+│   ├── watch.py            ← live viewer, hot-swaps checkpoints (--task reach|stand)
+│   ├── watch_multi.py      ← split-screen viewer for reach task
+│   ├── eval.py             ← evaluate a saved checkpoint
+│   ├── test_joints.py      ← manual joint tester (gravity off, Ctrl+A)
+│   └── build_scene.py      ← converts ape.urdf → scene.xml
 │
 └── roarm_ws/
     └── roarm_description/
@@ -93,7 +85,7 @@ source .venv/bin/activate
 
 ### Watch the robot (no training)
 ```bash
-python sim.py              # physics only, interactive viewer
+python tools/sim.py        # physics only, interactive viewer
 ```
 
 ### Train on GPU — recommended
@@ -113,7 +105,7 @@ python train.py --task stand --inherit --watch --envs 8
 
 ### Watch training live (CPU path)
 ```bash
-python watch.py --task stand         # loads best checkpoint, hot-swaps on new saves
+python tools/watch.py --task stand   # loads best checkpoint, hot-swaps on new saves
 ```
 
 ### Generational transfer — use after changing hardware params
@@ -131,8 +123,8 @@ python train.py --lineage --task stand
 
 ### Evaluate a checkpoint
 ```bash
-python eval.py --task stand
-python eval.py --task stand --model runs/ape_stand/best/best_model.zip
+python tools/eval.py --task stand
+python tools/eval.py --task stand --model runs/ape_stand/best/best_model.zip
 ```
 
 ---

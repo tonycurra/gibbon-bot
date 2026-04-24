@@ -27,13 +27,12 @@ import sys
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback
-from ape_env import ApeEnv
-from stand_env import StandEnv
+from envs import ApeEnv, StandEnv
 import lineage as lineage_mod
 
 TASKS = {
-    "reach": (ApeEnv,   "ape_reach",  pathlib.Path("ape_env.py")),
-    "stand": (StandEnv, "ape_stand",  pathlib.Path("stand_env.py")),
+    "reach": (ApeEnv,   "ape_reach",  pathlib.Path("envs/ape_env.py")),
+    "stand": (StandEnv, "ape_stand",  pathlib.Path("envs/stand_env.py")),
 }
 
 SCENE   = pathlib.Path("scene.xml")
@@ -144,7 +143,7 @@ def _run(model, total, checkpoint_cb, eval_cb, *, resume, task, watch):
     watcher = None
     if watch:
         watcher = subprocess.Popen(
-            [sys.executable, "watch.py", "--task", task],
+            [sys.executable, "tools/watch.py", "--task", task],
             cwd=pathlib.Path(__file__).parent,
         )
     print(f"Training for {total:,} steps ...")

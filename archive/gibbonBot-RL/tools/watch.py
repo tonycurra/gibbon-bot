@@ -9,9 +9,11 @@ Usage:
     python watch.py --task stand     # watch stand task
 """
 
+import sys, pathlib
+sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
+
 import argparse
 import time
-import pathlib
 import numpy as np
 from stable_baselines3 import PPO
 
@@ -39,9 +41,9 @@ def main():
     runs_dir = pathlib.Path(runs_path)
 
     if args.task == "reach":
-        from ape_env import ApeEnv as EnvClass
+        from envs import ApeEnv as EnvClass
     else:
-        from stand_env import StandEnv as EnvClass
+        from envs import StandEnv as EnvClass
 
     print(f"[watch] task={args.task}  waiting for first checkpoint in {runs_dir} ...")
     while True:

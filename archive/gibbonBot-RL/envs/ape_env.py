@@ -30,9 +30,7 @@ import mujoco.viewer
 import gymnasium as gym
 from gymnasium import spaces
 import pathlib
-import terrain as terrain_mod
-
-SCENE       = pathlib.Path(__file__).parent / "scene.xml"
+SCENE       = pathlib.Path(__file__).parent.parent / "scene.xml"
 TREE_POS    = np.array([5.0, 0.0, 0.0])
 SUCCESS_DIST = 1.5    # metres — torso this close = reached tree
 MIN_HEIGHT   = 0.15   # metres — torso below this = fallen
