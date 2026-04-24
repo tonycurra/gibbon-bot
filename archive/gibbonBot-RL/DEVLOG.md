@@ -290,6 +290,36 @@ Terminal 2:  python watch.py --task stand
 
 ---
 
+## 2026-04-24 — MuJoCo MJX GPU migration (46× speedup)
+
+**Motivation**: SB3+CPU training was GPU-idle, ~1M steps/hour. MJX runs thousands of
+parallel environments entirely on the RTX 4070 via JAX.
+
+**Result**: 1024 parallel envs → **46M steps/hour** (46× over CPU baseline).
+
+**New files**:
+- `stand_env_mjx.py` — pure-JAX environment. Stateless `reset()`/`step()` functions
+  operating on pytree state. `jax.vmap` gives free N-env parallelism.
+- `train_mjx.py` — JAX PPO training loop. Rollout collection with `jax.lax.scan`,
+  GAE advantage estimation, minibatch updates all JIT-compiled on GPU.
+  Saves checkpoints to `runs/ape_stand_mjx/` and exports SB3-compatible `best_model.zip`
+  so `watch.py` can visualise progress.
+
+**Key engineering decisions**:
+- Mesh geom collisions disabled before `mjx.put_model()` — STL meshes cause combinatorial
+  explosion of collision kernel compilation pairs. Contact handled by torso box geom only.
+- Tree trunk changed cylinder→capsule (MJX doesn't implement cylinder-box collision).
+- Network: Flax `ActorCritic` with tanh-squashed Gaussian policy (same architecture as SB3 MlpPolicy).
+- Separate from `train.py` — CPU path untouched, both work independently.
+
+**Usage**:
+```
+python train_mjx.py              # 1024 envs, ~46M steps/hr
+python train_mjx.py --envs 2048  # more envs if VRAM allows
+```
+
+---
+
 ## 2026-04-24 — Generational knowledge transfer (--inherit)
 
 **Motivation**: changing hardware params (kp, torque limits, physics steps) invalidates the old
