@@ -239,7 +239,12 @@ def main():
                 rng, reset_rng = jax.random.split(rng)
                 reset_rngs = jax.random.split(reset_rng, N_ENVS)
                 new_dx, new_obs, new_pa = v_reset(reset_rngs)
-                dx_batch         = jax.tree.map(lambda n, o: jnp.where(done_mask[:, None] if n.ndim > 1 else done_mask, n, o), new_dx, dx_batch)
+                dx_batch         = jax.tree.map(
+                    lambda n, o: jnp.where(
+                        done_mask.reshape(done_mask.shape + (1,) * (n.ndim - 1)), n, o
+                    ) if n.ndim > 0 else n,
+                    new_dx, dx_batch
+                )
                 obs_batch        = jnp.where(done_mask[:, None], new_obs, obs_batch)
                 prev_action_batch= jnp.where(done_mask[:, None], new_pa, prev_action_batch)
                 step_counts      = jnp.where(done_mask, 0, step_counts)
@@ -264,7 +269,7 @@ def main():
         # GAE per env, then flatten
         adv_t, ret_t = jax.vmap(
             lambda r, v, d, lv: gae(r, v, d, lv),
-            in_axes=1, out_axes=1,
+            in_axes=(1, 1, 1, 0), out_axes=1,
         )(rew_t, val_t, done_t, last_val)
 
         def flat(x):

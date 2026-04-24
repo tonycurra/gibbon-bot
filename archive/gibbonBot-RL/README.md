@@ -47,6 +47,8 @@ gb2.1/
 ├── README.md               ← you are here
 ├── DEVLOG.md               ← full change history with rationale
 ├── FUTURE.md               ← AMP, video tracking, MJX pipeline plans
+├── REMOTE.md               ← remote GPU/CPU SSH workflow + sync setup
+├── remote_sync.sh          ← bidirectional sync with H100 server
 ├── scene.xml               ← MJCF scene (flat ground, capsule tree for MJX compat)
 ├── lineage.py              ← records hardware params + inheritance chain per run
 │
@@ -183,6 +185,19 @@ Reloaded automatically at the start of each episode — no restart needed.
 | Reward | `progress×2 + 0.1 alive − 5e-4 ctrl² − 1e-3 jvel²` |
 | Termination | Fallen or success (dist < 1.5m to tree) |
 | Goal | Reach tree at (5, 0, 0) |
+
+---
+
+## Remote GPU training
+
+For massive speedup, train on a remote H100 while watching live on the laptop.
+Full setup in [REMOTE.md](REMOTE.md). Quick version:
+
+```bash
+./remote_sync.sh                      # local: bidirectional sync loop
+python tools/watch.py --task stand    # local: watches synced checkpoints
+# then edit envs/hints.py to steer the remote training in real time
+```
 
 ---
 

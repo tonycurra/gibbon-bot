@@ -1,6 +1,6 @@
 <?xml version='1.0' encoding='utf-8'?>
 <mujoco model="ape_robot">
-  <compiler angle="radian" meshdir="/home/tony/code/gb2.1/roarm_ws/roarm_description" />
+  <compiler angle="radian" meshdir="roarm_ws/roarm_description" />
 
   <asset>
     <mesh name="base_link" content_type="model/stl" file="meshes/roarm_m3/base_link.stl" scale="0.001 0.001 0.001" />
