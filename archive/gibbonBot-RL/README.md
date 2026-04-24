@@ -90,25 +90,28 @@ source .venv/bin/activate
 python tools/sim.py        # physics only, interactive viewer
 ```
 
-### Train on GPU — recommended
+### Train locally — two paths
+
+**GPU (MJX, fastest, ~46M steps/hr on RTX 4070)**
 ```bash
-python train_mjx.py                  # 1024 parallel envs, ~46M steps/hr
+python train_mjx.py                  # 1024 parallel envs
 python train_mjx.py --envs 2048      # more envs if VRAM allows
 ```
-
-### Train on CPU (SB3)
+GPU has no built-in viewer — open one in a second terminal:
 ```bash
-python train.py --task stand --watch        # train + live viewer, 1 env
+python tools/watch.py --task stand   # polls runs/ape_stand_mjx/best/
+```
+Note: `envs/hints.py` reward shaping currently affects **CPU training only** —
+the MJX env doesn't read it yet (planned).
+
+**CPU (SB3, slower but with live viewer + hints)**
+```bash
+python train.py --task stand --watch        # train + viewer in one command
 python train.py --task stand --envs 8       # 8 parallel envs
 python train.py --task stand --resume       # continue same run
-python train.py --task stand --inherit      # new run, inherit weights from best checkpoint
-python train.py --task stand --inherit --watch --envs 8
+python train.py --task stand --inherit      # new run, inherit weights from best
 ```
-
-### Watch training live (CPU path)
-```bash
-python tools/watch.py --task stand   # loads best checkpoint, hot-swaps on new saves
-```
+While running, edit `envs/hints.py` to steer rewards live — picked up at next episode.
 
 ### Generational transfer — use after changing hardware params
 ```bash
