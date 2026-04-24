@@ -290,6 +290,40 @@ Terminal 2:  python watch.py --task stand
 
 ---
 
+## 2026-04-24 — Generational knowledge transfer (--inherit)
+
+**Motivation**: changing hardware params (kp, torque limits, physics steps) invalidates the old
+policy's assumptions but the network still knows useful things ("push down to rise", "stay upright").
+Starting from scratch wastes all that. `--inherit` copies network weights from the best checkpoint
+into a fresh run — like teaching the next generation from the previous one's experience.
+
+**New flag: `--inherit`**
+- Loads best available checkpoint (prefers `best/best_model.zip`, falls back to latest step ckpt)
+- Copies `policy.state_dict()` into a freshly constructed PPO model
+- Resets step counter and opens a new TensorBoard curve (it's a new run, not a continuation)
+- Contrast with `--resume`: that continues the *same* run with the same step count
+
+**New file: `lineage.py`**
+Every training run appends one JSON entry to `runs/<task>/lineage.json` recording:
+- timestamp, n_envs, inherited_from path
+- physics params read live from `scene.xml` (kp, forcerange)
+- env constants read live from `stand_env.py` / `ape_env.py` (PHYSICS_STEPS_PER_ACTION, TARGET_Z, etc.)
+
+View the full lineage table:
+```
+python train.py --lineage --task stand
+```
+
+**Workflow for hardware changes**:
+```
+# change kp or torque in scene.xml, then:
+python train.py --task stand --inherit --watch
+```
+The agent starts with all prior knowledge and adapts to the new physics within thousands of
+steps rather than millions.
+
+---
+
 ## 2026-04-24 — Slower, wider movements
 
 **Goal**: reduce the quick twitchy motions and encourage slower, more deliberate arm sweeps.
