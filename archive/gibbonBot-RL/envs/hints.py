@@ -7,26 +7,24 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 HINTS = {
-    # Keep torso level — penalise tilt (roll/pitch)
-    # Measured as 1 - quat_w^2; 0 = perfectly upright, 1 = fully tipped
-    "upright": 0.0,
+    # Goal: high + stable torso, no tipping, no arm flailing
+    # ──────────────────────────────────────────────────────
 
-    # Reward spreading legs outward — encourages a wider, more stable base
-    # Measured as mean absolute value of the 4 base-rotation joints
-    "spread_legs": 0.0,
+    # Don't tip — strong penalty on torso tilt
+    "upright":     0.5,
 
-    # Reward keeping front arms planted — front gripper tips close to ground
-    # Measured as penalty on front gripper z height
+    # Wider stance = more stable base
+    "spread_legs": 0.3,
+
+    # Discourage arm flailing (joint-velocity penalty on top of the base term)
+    "stillness":   0.05,
+
+    # Off — would push grippers to floor; we don't want that, we want the
+    # torso pushed UP, not the arms pinned DOWN
     "front_arms_down": 0.0,
+    "back_arms_down":  0.0,
 
-    # Reward keeping back arms planted — same for rear grippers
-    "back_arms_down": 0.0,
-
-    # Reward symmetric left-right pose — discourages leaning to one side
-    # Measured as mean abs difference between left and right joint angles
+    # Off — symmetry kicks in once it can stand; turning it on too early
+    # discourages exploration of asymmetric push-up moves
     "symmetry": 0.0,
-
-    # Reward low joint velocity — encourages slow, deliberate movement
-    # (stacks with the base velocity penalty; raise this to really slow it down)
-    "stillness": 0.0,
 }
