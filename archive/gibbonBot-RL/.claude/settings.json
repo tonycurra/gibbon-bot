@@ -38,7 +38,10 @@
       "Bash(chmod 600 ~/.ssh/config)",
       "Bash(time ssh *)",
       "Bash(ssh root@51.159.147.155 \"pgrep -fa train_mjx\")",
-      "Bash(ssh root@51.159.147.155 \"kill 8996 2>/dev/null; nvidia-smi --query-gpu=utilization.gpu,memory.used --format=csv,noheader\")"
+      "Bash(ssh root@51.159.147.155 \"kill 8996 2>/dev/null; nvidia-smi --query-gpu=utilization.gpu,memory.used --format=csv,noheader\")",
+      "Bash(git push *)",
+      "Bash(rsync -az envs/hints.py root@51.159.147.155:/root/gb2.1/envs/hints.py)",
+      "Bash(ssh root@51.159.147.155 \"tail -3 /root/gb2.1/train_mjx.log\")"
     ]
   }
 }

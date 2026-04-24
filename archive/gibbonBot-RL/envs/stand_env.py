@@ -35,7 +35,7 @@ from . import hints as hints_mod
 ROOT       = pathlib.Path(__file__).parent.parent
 SCENE      = ROOT / "scene.xml"
 HINTS_FILE = pathlib.Path(__file__).parent / "hints.py"
-TARGET_Z   = 0.30   # comfortable standing height above terrain (metres)
+TARGET_Z   = 0.40   # tall-stance target — torso high, grippers on floor
 MIN_HEIGHT = 0.03   # torso this far below terrain surface → fallen
 SPAWN_CLEARANCE = 0.07  # start this far above terrain
 MAX_STEPS  = 2000
@@ -204,16 +204,16 @@ class StandEnv(gym.Env):
             fl_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "fl_gripper_link")
             fr_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "fr_gripper_link")
             if fl_id >= 0 and fr_id >= 0:
-                fl_z = float(self.data.xpos[fl_id][2]) - self._ground_z
-                fr_z = float(self.data.xpos[fr_id][2]) - self._ground_z
+                fl_z = float(self.data.xpos[fl_id][2])
+                fr_z = float(self.data.xpos[fr_id][2])
                 r -= h["front_arms_down"] * (fl_z + fr_z)   # lower = better
 
         if h.get("back_arms_down", 0.0) != 0.0:
             bl_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "bl_gripper_link")
             br_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "br_gripper_link")
             if bl_id >= 0 and br_id >= 0:
-                bl_z = float(self.data.xpos[bl_id][2]) - self._ground_z
-                br_z = float(self.data.xpos[br_id][2]) - self._ground_z
+                bl_z = float(self.data.xpos[bl_id][2])
+                br_z = float(self.data.xpos[br_id][2])
                 r -= h["back_arms_down"] * (bl_z + br_z)
 
         if h.get("symmetry", 0.0) != 0.0:

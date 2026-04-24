@@ -7,24 +7,23 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 HINTS = {
-    # Goal: high + stable torso, no tipping, no arm flailing
-    # ──────────────────────────────────────────────────────
+    # Goal: torso/chassis up high, gripper tips planted on floor —
+    # classic quadruped stance, stable and tall.
+    # ──────────────────────────────────────────────────────────────
 
     # Don't tip — strong penalty on torso tilt
-    "upright":     0.5,
+    "upright":         0.5,
 
     # Wider stance = more stable base
-    "spread_legs": 0.3,
+    "spread_legs":     0.3,
 
-    # Discourage arm flailing (joint-velocity penalty on top of the base term)
-    "stillness":   0.05,
+    # Press gripper tips DOWN toward the floor — they are the "feet"
+    "front_arms_down": 0.5,
+    "back_arms_down":  0.5,
 
-    # Off — would push grippers to floor; we don't want that, we want the
-    # torso pushed UP, not the arms pinned DOWN
-    "front_arms_down": 0.0,
-    "back_arms_down":  0.0,
+    # Discourage arm flailing
+    "stillness":       0.05,
 
-    # Off — symmetry kicks in once it can stand; turning it on too early
-    # discourages exploration of asymmetric push-up moves
-    "symmetry": 0.0,
+    # Off — symmetry kicks in naturally once all four grippers are down
+    "symmetry":        0.0,
 }

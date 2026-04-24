@@ -13,7 +13,7 @@ import numpy as np
 import pathlib
 
 SCENE      = pathlib.Path(__file__).parent.parent / "scene.xml"
-TARGET_Z   = 0.30
+TARGET_Z   = 0.40
 MIN_HEIGHT = 0.03
 SPAWN_CLEARANCE = 0.07
 MAX_STEPS  = 2000
