@@ -101,8 +101,10 @@ GPU has no built-in viewer — open one in a second terminal:
 ```bash
 python tools/watch.py --task stand   # polls runs/ape_stand_mjx/best/
 ```
-Note: `envs/hints.py` reward shaping currently affects **CPU training only** —
-the MJX env doesn't read it yet (planned).
+
+**Hints** (reward shaping in `envs/hints.py`) work on both paths:
+- **CPU**: hot-reloaded every episode — edit while training runs.
+- **MJX**: baked in at startup (JAX JIT can't hot-swap) — restart training to apply changes.
 
 **CPU (SB3, slower but with live viewer + hints)**
 ```bash
