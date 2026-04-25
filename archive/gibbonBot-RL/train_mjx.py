@@ -52,7 +52,7 @@ VF_COEF = 0.5
 MAX_GRAD = 0.5
 LR = 3e-4
 TOTAL_STEPS = 100_000_000
-SAVE_EVERY = 100_000  # env steps between checkpoints — fast iteration
+SAVE_EVERY = 500_000  # env steps between checkpoints
 LOG_EVERY = 2  # updates between console prints
 
 
@@ -192,7 +192,7 @@ def main():
     args = parser.parse_args()
 
     RUNS.mkdir(parents=True, exist_ok=True)
-    N_ENVS = args.envs
+    N_ENVS = args.envs if args.envs != 1024 else _auto_envs()
 
     print(f"JAX devices: {jax.devices()}")
     print(f"Loading model...")
@@ -356,6 +356,41 @@ def _save(train_state, steps):
         print(f"[save] exported SB3 best_model for watch.py")
     except Exception as e:
         print(f"[save] SB3 export skipped: {e}")
+
+
+def _auto_envs():
+    """Pick N_ENVS based on available GPU VRAM."""
+    total_bytes = 0
+    try:
+        stats = jax.devices()[0].memory_stats()
+        total_bytes = stats.get("bytes_limit", 0)
+    except Exception:
+        pass
+
+    if total_bytes == 0:
+        try:
+            import subprocess
+            out = subprocess.check_output(
+                ["nvidia-smi", "--query-gpu=memory.total", "--format=csv,noheader,nounits"],
+                text=True, stderr=subprocess.DEVNULL,
+            )
+            total_bytes = int(out.strip()) * 1024 * 1024  # MB → bytes
+        except Exception:
+            pass
+
+    gb = total_bytes / (1024 ** 3)
+    if gb >= 20:
+        n = 2048
+    elif gb >= 10:
+        n = 1024
+    elif gb >= 5:
+        n = 512
+    else:
+        n = 256
+
+    label = f"{gb:.1f} GB" if gb > 0 else "unknown"
+    print(f"[auto] GPU VRAM: {label} → {n} parallel envs (override with --envs N)")
+    return n
 
 
 def _copy_weights_to_sb3(train_state, sb3_model):
