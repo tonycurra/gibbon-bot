@@ -199,7 +199,7 @@ def main():
     mx, jnt_lo, jnt_hi, hints = load_model()
 
     # vmapped env functions
-    v_reset = jax.jit(jax.vmap(lambda rng: reset(mx, jnt_lo, jnt_hi, rng)))
+    v_reset = jax.jit(jax.vmap(lambda rng: reset(mx, jnt_lo, jnt_hi, hints, rng)))
     v_step = jax.jit(
         jax.vmap(lambda dx, a, pa: step(mx, jnt_lo, jnt_hi, hints, dx, a, pa))
     )

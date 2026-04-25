@@ -92,20 +92,22 @@ def load_model():
         "stillness": float(h.get("stillness", 0.0)),
         "symmetry": float(h.get("symmetry", 0.0)),
         "arm_spacing": float(h.get("arm_spacing", 0.0)),
+        "tree_seeking": float(h.get("tree_seeking", 1.0)),  # Weight for tree-seeking reward
         # static body indices
         "fl_id": body_id("fl_gripper_link"),
         "fr_id": body_id("fr_gripper_link"),
         "bl_id": body_id("bl_gripper_link"),
         "br_id": body_id("br_gripper_link"),
+        "tree_id": body_id("tree"),
     }
     active = [k for k, v in hints.items() if isinstance(v, float) and v != 0.0]
     print(f"[mjx] hints baked in: {active or 'none'}")
     return mx, jnt_lo, jnt_hi, hints
 
 
-def reset(mx, jnt_lo, jnt_hi, rng):
+def reset(mx, jnt_lo, jnt_hi, hints, rng):
     """Reset one environment. Returns (data, obs, prev_action)."""
-    rng, k_xy, k_yaw, k_jnt = jax.random.split(rng, 4)
+    rng, k_xy, k_yaw, k_jnt, k_tree = jax.random.split(rng, 5)
     dx = mjx.make_data(mx)
 
     # randomise torso XY and yaw to break path-memorisation
@@ -125,10 +127,24 @@ def reset(mx, jnt_lo, jnt_hi, rng):
     noise = jax.random.uniform(k_jnt, (24,), minval=-0.4, maxval=0.4)
     qpos = qpos.at[7:].set(jnp.array(_STAND_INIT) + noise)
 
+    # randomise tree position
+    tree_xy = jax.random.uniform(k_tree, (2,), minval=3.0, maxval=7.0)
+    tree_pos = jnp.array([tree_xy[0], tree_xy[1], 0.0])
+    
+    # Set tree position in the model
+    tree_body_idx = hints["tree_id"]
+    dx = dx.replace(xpos=dx.xpos.at[tree_body_idx].set(tree_pos))
+
     dx = dx.replace(qpos=qpos)
     dx = mjx.forward(mx, dx)
 
-    obs = _get_obs(dx)
+    # Calculate relative tree position for observation
+    robot_pos = dx.qpos[0:2]  # robot XY position
+    rel_tree_pos = tree_pos[0:2] - robot_pos
+    # Add z component (tree height is fixed)
+    rel_tree_pos = jnp.concatenate([rel_tree_pos, jnp.array([1.5])])
+
+    obs = _get_obs(dx, rel_tree_pos)
     prev_action = jnp.zeros(24)
     return dx, obs, prev_action
 
@@ -147,6 +163,11 @@ def step(mx, jnt_lo, jnt_hi, hints, dx, action, prev_action, step_count=0):
     else:
         current_target_z = TARGET_Z
     ctrl = 0.5 * (action + 1.0) * (jnt_hi - jnt_lo) + jnt_lo
+
+    # Get tree position for reward calculation
+    tree_pos = dx.xpos[hints["tree_id"]][0:2]  # XY position only
+    robot_pos = dx.qpos[0:2]  # robot XY position
+    rel_tree_pos = tree_pos - robot_pos
 
     # Adaptive stiffness based on joint positions
     jpos = dx.qpos[7:]  # 24 joint positions
@@ -171,7 +192,7 @@ def step(mx, jnt_lo, jnt_hi, hints, dx, action, prev_action, step_count=0):
         length=PHYSICS_STEPS_PER_ACTION,
     )
 
-    obs = _get_obs(dx)
+    obs = _get_obs(dx, jnp.concatenate([rel_tree_pos, jnp.array([1.5])]))
     torso_z = dx.qpos[2]
     fallen = torso_z < MIN_HEIGHT
 
@@ -184,6 +205,10 @@ def step(mx, jnt_lo, jnt_hi, hints, dx, action, prev_action, step_count=0):
     jvel = dx.qvel[6:]
     action_delta = jnp.sum((action - prev_action) ** 2)
 
+    # Tree-seeking reward: encourage moving toward the tree
+    tree_distance = jnp.linalg.norm(rel_tree_pos)
+    tree_reward = hints["tree_seeking"] * (1.0 / (1.0 + tree_distance))  # Higher reward when closer
+    
     reward = (
         height_reward
         + upright_reward
@@ -192,6 +217,7 @@ def step(mx, jnt_lo, jnt_hi, hints, dx, action, prev_action, step_count=0):
         - 1e-3 * jnp.sum(jvel**2)
         - 2e-2 * action_delta
         - 10.0 * fallen
+        + tree_reward
     )
 
     # ── hint rewards (weights baked in at load time) ─────────────────────────
@@ -233,7 +259,7 @@ def step(mx, jnt_lo, jnt_hi, hints, dx, action, prev_action, step_count=0):
     return dx, obs, reward, fallen, action
 
 
-def _get_obs(dx):
+def _get_obs(dx, tree_pos):
     return jnp.concatenate(
         [
             dx.qpos[2:3],  # torso z
@@ -242,9 +268,10 @@ def _get_obs(dx):
             dx.qvel[3:6],  # angular vel
             dx.qpos[7:],  # 24 joint pos
             dx.qvel[6:],  # 24 joint vel
+            tree_pos,     # 3D tree position relative to robot
         ]
     ).astype(jnp.float32)
 
 
-OBS_DIM = 59
+OBS_DIM = 62  # 59 + 3 for tree position
 ACT_DIM = 24
