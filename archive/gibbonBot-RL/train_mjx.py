@@ -48,8 +48,8 @@ VF_COEF     = 0.5
 MAX_GRAD    = 0.5
 LR          = 3e-4
 TOTAL_STEPS = 100_000_000
-SAVE_EVERY  = 1_000_000   # env steps between checkpoints
-LOG_EVERY   = 10           # updates between console prints
+SAVE_EVERY  = 100_000     # env steps between checkpoints — fast iteration
+LOG_EVERY   = 2            # updates between console prints
 
 
 # ── network ───────────────────────────────────────────────────────────────────
@@ -193,7 +193,7 @@ def main():
     train_state = make_train_state(init_rng, LR)
 
     if args.inherit:
-        _try_inherit(train_state)
+        train_state = _try_inherit(train_state)
 
     # reset all envs
     env_rngs = jax.random.split(env_rng, N_ENVS)
@@ -325,17 +325,17 @@ def _copy_weights_to_sb3(train_state, sb3_model):
 
 
 def _try_inherit(train_state):
-    from pathlib import Path
-    candidates = [
-        Path("runs/ape_stand/best/best_model.zip"),
-        *sorted(Path("runs/ape_stand").glob("ape_stand_*.zip")),
-    ]
-    for c in candidates:
-        if c.exists():
-            print(f"[inherit] found SB3 checkpoint: {c} (weight transfer not yet implemented — starting fresh)")
-            break
-    else:
-        print("[inherit] no SB3 checkpoint found — starting fresh.")
+    ckpts = sorted(RUNS.glob("mjx_*.npz"))
+    if not ckpts:
+        print("[inherit] no MJX checkpoint found — starting fresh.")
+        return train_state
+    latest = ckpts[-1]
+    data = np.load(str(latest))
+    flat = [jnp.asarray(data[k]) for k in data.files]
+    _, treedef = jax.tree_util.tree_flatten(train_state.params)
+    new_params = jax.tree_util.tree_unflatten(treedef, flat)
+    print(f"[inherit] loaded MJX weights from {latest.name}")
+    return train_state.replace(params=new_params)
 
 
 if __name__ == "__main__":

@@ -320,6 +320,27 @@ python train_mjx.py --envs 2048  # more envs if VRAM allows
 
 ---
 
+## 2026-04-25 — Fix `--inherit` for MJX path (weight transfer was a stub)
+
+**Problem**: `train_mjx.py --inherit` was printing "weight transfer not yet implemented — starting
+fresh" and training from scratch every time. The 8 generations logged in `lineage.json` were all
+cold starts — the inheritance chain was fictional.
+
+**Root cause**: `_try_inherit` was looking for SB3 `.zip` checkpoints (wrong framework, wrong
+architecture). The MJX training path saves Flax params as `.npz` files — same network, same
+shapes, directly loadable.
+
+**Fix**: replaced `_try_inherit` to glob `runs/ape_stand_mjx/mjx_*.npz`, pick the latest, load
+via `np.load`, unflatten into the params pytree using `jax.tree_util`, and return a new
+`TrainState` with the inherited params (optimizer state stays fresh — correct for a new run).
+Also fixed the call site which was discarding the return value.
+
+**Verified**: `python train_mjx.py --inherit` now prints
+`[inherit] loaded MJX weights from mjx_NNNNNNN.npz` and the first `mean_rew` starts well above
+the cold-start baseline of -1.35.
+
+---
+
 ## 2026-04-24 — Generational knowledge transfer (--inherit)
 
 **Motivation**: changing hardware params (kp, torque limits, physics steps) invalidates the old
