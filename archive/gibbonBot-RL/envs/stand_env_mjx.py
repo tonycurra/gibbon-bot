@@ -5,27 +5,56 @@ The environment is expressed as stateless functions (reset, step, get_obs)
 that operate on an EnvState pytree. jax.vmap over N_ENVS gives free parallelism.
 """
 
+import pathlib
+
 import jax
 import jax.numpy as jnp
 import mujoco
 import mujoco.mjx as mjx
 import numpy as np
-import pathlib
 
-SCENE      = pathlib.Path(__file__).parent.parent / "scene.xml"
-TARGET_Z   = 0.40
+SCENE = pathlib.Path(__file__).parent.parent / "scene.xml"
+TARGET_Z = 0.40
 MIN_HEIGHT = 0.03
 SPAWN_CLEARANCE = 0.07
-MAX_STEPS  = 2000
+MAX_STEPS = 2000
 PHYSICS_STEPS_PER_ACTION = 12
 
+# Curriculum learning parameters
+CURRICULUM_STEPS = 10_000_000  # Steps over which to increase difficulty
+TARGET_Z_MIN = 0.25  # Starting target height
+TARGET_Z_MAX = 0.40  # Final target height
+
 # arms-splayed init pose (24 joints)
-_STAND_INIT = np.array([
-     0.0, -0.4,  1.2, 0.0, 0.0, 0.0,
-     0.0, -0.4,  1.2, 0.0, 0.0, 0.0,
-     0.0, -0.4,  1.2, 0.0, 0.0, 0.0,
-     0.0, -0.4,  1.2, 0.0, 0.0, 0.0,
-], dtype=np.float32)
+_STAND_INIT = np.array(
+    [
+        0.0,
+        -0.4,
+        1.2,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        -0.4,
+        1.2,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        -0.4,
+        1.2,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        -0.4,
+        1.2,
+        0.0,
+        0.0,
+        0.0,
+    ],
+    dtype=np.float32,
+)
 
 
 def load_model():
@@ -49,19 +78,20 @@ def load_model():
 
     # Read hints.py once and resolve gripper body IDs
     from . import hints as hints_mod
+
     h = hints_mod.HINTS
 
     def body_id(name):
         return mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_BODY, name)
 
     hints = {
-        "upright":         float(h.get("upright", 0.0)),
-        "spread_legs":     float(h.get("spread_legs", 0.0)),
+        "upright": float(h.get("upright", 0.0)),
+        "spread_legs": float(h.get("spread_legs", 0.0)),
         "front_arms_down": float(h.get("front_arms_down", 0.0)),
-        "back_arms_down":  float(h.get("back_arms_down", 0.0)),
-        "stillness":       float(h.get("stillness", 0.0)),
-        "symmetry":        float(h.get("symmetry", 0.0)),
-        "arm_spacing":     float(h.get("arm_spacing", 0.0)),
+        "back_arms_down": float(h.get("back_arms_down", 0.0)),
+        "stillness": float(h.get("stillness", 0.0)),
+        "symmetry": float(h.get("symmetry", 0.0)),
+        "arm_spacing": float(h.get("arm_spacing", 0.0)),
         # static body indices
         "fl_id": body_id("fl_gripper_link"),
         "fr_id": body_id("fr_gripper_link"),
@@ -103,15 +133,37 @@ def reset(mx, jnt_lo, jnt_hi, rng):
     return dx, obs, prev_action
 
 
-def step(mx, jnt_lo, jnt_hi, hints, dx, action, prev_action):
+def step(mx, jnt_lo, jnt_hi, hints, dx, action, prev_action, step_count=0):
     """Step one environment. Returns (dx, obs, reward, done, prev_action).
 
     `hints` is a dict of scalar weights baked in at load time (see load_model).
     Non-scalar entries (body IDs) are used to look up gripper positions.
+    `step_count` is used for curriculum learning to gradually increase difficulty.
     """
+    # Curriculum learning: gradually increase target height
+    if step_count > 0:
+        progress = jnp.clip(step_count / CURRICULUM_STEPS, 0.0, 1.0)
+        current_target_z = TARGET_Z_MIN + progress * (TARGET_Z_MAX - TARGET_Z_MIN)
+    else:
+        current_target_z = TARGET_Z
     ctrl = 0.5 * (action + 1.0) * (jnt_hi - jnt_lo) + jnt_lo
 
-    dx = dx.replace(ctrl=ctrl)
+    # Adaptive stiffness based on joint positions
+    jpos = dx.qpos[7:]  # 24 joint positions
+    # Higher stiffness when joints are near center position, lower when extended
+    joint_ranges = jnt_hi - jnt_lo
+    joint_center = (jnt_hi + jnt_lo) / 2.0
+    dist_from_center = jnp.abs(jpos - joint_center)
+    # Normalize distance to [0, 1] range
+    normalized_dist = dist_from_center / (joint_ranges / 2.0)
+    # Adaptive kp: 8 * (1.2 - 0.4 * normalized_dist) gives range [4.8, 9.6]
+    adaptive_kp = 8.0 * (1.2 - 0.4 * normalized_dist)
+
+    # Apply adaptive stiffness by scaling control signal
+    # Higher stiffness when joints are near center, lower when extended
+    scaled_ctrl = ctrl * adaptive_kp
+
+    dx = dx.replace(ctrl=scaled_ctrl)
     dx, _ = jax.lax.scan(
         lambda d, _: (mjx.step(mx, d), None),
         dx,
@@ -119,25 +171,25 @@ def step(mx, jnt_lo, jnt_hi, hints, dx, action, prev_action):
         length=PHYSICS_STEPS_PER_ACTION,
     )
 
-    obs          = _get_obs(dx)
-    torso_z      = dx.qpos[2]
-    fallen       = torso_z < MIN_HEIGHT
+    obs = _get_obs(dx)
+    torso_z = dx.qpos[2]
+    fallen = torso_z < MIN_HEIGHT
 
-    height_err    = (torso_z - TARGET_Z) / 0.08
-    height_reward = jnp.exp(-0.5 * height_err ** 2)
+    height_err = (torso_z - current_target_z) / 0.08
+    height_reward = jnp.exp(-0.5 * height_err**2)
 
-    w              = dx.qpos[3]
+    w = dx.qpos[3]
     upright_reward = 0.3 * w * w
 
-    jvel         = dx.qvel[6:]
+    jvel = dx.qvel[6:]
     action_delta = jnp.sum((action - prev_action) ** 2)
 
     reward = (
-          height_reward
+        height_reward
         + upright_reward
         + 0.05
-        - 5e-4 * jnp.sum(ctrl ** 2)
-        - 1e-3 * jnp.sum(jvel ** 2)
+        - 5e-4 * jnp.sum(ctrl**2)
+        - 1e-3 * jnp.sum(jvel**2)
         - 2e-2 * action_delta
         - 10.0 * fallen
     )
@@ -156,21 +208,25 @@ def step(mx, jnt_lo, jnt_hi, hints, dx, action, prev_action):
     br_z = dx.xpos[hints["br_id"]][2]
     reward -= hints["back_arms_down"] * (bl_z + br_z)
 
-    reward -= hints["stillness"] * jnp.sum(jvel ** 2)
+    reward -= hints["stillness"] * jnp.sum(jvel**2)
 
     jpos = dx.qpos[7:]
-    sym_diff = jnp.mean(jnp.abs(jpos[0:6] - jpos[6:12])) + jnp.mean(jnp.abs(jpos[12:18] - jpos[18:24]))
+    sym_diff = jnp.mean(jnp.abs(jpos[0:6] - jpos[6:12])) + jnp.mean(
+        jnp.abs(jpos[12:18] - jpos[18:24])
+    )
     reward -= hints["symmetry"] * sym_diff
 
     # penalise gripper pairs that get closer than MIN_GAP
-    positions = jnp.stack([
-        dx.xpos[hints["fl_id"]],
-        dx.xpos[hints["fr_id"]],
-        dx.xpos[hints["bl_id"]],
-        dx.xpos[hints["br_id"]],
-    ])
-    pairs = [(0,1),(0,2),(0,3),(1,2),(1,3),(2,3)]
-    dists = jnp.stack([jnp.linalg.norm(positions[i] - positions[j]) for i,j in pairs])
+    positions = jnp.stack(
+        [
+            dx.xpos[hints["fl_id"]],
+            dx.xpos[hints["fr_id"]],
+            dx.xpos[hints["bl_id"]],
+            dx.xpos[hints["br_id"]],
+        ]
+    )
+    pairs = [(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)]
+    dists = jnp.stack([jnp.linalg.norm(positions[i] - positions[j]) for i, j in pairs])
     MIN_GAP = 0.08
     reward -= hints["arm_spacing"] * jnp.sum(jnp.maximum(0.0, MIN_GAP - dists) ** 2)
 
@@ -178,14 +234,16 @@ def step(mx, jnt_lo, jnt_hi, hints, dx, action, prev_action):
 
 
 def _get_obs(dx):
-    return jnp.concatenate([
-        dx.qpos[2:3],    # torso z
-        dx.qpos[3:7],    # quat
-        dx.qvel[0:3],    # linear vel
-        dx.qvel[3:6],    # angular vel
-        dx.qpos[7:],     # 24 joint pos
-        dx.qvel[6:],     # 24 joint vel
-    ]).astype(jnp.float32)
+    return jnp.concatenate(
+        [
+            dx.qpos[2:3],  # torso z
+            dx.qpos[3:7],  # quat
+            dx.qvel[0:3],  # linear vel
+            dx.qvel[3:6],  # angular vel
+            dx.qpos[7:],  # 24 joint pos
+            dx.qvel[6:],  # 24 joint vel
+        ]
+    ).astype(jnp.float32)
 
 
 OBS_DIM = 59

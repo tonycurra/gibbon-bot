@@ -16,12 +16,15 @@ INTERVAL=30   # seconds between syncs
 sync_once() {
     echo "[sync $(date '+%H:%M:%S')]"
 
-    # push hints.py so live reward steering reaches the server
-    rsync -az "$LOCAL/envs/hints.py" "$SERVER:$REMOTE/envs/hints.py"
+    # push code so local edits reach the server
+    rsync -az "$LOCAL/envs/" "$SERVER:$REMOTE/envs/"
+    rsync -az "$LOCAL/scene.xml" "$SERVER:$REMOTE/scene.xml"
+    rsync -az "$LOCAL/train_mjx.py" "$SERVER:$REMOTE/train_mjx.py"
 
-    # pull checkpoints and logs
+    # pull checkpoints, logs, and TensorBoard events
     rsync -az --include='*.zip' --include='*.npz' --include='*.log' \
-              --include='lineage.json' --include='*/' --exclude='*' \
+              --include='lineage.json' --include='events.out.*' \
+              --include='*/' --exclude='*' \
         "$SERVER:$REMOTE/runs/" "$LOCAL/runs/"
 
     # show latest log lines

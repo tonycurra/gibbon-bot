@@ -1,6 +1,10 @@
-# Robotic Ape Project
+# 🗂️ Robotic Ape Project - Organized
+
+**📁 See [README_ORGANIZED.md](README_ORGANIZED.md) for clean structure and quick start**
 
 A 4-limb robotic ape built from **4x RoArm M3 Pro** arms, trained with reinforcement learning to walk, climb, and eventually brachiate — using real ape video as motion reference.
+
+**🚀 Quick Start**: See [docs/QUICKSTART.md](docs/QUICKSTART.md)
 
 ---
 
@@ -150,6 +154,29 @@ python tools/eval.py --task stand --model runs/ape_stand/best/best_model.zip
 ```bash
 tensorboard --logdir runs/    # visualise reward curves
 ```
+
+## Recent Improvements
+
+### Adaptive Physics
+- **Adaptive stiffness**: Joint stiffness (kp) now varies based on position
+- Higher stiffness near center positions for stability
+- Lower stiffness at extremes for smoother motion
+- Range: 4.8-9.6 (compared to fixed 8.0 previously)
+
+### Training Optimizations
+- **Learning rate scheduling**: Cosine decay from 3e-4 to 1e-5 over 50M steps
+- **Layer normalization**: Added to all policy network layers for better stability
+- **AdamW optimizer**: Weight decay for better regularization
+
+### Curriculum Learning
+- **Progressive difficulty**: Target height gradually increases from 0.25m to 0.40m
+- **Duration**: 10M steps curriculum phase
+- **Smoother learning**: Easier initial phase helps policy converge faster
+
+### Expected Benefits
+- **Faster convergence**: Curriculum + adaptive physics should reduce training time
+- **Better final performance**: Layer norm + LR scheduling improve policy quality
+- **More natural motion**: Adaptive stiffness creates more biologically plausible movement
 
 ---
 
