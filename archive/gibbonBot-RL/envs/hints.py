@@ -26,4 +26,7 @@ HINTS = {
 
     # Off — symmetry kicks in naturally once all four grippers are down
     "symmetry":        0.0,
+
+    # Keep grippers from touching each other (real hardware safety)
+    "arm_spacing":     0.3,
 }

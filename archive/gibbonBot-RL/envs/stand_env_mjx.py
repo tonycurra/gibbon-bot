@@ -61,6 +61,7 @@ def load_model():
         "back_arms_down":  float(h.get("back_arms_down", 0.0)),
         "stillness":       float(h.get("stillness", 0.0)),
         "symmetry":        float(h.get("symmetry", 0.0)),
+        "arm_spacing":     float(h.get("arm_spacing", 0.0)),
         # static body indices
         "fl_id": body_id("fl_gripper_link"),
         "fr_id": body_id("fr_gripper_link"),
@@ -74,17 +75,24 @@ def load_model():
 
 def reset(mx, jnt_lo, jnt_hi, rng):
     """Reset one environment. Returns (data, obs, prev_action)."""
-    rng, k1 = jax.random.split(rng)
+    rng, k_xy, k_yaw, k_jnt = jax.random.split(rng, 4)
     dx = mjx.make_data(mx)
 
-    # set torso pose
-    qpos = dx.qpos.at[0].set(0.0)
-    qpos = qpos.at[1].set(0.0)
-    qpos = qpos.at[2].set(SPAWN_CLEARANCE)
-    qpos = qpos.at[3].set(1.0)   # quat w
-    qpos = qpos.at[4:7].set(0.0)
+    # randomise torso XY and yaw to break path-memorisation
+    xy = jax.random.uniform(k_xy, (2,), minval=-0.05, maxval=0.05)
+    yaw = jax.random.uniform(k_yaw, (), minval=-0.3, maxval=0.3)
+    qw = jnp.cos(yaw / 2)
+    qz = jnp.sin(yaw / 2)
 
-    noise = jax.random.uniform(k1, (24,), minval=-0.1, maxval=0.1)
+    qpos = dx.qpos.at[0].set(xy[0])
+    qpos = qpos.at[1].set(xy[1])
+    qpos = qpos.at[2].set(SPAWN_CLEARANCE)
+    qpos = qpos.at[3].set(qw)
+    qpos = qpos.at[4].set(0.0)
+    qpos = qpos.at[5].set(0.0)
+    qpos = qpos.at[6].set(qz)
+
+    noise = jax.random.uniform(k_jnt, (24,), minval=-0.4, maxval=0.4)
     qpos = qpos.at[7:].set(jnp.array(_STAND_INIT) + noise)
 
     dx = dx.replace(qpos=qpos)
@@ -153,6 +161,18 @@ def step(mx, jnt_lo, jnt_hi, hints, dx, action, prev_action):
     jpos = dx.qpos[7:]
     sym_diff = jnp.mean(jnp.abs(jpos[0:6] - jpos[6:12])) + jnp.mean(jnp.abs(jpos[12:18] - jpos[18:24]))
     reward -= hints["symmetry"] * sym_diff
+
+    # penalise gripper pairs that get closer than MIN_GAP
+    positions = jnp.stack([
+        dx.xpos[hints["fl_id"]],
+        dx.xpos[hints["fr_id"]],
+        dx.xpos[hints["bl_id"]],
+        dx.xpos[hints["br_id"]],
+    ])
+    pairs = [(0,1),(0,2),(0,3),(1,2),(1,3),(2,3)]
+    dists = jnp.stack([jnp.linalg.norm(positions[i] - positions[j]) for i,j in pairs])
+    MIN_GAP = 0.08
+    reward -= hints["arm_spacing"] * jnp.sum(jnp.maximum(0.0, MIN_GAP - dists) ** 2)
 
     return dx, obs, reward, fallen, action
 

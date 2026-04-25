@@ -320,6 +320,37 @@ python train_mjx.py --envs 2048  # more envs if VRAM allows
 
 ---
 
+## 2026-04-25 — Arm self-collision via capsule proxies + exploration improvements
+
+**Problem**: Arms visibly passed through each other. All arm geoms in scene.xml are
+`type="mesh"`, and MJX mesh-mesh collision was disabled (too expensive: blew 22 GB+ GPU
+memory). Also, the policy was stuck in a single local optimum (arms locking together)
+because start-pose randomisation was too narrow and entropy was very low.
+
+**Arm collision fix** (`tools/add_arm_capsules.py`, `scene.xml`):
+- Added 24 capsule collision proxies to scene.xml (one per arm link), each spanning
+  origin → child-link origin with per-arm contype/conaffinity bitmasks.
+- Arm meshes set to contype=0 (visual only). Capsules are cheap; mesh-mesh is not.
+- Used bitmasks so same-arm adjacent links never collide (they're physically attached)
+  while cross-arm contacts are fully active.
+- Outer links only collide (link3–gripper_link per arm = 16 active capsules). Inner
+  links (link1, link2) are visual-only — they rarely clash and halving active pairs
+  keeps SPS healthy (~2000+ vs crawling).
+- `tools/add_arm_capsules.py` is the canonical re-generator: run after modifying
+  `scene.xml.bak` or any arm geometry change.
+
+**Exploration fix** (`envs/stand_env_mjx.py`, `train_mjx.py`):
+- Reset joint noise: ±0.1 rad → ±0.4 rad
+- Added torso XY noise ±0.05 m and yaw noise ±0.3 rad at reset — forces policy to
+  handle many start configurations, breaking path-memorisation local optima.
+- ENT_COEF: 0.005 → 0.02 (4× more exploration pressure)
+
+**arm_spacing hint** (`envs/hints.py`, `envs/stand_env_mjx.py`):
+- Added `arm_spacing: 0.3` hint — soft reward penalty when any gripper pair is closer
+  than 8 cm. Complements the hard physics collision.
+
+---
+
 ## 2026-04-25 — Fix `--inherit` for MJX path (weight transfer was a stub)
 
 **Problem**: `train_mjx.py --inherit` was printing "weight transfer not yet implemented — starting

@@ -26,6 +26,7 @@ A 4-limb robotic ape built from **4x RoArm M3 Pro** arms, trained with reinforce
 - **4 limbs**: RoArm M3 Pro, each with 5 DOF + gripper = **24 actuated joints**
 - **Actuators**: position-controlled, kp=8, torque limits from STS3215 servo datasheet
 - **Ground**: flat plane (z=0), grey — simple and MJX-compatible
+- **Collision**: arm meshes are visual only; capsule proxies on outer links (link3–gripper) handle inter-arm contacts at low GPU cost
 
 ```
         [fl_]  [fr_]
@@ -67,7 +68,8 @@ gb2.1/
 │   ├── watch_multi.py      ← split-screen viewer for reach task
 │   ├── eval.py             ← evaluate a saved checkpoint
 │   ├── test_joints.py      ← manual joint tester (gravity off, Ctrl+A)
-│   └── build_scene.py      ← converts ape.urdf → scene.xml
+│   ├── build_scene.py      ← converts ape.urdf → scene.xml
+│   └── add_arm_capsules.py ← adds capsule collision proxies to scene.xml (run after build_scene.py)
 │
 └── roarm_ws/
     └── roarm_description/
