@@ -17,6 +17,7 @@ A 4-limb robotic ape built from **4x RoArm M3 Pro** arms, trained with reinforce
 | RL — reach tree | `ape_env.py` + PPO | ✅ Working |
 | RL — stand up (CPU) | `stand_env.py` + SB3 PPO | ✅ Training |
 | RL — stand up (GPU) | `stand_env_mjx.py` + JAX PPO | ✅ Working — 46M steps/hr |
+| RL — tree navigation (GPU) | `stand_env_mjx.py` + tree-seeking | ✅ Working |
 | Live viewer | `watch.py` | ✅ Working |
 | Generational transfer | `--inherit` flag | ✅ Working |
 | Motion reference | AMP / video tracking | ⬜ Next (see FUTURE.md) |
@@ -172,6 +173,13 @@ tensorboard --logdir runs/    # visualise reward curves
 - **Progressive difficulty**: Target height gradually increases from 0.25m to 0.40m
 - **Duration**: 10M steps curriculum phase
 - **Smoother learning**: Easier initial phase helps policy converge faster
+
+### Tree Navigation (New!)
+- **Tree-seeking rewards**: Distance-based rewards encourage approaching trees
+- **Relative positioning**: Robot observes tree position relative to itself
+- **Randomized targets**: Trees spawn at random positions (3-7m range)
+- **Configurable weight**: Adjust tree-seeking importance via `hints.py`
+- **Observation expansion**: Added 3D tree position to observation space (OBS_DIM: 59→62)
 
 ### Expected Benefits
 - **Faster convergence**: Curriculum + adaptive physics should reduce training time
