@@ -1,14 +1,14 @@
 """
 Gymnasium environment: teach the ape robot to lift itself and stand.
 
-Observation (58 dims):
+Observation (83 dims):
   [0]      torso height (z)
   [1:5]    torso orientation quaternion (w x y z)
   [5:8]    torso linear velocity
   [8:11]   torso angular velocity
   [11:35]  joint positions  (24)
   [35:59]  joint velocities (24)
-  Total: 59
+  [59:83]  joint torques via qfrc_actuator (24) — load proxy matching real servo feedback
 
 Action (24 dims):
   Target joint positions, normalised to [-1, 1].
@@ -20,7 +20,6 @@ Reward per step:
   + alive     0.05 per step
   - energy    5e-4 * sum(ctrl^2)
   - jvel      1e-3 * sum(jvel^2)   (discourages flailing)
-  - fall      -10 on termination if torso too low
 """
 
 import importlib
@@ -54,29 +53,29 @@ _STAND_INIT = np.array(
     [
         # fl (front-left)
         0.0,
-        -0.4,
-        1.2,
+        1.0,
+        1.5,
         0.0,
         0.0,
         0.0,
         # fr (front-right)
         0.0,
-        -0.4,
-        1.2,
+        1.0,
+        1.5,
         0.0,
         0.0,
         0.0,
         # bl (back-left)
         0.0,
-        -0.4,
-        1.2,
+        1.0,
+        1.5,
         0.0,
         0.0,
         0.0,
         # br (back-right)
         0.0,
-        -0.4,
-        1.2,
+        1.0,
+        1.5,
         0.0,
         0.0,
         0.0,
@@ -102,7 +101,7 @@ class StandEnv(gym.Env):
             [self.model.jnt_range[i][1] for i in range(1, self.model.njnt)]
         )
 
-        n_obs = 59
+        n_obs = 83  # 59 + 24 joint torques
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf, shape=(n_obs,), dtype=np.float32
         )
@@ -168,11 +167,20 @@ class StandEnv(gym.Env):
 
         # upright reward: penalise tilt — quat[0] is w
         w = float(self.data.qpos[3])
-        upright_reward = 0.3 * w * w
+        # Only reward upright position (w > 0), strongly penalize upside down
+        upright_reward = 0.3 * w * w if w > 0 else 0.0
+        upside_down_penalty = -2.0 if w < 0 else 0.0
 
         jvel = self.data.qvel[6:]
         action_delta = float(np.sum((action - self._prev_action) ** 2))
         self._prev_action = action.copy()
+
+        # Penalize moving too many joints at once - encourage coordinated movement
+        significant_movement = np.abs(action - self._prev_action) > 0.1
+        joints_moving = np.sum(significant_movement)
+        too_many_joints_penalty = -0.1 * max(
+            0, joints_moving - 6
+        )  # Penalize if >6 joints moving
 
         reward = (
             height_reward
@@ -181,13 +189,13 @@ class StandEnv(gym.Env):
             - 5e-4 * float(np.sum(ctrl**2))  # energy
             - 1e-3 * float(np.sum(jvel**2))  # joint velocity / flailing
             - 2e-2 * action_delta  # action smoothness
+            + upside_down_penalty
+            + too_many_joints_penalty
         )
-        if fallen:
-            reward -= 10.0
 
         reward += self._hints_reward()
 
-        terminated = fallen
+        terminated = False
         truncated = self._step_count >= MAX_STEPS
 
         info = {
@@ -286,6 +294,7 @@ class StandEnv(gym.Env):
                 qvel[3:6],  # angular vel
                 qpos[7:],  # 24 joint positions
                 qvel[6:],  # 24 joint velocities
+                self.data.qfrc_actuator[6:30],  # 24 joint torques (load proxy)
             ]
         ).astype(np.float32)
         return obs

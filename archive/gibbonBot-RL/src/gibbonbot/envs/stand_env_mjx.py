@@ -26,33 +26,38 @@ CURRICULUM_STEPS = 10_000_000  # Steps over which to increase difficulty
 TARGET_Z_MIN = 0.25  # Starting target height
 TARGET_Z_MAX = 0.40  # Final target height
 
-# arms-splayed init pose (24 joints)
+# More stable init pose: arms slightly extended downward for better initial stability
+# Pattern: [base, shoulder, elbow, base_rot, shoulder_rot, elbow_rot] for each limb
 _STAND_INIT = np.array(
     [
-        0.0,
-        -0.4,
-        1.2,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        -0.4,
-        1.2,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        -0.4,
-        1.2,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        -0.4,
-        1.2,
-        0.0,
-        0.0,
-        0.0,
+        # Front Left limb
+        0.3,  # base joint - slightly outward
+        0.5,  # shoulder - moderately forward
+        1.2,  # elbow - bent but not extreme
+        0.0,  # base rotation
+        0.0,  # shoulder rotation
+        0.0,  # elbow rotation
+        # Front Right limb
+        -0.3,  # base joint - slightly outward (mirrored)
+        0.5,  # shoulder - moderately forward
+        1.2,  # elbow - bent but not extreme
+        0.0,  # base rotation
+        0.0,  # shoulder rotation
+        0.0,  # elbow rotation
+        # Back Left limb
+        0.3,  # base joint - slightly outward
+        0.5,  # shoulder - moderately forward
+        1.2,  # elbow - bent but not extreme
+        0.0,  # base rotation
+        0.0,  # shoulder rotation
+        0.0,  # elbow rotation
+        # Back Right limb
+        -0.3,  # base joint - slightly outward (mirrored)
+        0.5,  # shoulder - moderately forward
+        1.2,  # elbow - bent but not extreme
+        0.0,  # base rotation
+        0.0,  # shoulder rotation
+        0.0,  # elbow rotation
     ],
     dtype=np.float32,
 )
@@ -98,6 +103,7 @@ def load_model():
         "fr_id": body_id("fr_gripper_link"),
         "bl_id": body_id("bl_gripper_link"),
         "br_id": body_id("br_gripper_link"),
+        "tree_id": body_id("tree"),
     }
     active = [k for k, v in hints.items() if isinstance(v, float) and v != 0.0]
     print(f"[mjx] hints baked in: {active or 'none'}")
@@ -123,7 +129,8 @@ def reset(mx, jnt_lo, jnt_hi, hints, rng):
     qpos = qpos.at[5].set(0.0)
     qpos = qpos.at[6].set(qz)
 
-    noise = jax.random.uniform(k_jnt, (24,), minval=-0.4, maxval=0.4)
+    # Reduced noise for more stable initial conditions
+    noise = jax.random.uniform(k_jnt, (24,), minval=-0.2, maxval=0.2)
     qpos = qpos.at[7:].set(jnp.array(_STAND_INIT) + noise)
 
     # randomise tree position
@@ -199,10 +206,22 @@ def step(mx, jnt_lo, jnt_hi, hints, dx, action, prev_action, step_count=0):
     height_reward = jnp.exp(-0.5 * height_err**2)
 
     w = dx.qpos[3]
-    upright_reward = 0.3 * w * w
+    # Only reward upright position (w > 0), strongly penalize upside down
+    upright_reward = jnp.where(w > 0, 0.3 * w * w, 0.0)
+    upside_down_penalty = jnp.where(w < 0, -2.0, 0.0)  # -2.0 reward when upside down
 
     jvel = dx.qvel[6:]
     action_delta = jnp.sum((action - prev_action) ** 2)
+
+    # Penalize moving too many joints at once - encourage coordinated movement
+    significant_movement = (
+        jnp.abs(action - prev_action) > 0.1
+    )  # Threshold for significant joint movement
+    joints_moving = jnp.sum(significant_movement)
+    # Penalize if more than 6 joints (25%) are moving significantly
+    too_many_joints_penalty = jnp.where(
+        joints_moving > 6, -0.1 * (joints_moving - 6), 0.0
+    )
 
     reward = (
         height_reward
@@ -211,11 +230,37 @@ def step(mx, jnt_lo, jnt_hi, hints, dx, action, prev_action, step_count=0):
         - 5e-4 * jnp.sum(ctrl**2)
         - 1e-3 * jnp.sum(jvel**2)
         - 2e-2 * action_delta
-        - 10.0 * fallen
+        + upside_down_penalty
+        + too_many_joints_penalty
     )
 
+    # Encourage coordinated limb movement (move limbs in pairs/groups rather than randomly)
+    # Define limb groups: [FL, FR, BL, BR], each with 6 joints
+    limb_groups = [
+        action[0:6] - prev_action[0:6],  # Front Left
+        action[6:12] - prev_action[6:12],  # Front Right
+        action[12:18] - prev_action[12:18],  # Back Left
+        action[18:24] - prev_action[18:24],  # Back Right
+    ]
+
+    # Calculate coordination score: reward when limbs move similarly
+    coordination_score = 0.0
+    # Compare front limbs
+    fl_fr_similarity = 1.0 - 0.5 * jnp.mean(jnp.abs(limb_groups[0] - limb_groups[1]))
+    # Compare back limbs
+    bl_br_similarity = 1.0 - 0.5 * jnp.mean(jnp.abs(limb_groups[2] - limb_groups[3]))
+    # Compare left limbs
+    fl_bl_similarity = 1.0 - 0.5 * jnp.mean(jnp.abs(limb_groups[0] - limb_groups[2]))
+    # Compare right limbs
+    fr_br_similarity = 1.0 - 0.5 * jnp.mean(jnp.abs(limb_groups[1] - limb_groups[3]))
+
+    coordination_score = 0.05 * (
+        fl_fr_similarity + bl_br_similarity + fl_bl_similarity + fr_br_similarity
+    )
+    reward += coordination_score
+
     # ── hint rewards (weights baked in at load time) ─────────────────────────
-    reward += hints["upright"] * w * w
+    reward += jnp.where(w > 0, hints["upright"] * w * w, 0.0)
 
     base_joints = dx.qpos[7:][::6]
     reward += hints["spread_legs"] * jnp.mean(jnp.abs(base_joints))
@@ -262,10 +307,13 @@ def _get_obs(dx, tree_pos):
             dx.qvel[3:6],  # angular vel
             dx.qpos[7:],  # 24 joint pos
             dx.qvel[6:],  # 24 joint vel
+            dx.qfrc_actuator[
+                6:30
+            ],  # 24 joint torques (load proxy matching real servo feedback)
             tree_pos,  # 3D tree position relative to robot
         ]
     ).astype(jnp.float32)
 
 
-OBS_DIM = 62  # 59 + 3 for tree position
+OBS_DIM = 86  # 62 + 24 joint torques
 ACT_DIM = 24
