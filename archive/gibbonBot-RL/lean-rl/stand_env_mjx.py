@@ -130,7 +130,7 @@ def reset(mx, jnt_lo, jnt_hi, hints, rng):
     qpos = qpos.at[6].set(qz)
 
     # Reduced noise for more stable initial conditions
-    noise = jax.random.uniform(k_jnt, (24,), minval=-0.2, maxval=0.2)
+    noise = jax.random.uniform(k_jnt, (24,), minval=-0.1, maxval=0.1)
     qpos = qpos.at[7:].set(jnp.array(_STAND_INIT) + noise)
 
     # randomise tree position

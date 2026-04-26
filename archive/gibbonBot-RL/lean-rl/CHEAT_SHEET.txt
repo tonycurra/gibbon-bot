@@ -1,0 +1,59 @@
+🎯 LEAN RL - QUICK CHEAT SHEET
+
+📁 FOLDER: lean-rl/
+
+🚀 START HERE:
+  cd lean-rl
+  python test_physics.py      # Test physics first
+  python analyze_policy.py    # Analyze policies
+  python train.py --watch      # Train with visualization
+
+🔬 PHYSICS TESTING:
+  python test_physics.py              # Zero actions (passive test)
+  python test_physics.py --random      # Random actions
+  python test_physics.py --step        # Frame-by-frame
+  python test_physics.py --speed 0.1  # Faster playback
+  python test_physics.py --speed 0.02 # Slower playback
+
+🔍 POLICY ANALYSIS:
+  python analyze_policy.py              # Latest checkpoint
+  python analyze_policy.py mjx_00010000000.npz  # Specific file
+  python analyze_policy.py --step       # Frame-by-frame
+  python analyze_policy.py --speed 0.02 # Slow motion
+
+🏋️ TRAINING (GRADUAL):
+  python train.py --envs 64 --watch     # Small scale (start here)
+  python train.py --envs 256 --watch    # Medium scale
+  python train.py --envs 512 --watch    # Large scale
+  python train.py --envs 1024           # Full scale (no visualization)
+
+📝 EDIT THESE FILES:
+  scene.xml        # Physics parameters
+  stand_env.py     # Reward functions
+  train_mjx.py     # Training hyperparameters
+
+✅ SUCCESS CRITERIA:
+  Physics:  Robot stands >50 steps with zero actions
+  Policy:   Moves 1-2 joints, height >0.3m, reward >2.0
+  Training: Stable improvement over time
+
+🎓 WORKFLOW:
+  1. Test physics → 2. Analyze policies → 3. Edit files
+  4. Repeat → 5. Train small scale → 6. Scale up
+
+🚀 READY FOR GPU WHEN:
+  ✅ Physics stable
+  ✅ Rewards make sense
+  ✅ Small training works
+  ✅ You understand the behavior
+
+📚 DOCS:
+  WORKFLOW_SUMMARY.md  # Complete overview
+  GRADUAL_WORKFLOW.md   # Detailed guide
+  QUICK_START.md        # Fast reference
+  README.md             # Full documentation
+
+🎯 GOAL: Gradual, careful, CPU-based development
+         No guesswork, no wasted GPU time!
+
+🐢 → 🏋️ → 🚀
