@@ -29,6 +29,13 @@
 
 ## 📊 Performance Impact
 
+**For comprehensive training script performance comparison, see:**
+- [`../../test/TRAINING_EVALUATION_REPORT.md`](../../test/TRAINING_EVALUATION_REPORT.md)
+- Includes benchmarks of all training scripts
+- Detailed recommendations for different use cases
+
+**Scene Optimization Results:**
+
 | Configuration | Geoms | Simulation Speed | Training Speed | Collision Accuracy |
 |---------------|-------|------------------|----------------|-------------------|
 | **With capsules** | 60+ | Baseline | Baseline | High |

@@ -1,0 +1,14 @@
+{
+  "start_time": 1777222468.587375,
+  "end_time": 1777222481.8781095,
+  "training_time": 13.29073452949524,
+  "steps_second": null,
+  "initial_height": null,
+  "final_height": null,
+  "improvement": null,
+  "max_gpu_usage": 0,
+  "max_cpu_usage": 99.8,
+  "max_memory_usage": 998.84375,
+  "learning_curve": [],
+  "exit_code": 0
+}
