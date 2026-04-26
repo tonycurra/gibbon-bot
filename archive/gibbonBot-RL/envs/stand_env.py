@@ -37,7 +37,7 @@ from . import hints as hints_mod
 ROOT = pathlib.Path(__file__).parent.parent
 SCENE = ROOT / "scene_fixed.xml"  # Use the fixed collision version
 HINTS_FILE = pathlib.Path(__file__).parent / "hints.py"
-TARGET_Z = 0.40  # tall-stance target — torso high, grippers on floor
+TARGET_Z = 0.30  # tall-stance target — torso high, grippers on floor
 MIN_HEIGHT = (
     0.08  # torso this far below terrain surface → fallen (increased for stability)
 )
