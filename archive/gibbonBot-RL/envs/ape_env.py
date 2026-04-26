@@ -43,9 +43,11 @@ from gymnasium import spaces
 SCENE = pathlib.Path(__file__).parent.parent / "scene.xml"
 BASE_TREE_POS = np.array([5.0, 0.0, 0.0])  # Base tree position
 BASE_SUCCESS_DIST = 1.5  # metres — torso this close = reached tree
-MIN_HEIGHT = 0.15  # metres — torso below this = fallen
+MIN_HEIGHT = 0.10  # metres — torso below this = fallen (lower to prevent false falls)
 MAX_STEPS = 2000
-PHYSICS_STEPS_PER_ACTION = 5  # simulate 5 MuJoCo steps per RL action
+PHYSICS_STEPS_PER_ACTION = (
+    15  # simulate 15 MuJoCo steps per RL action (even slower, smoother)
+)
 
 # Curriculum learning parameters
 CURRICULUM_STAGES = [
@@ -180,16 +182,23 @@ class ApeEnv(gym.Env):
         # Calculate alignment between torso forward and tree direction
         alignment = float(np.dot(torso_forward, tree_direction))
 
-        # Optimized reward system with dense shaping
+        # Optimized reward system with dense shaping (slower, smoother movements)
         proximity_reward = np.exp(-dist / 2.0)  # Exponential decay: stronger near tree
-        progress_reward = progress * 3.0  # 50% more weight on progress
-        alignment_reward = max(0, alignment) * 1.5  # Reward facing tree
+        progress_reward = (
+            progress * 1.0
+        )  # Reduced weight on progress for smoother movement
+        alignment_reward = max(0, alignment) * 1.0  # Reduced weight on alignment
+
+        # Penalize fast vertical movement to encourage stability
+        torso_z_vel = abs(self.data.qvel[2])  # Vertical velocity of torso
+        stability_penalty = -0.01 * torso_z_vel  # Penalize up-down oscillation
 
         reward = (
             progress_reward
-            + proximity_reward * 2.0  # Get closer faster
+            + proximity_reward * 1.0  # Get closer at natural pace
             + alignment_reward  # Face the right direction
             + smoothness_penalty  # Smooth movement
+            + stability_penalty  # Encourage stable height
             + 0.1  # alive bonus
             - 3e-4 * float(np.sum(ctrl**2))  # Reduced energy penalty
             - 5e-4 * float(np.sum(jvel**2))  # Reduced velocity penalty

@@ -15,7 +15,9 @@ Checkpoints saved to: runs/ape_stand_mjx/  (compatible with watch.py via SB3 exp
 
 import argparse
 import json
+import os
 import pathlib
+import sys
 import time
 
 import flax.linen as nn
@@ -27,6 +29,8 @@ import optax
 from flax import struct
 from flax.training.train_state import TrainState
 
+# Add parent directory to Python path so we can import lineage module
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import lineage as lineage_mod
 from envs.stand_env_mjx import (
     ACT_DIM,
@@ -370,15 +374,21 @@ def _auto_envs():
     if total_bytes == 0:
         try:
             import subprocess
+
             out = subprocess.check_output(
-                ["nvidia-smi", "--query-gpu=memory.total", "--format=csv,noheader,nounits"],
-                text=True, stderr=subprocess.DEVNULL,
+                [
+                    "nvidia-smi",
+                    "--query-gpu=memory.total",
+                    "--format=csv,noheader,nounits",
+                ],
+                text=True,
+                stderr=subprocess.DEVNULL,
             )
             total_bytes = int(out.strip()) * 1024 * 1024  # MB → bytes
         except Exception:
             pass
 
-    gb = total_bytes / (1024 ** 3)
+    gb = total_bytes / (1024**3)
     if gb >= 20:
         n = 2048
     elif gb >= 10:

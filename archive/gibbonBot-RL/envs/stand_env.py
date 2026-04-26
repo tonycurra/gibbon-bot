@@ -24,36 +24,65 @@ Reward per step:
 """
 
 import importlib
-import numpy as np
+import pathlib
+
+import gymnasium as gym
 import mujoco
 import mujoco.viewer
-import gymnasium as gym
+import numpy as np
 from gymnasium import spaces
-import pathlib
+
 from . import hints as hints_mod
 
-ROOT       = pathlib.Path(__file__).parent.parent
-SCENE      = ROOT / "scene.xml"
+ROOT = pathlib.Path(__file__).parent.parent
+SCENE = ROOT / "scene_fixed.xml"  # Use the fixed collision version
 HINTS_FILE = pathlib.Path(__file__).parent / "hints.py"
-TARGET_Z   = 0.40   # tall-stance target — torso high, grippers on floor
-MIN_HEIGHT = 0.03   # torso this far below terrain surface → fallen
+TARGET_Z = 0.40  # tall-stance target — torso high, grippers on floor
+MIN_HEIGHT = (
+    0.08  # torso this far below terrain surface → fallen (increased for stability)
+)
 SPAWN_CLEARANCE = 0.07  # start this far above terrain
-MAX_STEPS  = 2000
-PHYSICS_STEPS_PER_ACTION = 12  # longer per-action window → slower, more deliberate motion
+MAX_STEPS = 2000
+PHYSICS_STEPS_PER_ACTION = (
+    12  # longer per-action window → slower, more deliberate motion
+)
 
 # Arms splayed down — a reasonable starting pose for learning to stand.
 # Each leg: base(link1) rotated outward, link2 angled down, rest relaxed.
 # Indices per leg: [base, l1l2, l2l3, l3l4, l4l5, gripper]  × 4 legs
-_STAND_INIT = np.array([
-    # fl (front-left)
-     0.0, -0.4,  1.2, 0.0, 0.0, 0.0,
-    # fr (front-right)
-     0.0, -0.4,  1.2, 0.0, 0.0, 0.0,
-    # bl (back-left)
-     0.0, -0.4,  1.2, 0.0, 0.0, 0.0,
-    # br (back-right)
-     0.0, -0.4,  1.2, 0.0, 0.0, 0.0,
-], dtype=np.float64)
+_STAND_INIT = np.array(
+    [
+        # fl (front-left)
+        0.0,
+        -0.4,
+        1.2,
+        0.0,
+        0.0,
+        0.0,
+        # fr (front-right)
+        0.0,
+        -0.4,
+        1.2,
+        0.0,
+        0.0,
+        0.0,
+        # bl (back-left)
+        0.0,
+        -0.4,
+        1.2,
+        0.0,
+        0.0,
+        0.0,
+        # br (back-right)
+        0.0,
+        -0.4,
+        1.2,
+        0.0,
+        0.0,
+        0.0,
+    ],
+    dtype=np.float64,
+)
 
 
 class StandEnv(gym.Env):
@@ -64,12 +93,14 @@ class StandEnv(gym.Env):
         self.render_mode = render_mode
 
         self.model = mujoco.MjModel.from_xml_path(str(SCENE))
-        self.data  = mujoco.MjData(self.model)
+        self.data = mujoco.MjData(self.model)
 
-        self._jnt_lo = np.array([self.model.jnt_range[i][0]
-                                  for i in range(1, self.model.njnt)])
-        self._jnt_hi = np.array([self.model.jnt_range[i][1]
-                                  for i in range(1, self.model.njnt)])
+        self._jnt_lo = np.array(
+            [self.model.jnt_range[i][0] for i in range(1, self.model.njnt)]
+        )
+        self._jnt_hi = np.array(
+            [self.model.jnt_range[i][1] for i in range(1, self.model.njnt)]
+        )
 
         n_obs = 59
         self.observation_space = spaces.Box(
@@ -79,10 +110,10 @@ class StandEnv(gym.Env):
             low=-1.0, high=1.0, shape=(24,), dtype=np.float32
         )
 
-        self._step_count  = 0
+        self._step_count = 0
         self._prev_action = np.zeros(24, dtype=np.float32)
         self._hints_mtime = 0.0
-        self._hints       = dict(hints_mod.HINTS)
+        self._hints = dict(hints_mod.HINTS)
 
         if render_mode == "human":
             self._viewer = mujoco.viewer.launch_passive(self.model, self.data)
@@ -100,14 +131,14 @@ class StandEnv(gym.Env):
         self.data.qpos[0] = 0.0
         self.data.qpos[1] = 0.0
         self.data.qpos[2] = SPAWN_CLEARANCE  # ground is always z=0
-        self.data.qpos[3] = 1.0   # quat w (upright)
+        self.data.qpos[3] = 1.0  # quat w (upright)
         self.data.qpos[4:7] = 0.0
 
         # arms in splayed-down pose + small noise
         self.data.qpos[7:] = _STAND_INIT + rng.uniform(-0.1, 0.1, size=24)
 
         mujoco.mj_forward(self.model, self.data)
-        self._step_count  = 0
+        self._step_count = 0
         self._prev_action = np.zeros(24, dtype=np.float32)
         self._reload_hints()
 
@@ -127,29 +158,29 @@ class StandEnv(gym.Env):
         self._step_count += 1
         obs = self._get_obs()
 
-        torso_z      = float(self.data.qpos[2])
+        torso_z = float(self.data.qpos[2])
         above_ground = torso_z  # ground is z=0
-        fallen       = above_ground < MIN_HEIGHT
+        fallen = above_ground < MIN_HEIGHT
 
         # height reward: Gaussian around TARGET_Z above terrain, max 1.0
-        height_err    = (above_ground - TARGET_Z) / 0.08
-        height_reward = float(np.exp(-0.5 * height_err ** 2))
+        height_err = (above_ground - TARGET_Z) / 0.08
+        height_reward = float(np.exp(-0.5 * height_err**2))
 
         # upright reward: penalise tilt — quat[0] is w
         w = float(self.data.qpos[3])
         upright_reward = 0.3 * w * w
 
-        jvel        = self.data.qvel[6:]
+        jvel = self.data.qvel[6:]
         action_delta = float(np.sum((action - self._prev_action) ** 2))
         self._prev_action = action.copy()
 
         reward = (
-              height_reward
+            height_reward
             + upright_reward
-            + 0.05                                    # alive bonus
-            - 5e-4 * float(np.sum(ctrl ** 2))        # energy
-            - 1e-3 * float(np.sum(jvel ** 2))        # joint velocity / flailing
-            - 2e-2 * action_delta                     # action smoothness
+            + 0.05  # alive bonus
+            - 5e-4 * float(np.sum(ctrl**2))  # energy
+            - 1e-3 * float(np.sum(jvel**2))  # joint velocity / flailing
+            - 2e-2 * action_delta  # action smoothness
         )
         if fallen:
             reward -= 10.0
@@ -157,12 +188,16 @@ class StandEnv(gym.Env):
         reward += self._hints_reward()
 
         terminated = fallen
-        truncated  = self._step_count >= MAX_STEPS
+        truncated = self._step_count >= MAX_STEPS
 
-        info = {"torso_z": torso_z, "above_ground": above_ground,
-                "fallen": fallen, "height_reward": height_reward,
-                "upright_reward": upright_reward,
-                "active_hints": [k for k, v in self._hints.items() if v != 0.0]}
+        info = {
+            "torso_z": torso_z,
+            "above_ground": above_ground,
+            "fallen": fallen,
+            "height_reward": height_reward,
+            "upright_reward": upright_reward,
+            "active_hints": [k for k, v in self._hints.items() if v != 0.0],
+        }
         return obs, reward, terminated, truncated, info
 
     def close(self):
@@ -192,7 +227,9 @@ class StandEnv(gym.Env):
         if h.get("upright", 0.0) != 0.0:
             w = float(qpos[3])
             # 1 - w^2: 0 when upright, up to 1 when tipped — negate for reward
-            r += h["upright"] * (w * w - 1.0 + 1.0)   # = w^2, same as base but user-weighted
+            r += h["upright"] * (
+                w * w - 1.0 + 1.0
+            )  # = w^2, same as base but user-weighted
 
         if h.get("spread_legs", 0.0) != 0.0:
             # base joints are indices 0,6,12,18 in the arm joint array (qpos[7:])
@@ -201,16 +238,24 @@ class StandEnv(gym.Env):
 
         if h.get("front_arms_down", 0.0) != 0.0:
             # fl gripper = body "fl_gripper_link", fr gripper = "fr_gripper_link"
-            fl_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "fl_gripper_link")
-            fr_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "fr_gripper_link")
+            fl_id = mujoco.mj_name2id(
+                self.model, mujoco.mjtObj.mjOBJ_BODY, "fl_gripper_link"
+            )
+            fr_id = mujoco.mj_name2id(
+                self.model, mujoco.mjtObj.mjOBJ_BODY, "fr_gripper_link"
+            )
             if fl_id >= 0 and fr_id >= 0:
                 fl_z = float(self.data.xpos[fl_id][2])
                 fr_z = float(self.data.xpos[fr_id][2])
-                r -= h["front_arms_down"] * (fl_z + fr_z)   # lower = better
+                r -= h["front_arms_down"] * (fl_z + fr_z)  # lower = better
 
         if h.get("back_arms_down", 0.0) != 0.0:
-            bl_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "bl_gripper_link")
-            br_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "br_gripper_link")
+            bl_id = mujoco.mj_name2id(
+                self.model, mujoco.mjtObj.mjOBJ_BODY, "bl_gripper_link"
+            )
+            br_id = mujoco.mj_name2id(
+                self.model, mujoco.mjtObj.mjOBJ_BODY, "br_gripper_link"
+            )
             if bl_id >= 0 and br_id >= 0:
                 bl_z = float(self.data.xpos[bl_id][2])
                 br_z = float(self.data.xpos[br_id][2])
@@ -219,8 +264,9 @@ class StandEnv(gym.Env):
         if h.get("symmetry", 0.0) != 0.0:
             jpos = qpos[7:]
             # compare fl vs fr (indices 0:6 vs 6:12) and bl vs br (12:18 vs 18:24)
-            lr_diff = float(np.mean(np.abs(jpos[0:6] - jpos[6:12]))) \
-                    + float(np.mean(np.abs(jpos[12:18] - jpos[18:24])))
+            lr_diff = float(np.mean(np.abs(jpos[0:6] - jpos[6:12]))) + float(
+                np.mean(np.abs(jpos[12:18] - jpos[18:24]))
+            )
             r -= h["symmetry"] * lr_diff
 
         if h.get("stillness", 0.0) != 0.0:
@@ -232,12 +278,14 @@ class StandEnv(gym.Env):
         qpos = self.data.qpos
         qvel = self.data.qvel
 
-        obs = np.concatenate([
-            qpos[2:3],    # torso z
-            qpos[3:7],    # torso quat (w x y z)
-            qvel[0:3],    # linear vel
-            qvel[3:6],    # angular vel
-            qpos[7:],     # 24 joint positions
-            qvel[6:],     # 24 joint velocities
-        ]).astype(np.float32)
+        obs = np.concatenate(
+            [
+                qpos[2:3],  # torso z
+                qpos[3:7],  # torso quat (w x y z)
+                qvel[0:3],  # linear vel
+                qvel[3:6],  # angular vel
+                qpos[7:],  # 24 joint positions
+                qvel[6:],  # 24 joint velocities
+            ]
+        ).astype(np.float32)
         return obs

@@ -1,166 +1,132 @@
+#!/usr/bin/env python3
 """
-Train the ape robot using PPO.
+Unified training script for gibbonBot-RL
 
 Usage:
-    python train.py --task stand            # fresh run (random init)
-    python train.py --task stand --inherit  # warm-start from best checkpoint
-    python train.py --task stand --resume   # continue exact run (preserves step count)
-    python train.py --task stand --watch    # open live viewer alongside training
-    python train.py --task stand --inherit --watch --envs 8
+    python train.py stand          # GPU training (MJX) with auto viewer
+    python train.py stand --cpu     # CPU training (SB3) with auto viewer
+    python train.py reach           # Train reach task
+    python train.py --help          # Show all options
 
---inherit vs --resume
-  --resume  : continues the same run — step counter keeps going, same TensorBoard curve.
-              Use when you paused and want to continue.
-  --inherit : starts a NEW run but copies the network weights from the best checkpoint.
-              Use when you changed physics params (kp, torque, etc.) and want the agent
-              to start with existing knowledge instead of from scratch.
-
-Checkpoints:  runs/<task>/
-TensorBoard:  tensorboard --logdir runs/
-Lineage:      python train.py --lineage --task stand
+Features:
+    - Automatic viewer launch
+    - GPU/CPU detection
+    - Task selection
+    - Progress monitoring
 """
 
 import argparse
-import pathlib
+import os
 import subprocess
 import sys
-from stable_baselines3 import PPO
-from stable_baselines3.common.env_util import make_vec_env
-from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback
-from envs import ApeEnv, StandEnv
-import lineage as lineage_mod
-
-TASKS = {
-    "reach": (ApeEnv,   "ape_reach",  pathlib.Path("envs/ape_env.py")),
-    "stand": (StandEnv, "ape_stand",  pathlib.Path("envs/stand_env.py")),
-}
-
-SCENE   = pathlib.Path("scene.xml")
-STEPS   = 2_048
-TOTAL   = 10_000_000
+import threading
+import time
+from pathlib import Path
 
 
-def best_checkpoint(runs_dir: pathlib.Path, run_name: str) -> pathlib.Path | None:
-    best = runs_dir / "best" / "best_model.zip"
-    if best.exists():
-        return best
-    checkpoints = sorted(runs_dir.glob(f"{run_name}_*.zip"))
-    return checkpoints[-1] if checkpoints else None
+def parse_args():
+    parser = argparse.ArgumentParser(description="Unified gibbonBot-RL training script")
+    parser.add_argument(
+        "task",
+        nargs="?",
+        default="stand",
+        choices=["stand", "reach"],
+        help="Task to train (stand or reach)",
+    )
+    parser.add_argument("--cpu", action="store_true", help="Force CPU training (SB3)")
+    parser.add_argument("--gpu", action="store_true", help="Force GPU training (MJX)")
+    parser.add_argument(
+        "--envs", type=int, default=None, help="Number of parallel environments"
+    )
+    parser.add_argument(
+        "--no-watch", action="store_true", help="Disable automatic viewer"
+    )
+    parser.add_argument(
+        "--inherit", action="store_true", help="Inherit from best checkpoint"
+    )
+    return parser.parse_args()
+
+
+def detect_gpu():
+    """Check if CUDA is available"""
+    try:
+        import jax
+
+        devices = jax.devices()
+        return any("cuda" in str(d).lower() for d in devices)
+    except:
+        return False
+
+
+def run_viewer(task):
+    """Run the viewer in a separate process"""
+    viewer_cmd = [sys.executable, "tools/watch.py", f"--task", task]
+    print(f"\n🎬 Starting viewer: {' '.join(viewer_cmd)}\n")
+    subprocess.run(viewer_cmd)
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--task",    default="reach", choices=list(TASKS))
-    parser.add_argument("--resume",  action="store_true",
-                        help="continue exact run from last checkpoint")
-    parser.add_argument("--inherit", action="store_true",
-                        help="warm-start weights from best checkpoint, fresh step counter")
-    parser.add_argument("--watch",   action="store_true",
-                        help="open live viewer alongside training")
-    parser.add_argument("--envs",    type=int, default=1,
-                        help="number of parallel training envs")
-    parser.add_argument("--lineage", action="store_true",
-                        help="print lineage table and exit")
-    args = parser.parse_args()
+    args = parse_args()
 
-    EnvClass, run_name, env_file = TASKS[args.task]
-    RUNS = pathlib.Path(f"runs/{run_name}")
-    RUNS.mkdir(parents=True, exist_ok=True)
+    # Set up environment
+    os.environ["PYTHONPATH"] = "."
 
-    if args.lineage:
-        lineage_mod.show(RUNS)
-        return
+    # Determine training mode
+    has_gpu = detect_gpu()
+    use_gpu = args.gpu or (has_gpu and not args.cpu)
 
-    n_envs = args.envs
-    env    = make_vec_env(EnvClass, n_envs=n_envs)
+    print(f"🤖 gibbonBot-RL Training")
+    print(f"   Task: {args.task}")
+    print(f"   Mode: {'GPU (MJX)' if use_gpu else 'CPU (SB3)'}")
+    print(f"   GPU detected: {has_gpu}")
+    print(f"   Viewer: {'Enabled' if not args.no_watch else 'Disabled'}")
+    print(f"   Inherit: {args.inherit}")
+    if args.envs:
+        print(f"   Environments: {args.envs}")
+    print()
 
-    checkpoint_cb = CheckpointCallback(
-        save_freq=max(50_000 // n_envs, 1),
-        save_path=str(RUNS),
-        name_prefix=run_name,
-    )
-    eval_env = make_vec_env(EnvClass, n_envs=1)
-    eval_cb  = EvalCallback(
-        eval_env,
-        best_model_save_path=str(RUNS / "best"),
-        log_path=str(RUNS / "eval"),
-        eval_freq=max(100_000 // n_envs, 1),
-        n_eval_episodes=5,
-        verbose=1,
-    )
+    # Build training command
+    if use_gpu:
+        script = "config/train_mjx.py"
+        cmd = [sys.executable, script]
+        if args.envs:
+            cmd.extend(["--envs", str(args.envs)])
+        if args.inherit:
+            cmd.append("--inherit")
+    else:
+        # Use unified environment
+        script = "train_fixed.py"
+        cmd = [sys.executable, script, "--task", args.task]
+        if args.envs:
+            cmd.extend(["--envs", str(args.envs)])
+        if args.inherit:
+            cmd.append("--inherit")
+        if not args.no_watch:
+            cmd.append("--watch")
 
-    inherited_from = None
+    print(f"🚀 Starting training: {' '.join(cmd)}")
 
-    if args.resume:
-        ckpt = best_checkpoint(RUNS, run_name)
-        if ckpt is None:
-            print("No checkpoint found — starting from scratch.")
-        else:
-            print(f"[resume] continuing from {ckpt.name}")
-            model = PPO.load(str(ckpt), env=env)
-            lineage_mod.record(RUNS, args.task, n_envs, str(ckpt), SCENE, env_file)
-            _run(model, TOTAL, checkpoint_cb, eval_cb, resume=True,
-                 task=args.task, watch=args.watch)
-            return
+    # Start training process
+    train_process = subprocess.Popen(cmd)
 
-    if args.inherit:
-        ckpt = best_checkpoint(RUNS, run_name)
-        if ckpt is None:
-            print("[inherit] no checkpoint found — starting from scratch.")
-        else:
-            print(f"[inherit] warm-starting weights from {ckpt.name}")
-            inherited_from = str(ckpt)
-            # Load weights only — fresh env, fresh step counter, fresh TensorBoard run
-            old_model = PPO.load(str(ckpt), env=env)
-            model = PPO(
-                "MlpPolicy", env,
-                n_steps=STEPS, batch_size=256, n_epochs=10,
-                gamma=0.99, learning_rate=3e-4, ent_coef=0.005,
-                clip_range=0.2, verbose=1,
-                tensorboard_log=str(RUNS),
-            )
-            model.policy.load_state_dict(old_model.policy.state_dict())
-            print("[inherit] weights transferred.")
-            lineage_mod.record(RUNS, args.task, n_envs, inherited_from, SCENE, env_file)
-            _run(model, TOTAL, checkpoint_cb, eval_cb, resume=False,
-                 task=args.task, watch=args.watch)
-            return
-
-    # fresh run
-    model = PPO(
-        "MlpPolicy", env,
-        n_steps=STEPS, batch_size=256, n_epochs=10,
-        gamma=0.99, learning_rate=3e-4, ent_coef=0.005,
-        clip_range=0.2, verbose=1,
-        tensorboard_log=str(RUNS),
-    )
-    lineage_mod.record(RUNS, args.task, n_envs, None, SCENE, env_file)
-    _run(model, TOTAL, checkpoint_cb, eval_cb, resume=False,
-         task=args.task, watch=args.watch)
-
-
-def _run(model, total, checkpoint_cb, eval_cb, *, resume, task, watch):
-    watcher = None
-    if watch:
-        watcher = subprocess.Popen(
-            [sys.executable, "tools/watch.py", "--task", task],
-            cwd=pathlib.Path(__file__).parent,
+    # Start viewer in background if requested
+    if not args.no_watch and use_gpu:
+        viewer_thread = threading.Thread(
+            target=run_viewer, args=(args.task,), daemon=True
         )
-    print(f"Training for {total:,} steps ...")
+        viewer_thread.start()
+        time.sleep(2)  # Give viewer time to start
+
+    # Wait for training to complete
     try:
-        model.learn(
-            total_timesteps=total,
-            callback=[checkpoint_cb, eval_cb],
-            reset_num_timesteps=not resume,
-        )
-    finally:
-        if watcher is not None:
-            watcher.wait()
+        train_process.wait()
+    except KeyboardInterrupt:
+        print("\n⏹️  Training stopped by user")
+        train_process.terminate()
+        if not args.no_watch and use_gpu:
+            viewer_thread.join(timeout=1)
 
-    run_name = model.tensorboard_log and pathlib.Path(model.tensorboard_log).name or "model"
-    final = pathlib.Path(f"runs/{run_name}_final.zip")
-    model.save(str(final))
-    print(f"Saved: {final}")
+    print(f"\n✅ Training completed!")
 
 
 if __name__ == "__main__":
