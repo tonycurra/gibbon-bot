@@ -30,23 +30,38 @@ from flax import struct
 from flax.training.train_state import TrainState
 
 # Add project root to Python path for imports
-project_root = os.path.dirname(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-)
-src_path = project_root  # This should be the src directory
-sys.path.insert(0, src_path)
+# Calculate the correct src directory path
+file_path = os.path.abspath(__file__)
+if "gibbonbot" in file_path and "config" in file_path:
+    # We're in src/gibbonbot/config/train_mjx.py
+    src_path = os.path.dirname(os.path.dirname(os.path.dirname(file_path)))
+elif "src" in file_path:
+    # We're somewhere in src/
+    src_path = os.path.dirname(file_path)
+else:
+    # Fallback: assume we're running from project root
+    src_path = os.path.join(os.getcwd(), "src")
 
 # Verify the path is correct
 check_path = os.path.join(src_path, "gibbonbot", "envs", "stand_env_mjx.py")
 if not os.path.exists(check_path):
-    # Try alternative path (src_path might already be the gibbonbot directory)
+    # Try alternative path
     alt_check_path = os.path.join(src_path, "envs", "stand_env_mjx.py")
     if os.path.exists(alt_check_path):
-        src_path = os.path.dirname(src_path)  # Adjust src_path to parent
+        src_path = os.path.dirname(src_path)
     else:
-        raise ImportError(
-            f"Cannot find stand_env_mjx.py at {src_path} or {alt_check_path}"
+        # Last resort: try to find it from current directory
+        fallback_path = os.path.join(
+            os.getcwd(), "src", "gibbonbot", "envs", "stand_env_mjx.py"
         )
+        if os.path.exists(fallback_path):
+            src_path = os.path.join(os.getcwd(), "src")
+        else:
+            raise ImportError(
+                f"Cannot find stand_env_mjx.py. Tried: {check_path}, {alt_check_path}, {fallback_path}"
+            )
+
+sys.path.insert(0, src_path)
 
 from gibbonbot.envs.stand_env_mjx import (
     ACT_DIM,
