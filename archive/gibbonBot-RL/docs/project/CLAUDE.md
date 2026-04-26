@@ -21,8 +21,8 @@ source .venv/bin/activate
 
 ### Training
 ```bash
-python train_mjx.py                            # GPU PPO via JAX/MJX, 1024 envs (~46M steps/hr on RTX 4070)
-python train_mjx.py --envs 2048 --inherit      # more envs, warm-start from prior best
+python run_train_mjx.py                        # GPU PPO via JAX/MJX, 1024 envs (~46M steps/hr on RTX 4070)
+python run_train_mjx.py --envs 2048 --inherit  # more envs, warm-start from prior best
 python train.py --task stand --watch           # CPU PPO via SB3 + live viewer
 python train.py --task stand --resume          # continue same run
 python train.py --task stand --inherit         # new run, inherit weights from best (use after hardware param changes)
@@ -31,11 +31,8 @@ python train.py --lineage --task stand         # show lineage chain
 
 ### Viewing / evaluation
 ```bash
-python tools/sim.py                             # interactive physics-only viewer (no policy)
-python tools/watch.py --task stand              # live viewer, hot-swaps checkpoints from runs/ape_stand/best/
-python tools/watch_mjx.py                       # live viewer for MJX training
-python tools/eval.py --task stand               # evaluate the saved best checkpoint
-python tools/test_joints.py                     # manual joint tester (gravity off)
+python src/gibbonbot/utils/watch.py --task stand   # live viewer, hot-swaps checkpoints from runs/ape_stand/best/
+python src/gibbonbot/utils/watch_mjx.py            # live viewer for MJX training
 tensorboard --logdir runs/
 ```
 
@@ -56,8 +53,13 @@ Keep the two env implementations behaviourally aligned — same OBS_DIM/ACT_DIM,
 ### Scene + robot
 
 - `scene.xml` — MJCF scene compiled from `ape.urdf` plus floor/lighting/actuators. Uses **capsule geometry** (no meshes referenced at runtime) so it stays MJX-compatible.
-- `roarm_ws/roarm_description/ape.urdf` — the robot description: 1 floating torso + 4 prefixed arms (`fl_`, `fr_`, `bl_`, `br_`). Edit this to change the robot. Servo limits come from STS3215 datasheet (effort 2.94 Nm, velocity 6.28 rad/s; grippers half torque). Mount rpy/xyz of the four arms is what defines pose stance.
+- `roarm_ws/roarm_description/ape.urdf` — the robot description: 1 floating torso + 4 prefixed arms (`fl_`, `fr_`, `bl_`, `br_`). Edit this to change the robot. Mount rpy/xyz of the four arms is what defines pose stance.
 - Position actuators with `kp=8`. Changing `kp` or `forcerange` is a hardware change — bump generation by retraining with `--inherit`.
+- **Servo specs** (RoArm-M3-Pro, see `docs/hardware/roarm_m3_pro_specs.md`):
+  - Standard joints: **ST3235** → 30 kg.cm = **2.943 Nm**, 45 RPM = 4.71 rad/s, 70.5 g
+  - Shoulder: **dual-drive (2× ST3235)** → 60 kg.cm = **5.886 Nm** (reflected in `scene.xml`)
+  - Gripper: **ST3215-HS** → 20 kg.cm = **1.962 Nm**
+  - Arm weight: **1020.8 g** per complete arm (link masses in scene.xml scaled to match)
 
 ### Lineage
 

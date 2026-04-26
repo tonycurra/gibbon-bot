@@ -91,6 +91,7 @@ LR = 5e-4  # Increased learning rate for faster policy updates
 TOTAL_STEPS = 100_000_000
 SAVE_EVERY = 500_000  # env steps between checkpoints
 LOG_EVERY = 2  # updates between console prints
+WATCH_EVERY = 10  # updates between visualizations (when --watch is enabled)
 
 
 # ── network ───────────────────────────────────────────────────────────────────
@@ -213,6 +214,56 @@ def update_step(train_state, rollout):
 # ── main ─────────────────────────────────────────────────────────────────────
 
 
+def _visualize_policy(train_state, step_count):
+    """Visualize the current policy using the regular MuJoCo viewer."""
+    try:
+        import time
+
+        from gibbonbot.envs.stand_env import StandEnv
+
+        # Create a deterministic action function
+        @jax.jit
+        def act(params, obs):
+            mean, log_std, _ = ActorCritic().apply(params, obs)
+            return jnp.tanh(mean)  # deterministic: use mean action
+
+        env = StandEnv(render_mode="human")
+        obs, _ = env.reset()
+
+        # Pad observation to match MJX format (add dummy tree position)
+        _TREE_PAD = np.array([5.0, 0.0, 1.5], dtype=np.float32)
+        obs_padded = np.concatenate([obs, _TREE_PAD])
+
+        total_reward = 0.0
+        step = 0
+        done = False
+
+        print(f"\n[visualize] Showing policy at step {step_count:,}...")
+
+        while not done and step < 500:  # Limit to 500 steps for visualization
+            action = np.array(act(train_state.params, jnp.array(obs_padded)))
+            obs, reward, terminated, truncated, info = env.step(action)
+
+            # Re-pad observation for next step
+            obs_padded = np.concatenate([obs, _TREE_PAD])
+
+            total_reward += reward
+            step += 1
+            done = terminated or truncated
+
+            # Small delay to make visualization smoother
+            time.sleep(0.02)
+
+        env.close()
+        status = "FALLEN" if info.get("fallen", False) else "ALIVE"
+        print(
+            f"[visualize] Episode: {status} | Reward: {total_reward:.1f} | Steps: {step}"
+        )
+
+    except Exception as e:
+        print(f"[visualize] Error: {e}")
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--envs", type=int, default=1024)
@@ -224,7 +275,7 @@ def main():
     parser.add_argument(
         "--watch",
         action="store_true",
-        help="periodically open viewer (not yet implemented for MJX)",
+        help="periodically open viewer to visualize training progress",
     )
     args = parser.parse_args()
 
@@ -361,6 +412,10 @@ def main():
                 f"steps={total_env_steps:>10,}  sps={sps:>8,.0f}  "
                 f"mean_rew={mean_rew:.3f}  updates={update_count}"
             )
+
+        # Periodically visualize the current policy
+        if args.watch and update_count % max(1, WATCH_EVERY) == 0:
+            _visualize_policy(train_state, total_env_steps)
 
         if total_env_steps - last_save >= SAVE_EVERY:
             _save(train_state, total_env_steps)
