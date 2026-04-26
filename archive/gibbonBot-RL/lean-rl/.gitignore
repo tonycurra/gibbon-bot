@@ -1,0 +1,29 @@
+# Lean RL - Git Ignore
+
+# Ignore training checkpoints and runs
+runs/
+mjx_*.npz
+*.npz
+
+# Ignore Python cache
+__pycache__/
+*.py[cod]
+
+# Ignore virtual environments
+.venv/
+venv/
+
+# Ignore IDE-specific files
+.idea/
+.vscode/
+*.swp
+
+# Ignore system files
+.DS_Store
+
+# Ignore test/output files
+test_*.py
+*.log
+
+# Ignore documentation that can be regenerated
+# (keep essential docs like README and QUICK_START)
