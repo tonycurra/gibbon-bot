@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-SIMPLIFIED GPU TRAINING: Focus on lifting all arm bases high
+SIMPLE GPU TRAINING
 
-Uses MJX for GPU acceleration with simple reward function.
+Direct height rewards with GPU acceleration.
 """
 
 import argparse
@@ -17,31 +17,24 @@ sys.path.insert(0, str(project_root / "src"))
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Simplified GPU Training")
+    parser = argparse.ArgumentParser(description="Simple GPU Training")
     parser.add_argument(
-        "--steps", type=int, default=1_000_000, help="Total training steps"
+        "--steps", type=int, default=1000000, help="Total training steps"
     )
     parser.add_argument(
         "--envs", type=int, default=None, help="Number of parallel envs (auto if None)"
     )
     args = parser.parse_args()
 
-    print(f"🚀 Starting SIMPLE GPU training")
-    print(f"   Total steps: {args.steps:,}")
-    print(f"   Parallel envs: {'auto' if args.envs is None else args.envs}")
+    print(f"🚀 Simple GPU Training")
+    print(f"   Steps: {args.steps:,}")
+    print(f"   Envs: {'auto' if args.envs is None else args.envs}")
     print(f"   Goal: Lift all arm bases as high as possible")
-    print(f"   Reward: Direct height reward (higher arms = higher reward)")
     print()
 
-    # Run the GPU training script with simplified rewards
+    # Run GPU training with simple rewards
     from src.gibbonbot.config.train_mjx import main as gpu_main
 
-    # Set steps if provided
-    if args.steps:
-        # We'll need to modify this in the actual training script
-        print(f"⚠️  Note: Step count will be set in training script")
-
-    # Run GPU training
     try:
         gpu_main()
     except KeyboardInterrupt:

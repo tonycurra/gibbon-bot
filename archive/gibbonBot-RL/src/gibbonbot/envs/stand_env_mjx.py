@@ -93,15 +93,11 @@ def load_model():
         "stillness": float(h.get("stillness", 0.0)),
         "symmetry": float(h.get("symmetry", 0.0)),
         "arm_spacing": float(h.get("arm_spacing", 0.0)),
-        "tree_seeking": float(
-            h.get("tree_seeking", 1.0)
-        ),  # Weight for tree-seeking reward
         # static body indices
         "fl_id": body_id("fl_gripper_link"),
         "fr_id": body_id("fr_gripper_link"),
         "bl_id": body_id("bl_gripper_link"),
         "br_id": body_id("br_gripper_link"),
-        "tree_id": body_id("tree"),
     }
     active = [k for k, v in hints.items() if isinstance(v, float) and v != 0.0]
     print(f"[mjx] hints baked in: {active or 'none'}")
@@ -208,12 +204,6 @@ def step(mx, jnt_lo, jnt_hi, hints, dx, action, prev_action, step_count=0):
     jvel = dx.qvel[6:]
     action_delta = jnp.sum((action - prev_action) ** 2)
 
-    # Tree-seeking reward: encourage moving toward the tree
-    tree_distance = jnp.linalg.norm(rel_tree_pos)
-    tree_reward = hints["tree_seeking"] * (
-        1.0 / (1.0 + tree_distance)
-    )  # Higher reward when closer
-
     reward = (
         height_reward
         + upright_reward
@@ -222,7 +212,6 @@ def step(mx, jnt_lo, jnt_hi, hints, dx, action, prev_action, step_count=0):
         - 1e-3 * jnp.sum(jvel**2)
         - 2e-2 * action_delta
         - 10.0 * fallen
-        + tree_reward
     )
 
     # ── hint rewards (weights baked in at load time) ─────────────────────────
