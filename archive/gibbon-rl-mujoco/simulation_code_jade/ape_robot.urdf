@@ -1,0 +1,231 @@
+<?xml version="1.0"?>
+<mujoco>
+  <option integrator="RK4" timestep="0.001"/>
+  <compiler discardvisual="false" meshdir="meshes/roarm_m3"/>
+
+  <contact>
+    <exclude body1="torso" body2="fl_base_link"/>
+    <exclude body1="torso" body2="fr_base_link"/>
+    <exclude body1="torso" body2="bl_base_link"/>
+    <exclude body1="torso" body2="br_base_link"/>
+  </contact>
+
+  <asset>
+    <mesh name="base_link" file="meshes/roarm_m3/base_link.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="link1" file="meshes/roarm_m3/link1.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="link2" file="meshes/roarm_m3/link2.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="link3" file="meshes/roarm_m3/link3.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="link4" file="meshes/roarm_m3/link4.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="link5" file="meshes/roarm_m3/link5.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="gripper_link" file="meshes/roarm_m3/gripper_link.stl" scale="0.001 0.001 0.001"/>
+  </asset>
+
+  <worldbody>
+    <!-- Torso -->
+    <body name="torso" pos="0 0 0">
+      <inertial pos="0 0 0" mass="1.5" diaginertia="0.0058 0.0121 0.0163"/>
+      <geom name="torso_visual" type="box" size="0.30 0.20 0.08" rgba="0.5 0.5 0.5 1"/>
+      <geom name="torso_collision" type="box" size="0.30 0.20 0.08" contype="1" conaffinity="1"/>
+
+      <!-- Front-left arm -->
+      <body name="fl_base_link" pos="0.10 0.09 -0.04">
+        <joint name="fl_mount_joint" type="free"/>
+        <inertial pos="-0.0068 0 -0.03" mass="0.2562183" diaginertia="0.00029211 0.00035719 0.000349421"/>
+        <geom name="fl_base_link_visual" type="mesh" mesh="base_link" rgba="0.8 0.8 0.8 1"/>
+        <geom name="fl_base_link_collision" type="mesh" mesh="base_link" contype="1" conaffinity="1"/>
+
+        <body name="fl_link1" pos="0 0 0">
+          <joint name="fl_base_link_to_link1" type="hinge" axis="0 0 1" range="-3.1416 3.1416"/>
+          <inertial pos="0 0 0.037" mass="0.0729177" diaginertia="4.68465E-05 3.32107E-05 5.01023E-05"/>
+          <geom name="fl_link1_visual" type="mesh" mesh="link1" rgba="0.8 0.8 0.8 1"/>
+          <geom name="fl_link1_collision" type="mesh" mesh="link1" contype="1" conaffinity="1"/>
+
+          <body name="fl_link2" pos="0 0 0.051959">
+            <joint name="fl_link1_to_link2" type="hinge" axis="0 0 1" range="-1.5708 1.5708"/>
+            <inertial pos="0.119 0.012247 -0.0001" mass="0.0703216" diaginertia="5.46501E-05 0.000423091 0.000404557"/>
+            <geom name="fl_link2_visual" type="mesh" mesh="link2" rgba="0.8 0.8 0.8 1"/>
+            <geom name="fl_link2_collision" type="mesh" mesh="link2" contype="1" conaffinity="1"/>
+
+            <body name="fl_link3" pos="0.236815 0.030002 0">
+              <joint name="fl_link2_to_link3" type="hinge" axis="0 0 1" range="-1 2.95"/>
+              <inertial pos="-0.0015 -0.0765 0.00505" mass="0.021608" diaginertia="6.37699E-05 3.67026E-06 6.28965E-05"/>
+              <geom name="fl_link3_visual" type="mesh" mesh="link3" rgba="0.8 0.8 0.8 1"/>
+              <geom name="fl_link3_collision" type="mesh" mesh="link3" contype="1" conaffinity="1"/>
+
+              <body name="fl_link4" pos="0 -0.144586 0">
+                <joint name="fl_link3_to_link4" type="hinge" axis="0 0 1" range="-1.5708 1.5708"/>
+                <inertial pos="-0.0015 -0.022 -0.00075" mass="0.0099933" diaginertia="4.53979E-06 3.78103E-06 5.60238E-06"/>
+                <geom name="fl_link4_visual" type="mesh" mesh="link4" rgba="0.8 0.8 0.8 1"/>
+                <geom name="fl_link4_collision" type="mesh" mesh="link4" contype="1" conaffinity="1"/>
+
+                <body name="fl_link5" pos="0.015147 -0.053653 0">
+                  <joint name="fl_link4_to_link5" type="hinge" axis="0 0 1" range="-3.1416 3.1416"/>
+                  <inertial pos="-0.0078 0 0.0595" mass="0.0153928" diaginertia="2.02869E-05 2.14427E-05 4.39495E-06"/>
+                  <geom name="fl_link5_visual" type="mesh" mesh="link5" rgba="0.8 0.8 0.8 1"/>
+                  <geom name="fl_link5_collision" type="mesh" mesh="link5" contype="1" conaffinity="1"/>
+
+                  <body name="fl_gripper_link" pos="0.00 0.018821 0.052035">
+                    <joint name="fl_link5_to_gripper_link" type="hinge" axis="0 0 1" range="0 1.5"/>
+                    <inertial pos="0.027 0.0027 -0.018935" mass="0.0028708" diaginertia="5.23216E-07 1.82071E-06 1.60231E-06"/>
+                    <geom name="fl_gripper_link_visual" type="mesh" mesh="gripper_link" rgba="0.8 0.8 0.8 1"/>
+                    <geom name="fl_gripper_link_collision" type="mesh" mesh="gripper_link" contype="1" conaffinity="1"/>
+                  </body>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+
+      <!-- Front-right arm -->
+      <body name="fr_base_link" pos="0.10 -0.09 -0.04">
+        <joint name="fr_mount_joint" type="free"/>
+        <inertial pos="-0.0068 0 -0.03" mass="0.2562183" diaginertia="0.00029211 0.00035719 0.000349421"/>
+        <geom name="fr_base_link_visual" type="mesh" mesh="base_link" rgba="0.8 0.8 0.8 1"/>
+        <geom name="fr_base_link_collision" type="mesh" mesh="base_link" contype="1" conaffinity="1"/>
+
+        <body name="fr_link1" pos="0 0 0">
+          <joint name="fr_base_link_to_link1" type="hinge" axis="0 0 1" range="-3.1416 3.1416"/>
+          <inertial pos="0 0 0.037" mass="0.0729177" diaginertia="4.68465E-05 3.32107E-05 5.01023E-05"/>
+          <geom name="fr_link1_visual" type="mesh" mesh="link1" rgba="0.8 0.8 0.8 1"/>
+          <geom name="fr_link1_collision" type="mesh" mesh="link1" contype="1" conaffinity="1"/>
+
+          <body name="fr_link2" pos="0 0 0.051959">
+            <joint name="fr_link1_to_link2" type="hinge" axis="0 0 1" range="-1.5708 1.5708"/>
+            <inertial pos="0.119 0.012247 -0.0001" mass="0.0703216" diaginertia="5.46501E-05 0.000423091 0.000404557"/>
+            <geom name="fr_link2_visual" type="mesh" mesh="link2" rgba="0.8 0.8 0.8 1"/>
+            <geom name="fr_link2_collision" type="mesh" mesh="link2" contype="1" conaffinity="1"/>
+
+            <body name="fr_link3" pos="0.236815 0.030002 0">
+              <joint name="fr_link2_to_link3" type="hinge" axis="0 0 1" range="-1 2.95"/>
+              <inertial pos="-0.0015 -0.0765 0.00505" mass="0.021608" diaginertia="6.37699E-05 3.67026E-06 6.28965E-05"/>
+              <geom name="fr_link3_visual" type="mesh" mesh="link3" rgba="0.8 0.8 0.8 1"/>
+              <geom name="fr_link3_collision" type="mesh" mesh="link3" contype="1" conaffinity="1"/>
+
+              <body name="fr_link4" pos="0 -0.144586 0">
+                <joint name="fr_link3_to_link4" type="hinge" axis="0 0 1" range="-1.5708 1.5708"/>
+                <inertial pos="-0.0015 -0.022 -0.00075" mass="0.0099933" diaginertia="4.53979E-06 3.78103E-06 5.60238E-06"/>
+                <geom name="fr_link4_visual" type="mesh" mesh="link4" rgba="0.8 0.8 0.8 1"/>
+                <geom name="fr_link4_collision" type="mesh" mesh="link4" contype="1" conaffinity="1"/>
+
+                <body name="fr_link5" pos="0.015147 -0.053653 0">
+                  <joint name="fr_link4_to_link5" type="hinge" axis="0 0 1" range="-3.1416 3.1416"/>
+                  <inertial pos="-0.0078 0 0.0595" mass="0.0153928" diaginertia="2.02869E-05 2.14427E-05 4.39495E-06"/>
+                  <geom name="fr_link5_visual" type="mesh" mesh="link5" rgba="0.8 0.8 0.8 1"/>
+                  <geom name="fr_link5_collision" type="mesh" mesh="link5" contype="1" conaffinity="1"/>
+
+                  <body name="fr_gripper_link" pos="0.00 0.018821 0.052035">
+                    <joint name="fr_link5_to_gripper_link" type="hinge" axis="0 0 1" range="0 1.5"/>
+                    <inertial pos="0.027 0.0027 -0.018935" mass="0.0028708" diaginertia="5.23216E-07 1.82071E-06 1.60231E-06"/>
+                    <geom name="fr_gripper_link_visual" type="mesh" mesh="gripper_link" rgba="0.8 0.8 0.8 1"/>
+                    <geom name="fr_gripper_link_collision" type="mesh" mesh="gripper_link" contype="1" conaffinity="1"/>
+                  </body>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+
+      <!-- Back-left arm -->
+      <body name="bl_base_link" pos="-0.10 0.09 -0.04">
+        <joint name="bl_mount_joint" type="free"/>
+        <inertial pos="-0.0068 0 -0.03" mass="0.2562183" diaginertia="0.00029211 0.00035719 0.000349421"/>
+        <geom name="bl_base_link_visual" type="mesh" mesh="base_link" rgba="0.8 0.8 0.8 1"/>
+        <geom name="bl_base_link_collision" type="mesh" mesh="base_link" contype="1" conaffinity="1"/>
+
+        <body name="bl_link1" pos="0 0 0">
+          <joint name="bl_base_link_to_link1" type="hinge" axis="0 0 1" range="-3.1416 3.1416"/>
+          <inertial pos="0 0 0.037" mass="0.0729177" diaginertia="4.68465E-05 3.32107E-05 5.01023E-05"/>
+          <geom name="bl_link1_visual" type="mesh" mesh="link1" rgba="0.8 0.8 0.8 1"/>
+          <geom name="bl_link1_collision" type="mesh" mesh="link1" contype="1" conaffinity="1"/>
+
+          <body name="bl_link2" pos="0 0 0.051959">
+            <joint name="bl_link1_to_link2" type="hinge" axis="0 0 1" range="-1.5708 1.5708"/>
+            <inertial pos="0.119 0.012247 -0.0001" mass="0.0703216" diaginertia="5.46501E-05 0.000423091 0.000404557"/>
+            <geom name="bl_link2_visual" type="mesh" mesh="link2" rgba="0.8 0.8 0.8 1"/>
+            <geom name="bl_link2_collision" type="mesh" mesh="link2" contype="1" conaffinity="1"/>
+
+            <body name="bl_link3" pos="0.236815 0.030002 0">
+              <joint name="bl_link2_to_link3" type="hinge" axis="0 0 1" range="-1 2.95"/>
+              <inertial pos="-0.0015 -0.0765 0.00505" mass="0.021608" diaginertia="6.37699E-05 3.67026E-06 6.28965E-05"/>
+              <geom name="bl_link3_visual" type="mesh" mesh="link3" rgba="0.8 0.8 0.8 1"/>
+              <geom name="bl_link3_collision" type="mesh" mesh="link3" contype="1" conaffinity="1"/>
+
+              <body name="bl_link4" pos="0 -0.144586 0">
+                <joint name="bl_link3_to_link4" type="hinge" axis="0 0 1" range="-1.5708 1.5708"/>
+                <inertial pos="-0.0015 -0.022 -0.00075" mass="0.0099933" diaginertia="4.53979E-06 3.78103E-06 5.60238E-06"/>
+                <geom name="bl_link4_visual" type="mesh" mesh="link4" rgba="0.8 0.8 0.8 1"/>
+                <geom name="bl_link4_collision" type="mesh" mesh="link4" contype="1" conaffinity="1"/>
+
+                <body name="bl_link5" pos="0.015147 -0.053653 0">
+                  <joint name="bl_link4_to_link5" type="hinge" axis="0 0 1" range="-3.1416 3.1416"/>
+                  <inertial pos="-0.0078 0 0.0595" mass="0.0153928" diaginertia="2.02869E-05 2.14427E-05 4.39495E-06"/>
+                  <geom name="bl_link5_visual" type="mesh" mesh="link5" rgba="0.8 0.8 0.8 1"/>
+                  <geom name="bl_link5_collision" type="mesh" mesh="link5" contype="1" conaffinity="1"/>
+
+                  <body name="bl_gripper_link" pos="0.00 0.018821 0.052035">
+                    <joint name="bl_link5_to_gripper_link" type="hinge" axis="0 0 1" range="0 1.5"/>
+                    <inertial pos="0.027 0.0027 -0.018935" mass="0.0028708" diaginertia="5.23216E-07 1.82071E-06 1.60231E-06"/>
+                    <geom name="bl_gripper_link_visual" type="mesh" mesh="gripper_link" rgba="0.8 0.8 0.8 1"/>
+                    <geom name="bl_gripper_link_collision" type="mesh" mesh="gripper_link" contype="1" conaffinity="1"/>
+                  </body>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+
+      <!-- Back-right arm -->
+      <body name="br_base_link" pos="-0.10 -0.09 -0.04">
+        <joint name="br_mount_joint" type="free"/>
+        <inertial pos="-0.0068 0 -0.03" mass="0.2562183" diaginertia="0.00029211 0.00035719 0.000349421"/>
+        <geom name="br_base_link_visual" type="mesh" mesh="base_link" rgba="0.8 0.8 0.8 1"/>
+        <geom name="br_base_link_collision" type="mesh" mesh="base_link" contype="1" conaffinity="1"/>
+
+        <body name="br_link1" pos="0 0 0">
+          <joint name="br_base_link_to_link1" type="hinge" axis="0 0 1" range="-3.1416 3.1416"/>
+          <inertial pos="0 0 0.037" mass="0.0729177" diaginertia="4.68465E-05 3.32107E-05 5.01023E-05"/>
+          <geom name="br_link1_visual" type="mesh" mesh="link1" rgba="0.8 0.8 0.8 1"/>
+          <geom name="br_link1_collision" type="mesh" mesh="link1" contype="1" conaffinity="1"/>
+
+          <body name="br_link2" pos="0 0 0.051959">
+            <joint name="br_link1_to_link2" type="hinge" axis="0 0 1" range="-1.5708 1.5708"/>
+            <inertial pos="0.119 0.012247 -0.0001" mass="0.0703216" diaginertia="5.46501E-05 0.000423091 0.000404557"/>
+            <geom name="br_link2_visual" type="mesh" mesh="link2" rgba="0.8 0.8 0.8 1"/>
+            <geom name="br_link2_collision" type="mesh" mesh="link2" contype="1" conaffinity="1"/>
+
+            <body name="br_link3" pos="0.236815 0.030002 0">
+              <joint name="br_link2_to_link3" type="hinge" axis="0 0 1" range="-1 2.95"/>
+              <inertial pos="-0.0015 -0.0765 0.00505" mass="0.021608" diaginertia="6.37699E-05 3.67026E-06 6.28965E-05"/>
+              <geom name="br_link3_visual" type="mesh" mesh="link3" rgba="0.8 0.8 0.8 1"/>
+              <geom name="br_link3_collision" type="mesh" mesh="link3" contype="1" conaffinity="1"/>
+
+              <body name="br_link4" pos="0 -0.144586 0">
+                <joint name="br_link3_to_link4" type="hinge" axis="0 0 1" range="-1.5708 1.5708"/>
+                <inertial pos="-0.0015 -0.022 -0.00075" mass="0.0099933" diaginertia="4.53979E-06 3.78103E-06 5.60238E-06"/>
+                <geom name="br_link4_visual" type="mesh" mesh="link4" rgba="0.8 0.8 0.8 1"/>
+                <geom name="br_link4_collision" type="mesh" mesh="link4" contype="1" conaffinity="1"/>
+
+                <body name="br_link5" pos="0.015147 -0.053653 0">
+                  <joint name="br_link4_to_link5" type="hinge" axis="0 0 1" range="-3.1416 3.1416"/>
+                  <inertial pos="-0.0078 0 0.0595" mass="0.0153928" diaginertia="2.02869E-05 2.14427E-05 4.39495E-06"/>
+                  <geom name="br_link5_visual" type="mesh" mesh="link5" rgba="0.8 0.8 0.8 1"/>
+                  <geom name="br_link5_collision" type="mesh" mesh="link5" contype="1" conaffinity="1"/>
+
+                  <body name="br_gripper_link" pos="0.00 0.018821 0.052035">
+                    <joint name="br_link5_to_gripper_link" type="hinge" axis="0 0 1" range="0 1.5"/>
+                    <inertial pos="0.027 0.0027 -0.018935" mass="0.0028708" diaginertia="5.23216E-07 1.82071E-06 1.60231E-06"/>
+                    <geom name="br_gripper_link_visual" type="mesh" mesh="gripper_link" rgba="0.8 0.8 0.8 1"/>
+                    <geom name="br_gripper_link_collision" type="mesh" mesh="gripper_link" contype="1" conaffinity="1"/>
+                  </body>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+</mujoco>

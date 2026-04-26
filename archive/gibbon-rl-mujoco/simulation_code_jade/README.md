@@ -38,6 +38,12 @@ Python script to:
 
 ## Running the Simulation
 
+### Prerequisites
+- MuJoCo simulation engine installed
+- STL mesh files in `meshes/roarm_m3/` directory (from roarm_ws)
+- Python 3.10+
+
+### Quick Start
 ```bash
 # Navigate to the simulation directory
 cd simulation_code_jade
@@ -46,11 +52,33 @@ cd simulation_code_jade
 python ape_simulation.py
 ```
 
+### Alternative: Using Xacro (if available)
+If you have ROS and xacro installed, you can use the original Xacro workflow:
+```bash
+# Install xacro if needed
+sudo apt install ros-humble-xacro  # or your ROS distribution
+
+# Compile and run
+xacro ape_robot.urdf.xacro -o ape_robot_compiled.urdf
+python ape_simulation.py  # Will use the pre-compiled URDF
+```
+
 The simulation will:
-1. Compile `ape_robot.urdf.xacro` to `ape_robot.urdf`
-2. Load the model into MuJoCo
-3. Launch a viewer showing the robotic ape
+1. Load the pre-compiled `ape_robot.urdf` file
+2. Initialize the MuJoCo model
+3. Launch an interactive viewer showing the robotic ape
 4. Simulate physics (the robot will fall under gravity)
+
+## Troubleshooting
+
+**Error: "No such file or directory: 'xacro'"**
+- This means ROS/xacro is not installed
+- The solution: Use the pre-compiled `ape_robot.urdf` file (default behavior)
+- The Xacro compilation step has been removed from the main script
+
+**Error: "File not found: meshes/roarm_m3/*.stl"**
+- Copy the mesh files from `roarm_ws/src/roarm_else/roarm_m3/meshes/` to `simulation_code_jade/meshes/roarm_m3/`
+- Or create a symlink: `ln -s ../../roarm_ws/src/roarm_else/roarm_m3/meshes meshes`
 
 ## Technical Details
 
