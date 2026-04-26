@@ -29,10 +29,9 @@ import optax
 from flax import struct
 from flax.training.train_state import TrainState
 
-# Add parent directory to Python path so we can import lineage module
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-import lineage as lineage_mod
-from envs.stand_env_mjx import (
+# Add project root to Python path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+from gibbonbot.envs.stand_env_mjx import (
     ACT_DIM,
     MAX_STEPS,
     OBS_DIM,
@@ -40,6 +39,7 @@ from envs.stand_env_mjx import (
     reset,
     step,
 )
+from gibbonbot.utils import lineage as lineage_mod
 
 RUNS = pathlib.Path("runs/ape_stand_mjx")
 SCENE = pathlib.Path("scene.xml")

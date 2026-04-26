@@ -13,7 +13,8 @@ import mujoco
 import mujoco.mjx as mjx
 import numpy as np
 
-SCENE = pathlib.Path(__file__).parent.parent / "scene.xml"
+ROOT = pathlib.Path(__file__).parent.parent.parent.parent  # Project root
+SCENE = ROOT / "data" / "scene.xml"  # Use the original scene
 TARGET_Z = 0.40
 MIN_HEIGHT = 0.03
 SPAWN_CLEARANCE = 0.07
@@ -92,7 +93,9 @@ def load_model():
         "stillness": float(h.get("stillness", 0.0)),
         "symmetry": float(h.get("symmetry", 0.0)),
         "arm_spacing": float(h.get("arm_spacing", 0.0)),
-        "tree_seeking": float(h.get("tree_seeking", 1.0)),  # Weight for tree-seeking reward
+        "tree_seeking": float(
+            h.get("tree_seeking", 1.0)
+        ),  # Weight for tree-seeking reward
         # static body indices
         "fl_id": body_id("fl_gripper_link"),
         "fr_id": body_id("fr_gripper_link"),
@@ -130,7 +133,7 @@ def reset(mx, jnt_lo, jnt_hi, hints, rng):
     # randomise tree position
     tree_xy = jax.random.uniform(k_tree, (2,), minval=3.0, maxval=7.0)
     tree_pos = jnp.array([tree_xy[0], tree_xy[1], 0.0])
-    
+
     # Set tree position in the model
     tree_body_idx = hints["tree_id"]
     dx = dx.replace(xpos=dx.xpos.at[tree_body_idx].set(tree_pos))
@@ -207,8 +210,10 @@ def step(mx, jnt_lo, jnt_hi, hints, dx, action, prev_action, step_count=0):
 
     # Tree-seeking reward: encourage moving toward the tree
     tree_distance = jnp.linalg.norm(rel_tree_pos)
-    tree_reward = hints["tree_seeking"] * (1.0 / (1.0 + tree_distance))  # Higher reward when closer
-    
+    tree_reward = hints["tree_seeking"] * (
+        1.0 / (1.0 + tree_distance)
+    )  # Higher reward when closer
+
     reward = (
         height_reward
         + upright_reward
@@ -268,7 +273,7 @@ def _get_obs(dx, tree_pos):
             dx.qvel[3:6],  # angular vel
             dx.qpos[7:],  # 24 joint pos
             dx.qvel[6:],  # 24 joint vel
-            tree_pos,     # 3D tree position relative to robot
+            tree_pos,  # 3D tree position relative to robot
         ]
     ).astype(jnp.float32)
 

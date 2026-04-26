@@ -1,0 +1,32 @@
+# gibbonBot-RL Requirements
+# Core dependencies for reinforcement learning with MuJoCo
+
+# Reinforcement Learning
+stable-baselines3==2.8.0
+mujoco==3.8.0
+mujoco-mjx==3.8.0
+gymnasium==1.2.3
+
+# GPU/ML Acceleration
+jax==0.10.0
+jaxlib==0.10.0
+flax==0.12.7
+optax==0.2.8
+
+# Core Scientific Computing
+numpy==2.4.4
+pandas==3.0.2
+matplotlib==3.10.9
+
+# Deep Learning
+torch==2.11.0
+
+# Utilities
+pathlib
+argparse
+
+# Visualization
+opencv-python
+
+# For GPU support (uncomment if needed)
+# jax[cuda12] -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html

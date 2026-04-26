@@ -1,1 +1,0 @@
-config/train_mjx.py

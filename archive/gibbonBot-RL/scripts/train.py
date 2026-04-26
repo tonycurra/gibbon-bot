@@ -60,7 +60,7 @@ def detect_gpu():
 
 def run_viewer(task):
     """Run the viewer in a separate process"""
-    viewer_cmd = [sys.executable, "tools/watch.py", f"--task", task]
+    viewer_cmd = [sys.executable, "src/gibbonbot/utils/watch.py", f"--task", task]
     print(f"\n🎬 Starting viewer: {' '.join(viewer_cmd)}\n")
     subprocess.run(viewer_cmd)
 
@@ -87,7 +87,7 @@ def main():
 
     # Build training command
     if use_gpu:
-        script = "config/train_mjx.py"
+        script = "src/gibbonbot/config/train_mjx.py"
         cmd = [sys.executable, script]
         if args.envs:
             cmd.extend(["--envs", str(args.envs)])
@@ -95,7 +95,7 @@ def main():
             cmd.append("--inherit")
     else:
         # Use unified environment
-        script = "train_fixed.py"
+        script = "scripts/train_fixed.py"
         cmd = [sys.executable, script, "--task", args.task]
         if args.envs:
             cmd.extend(["--envs", str(args.envs)])

@@ -1,0 +1,1 @@
+../src/gibbonbot/config/train_mjx.py

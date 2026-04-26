@@ -40,7 +40,8 @@ import mujoco.viewer
 import numpy as np
 from gymnasium import spaces
 
-SCENE = pathlib.Path(__file__).parent.parent / "scene.xml"
+ROOT = pathlib.Path(__file__).parent.parent.parent.parent  # Project root
+SCENE = ROOT / "data" / "scene.xml"  # Use the original scene
 BASE_TREE_POS = np.array([5.0, 0.0, 0.0])  # Base tree position
 BASE_SUCCESS_DIST = 1.5  # metres — torso this close = reached tree
 MIN_HEIGHT = 0.10  # metres — torso below this = fallen (lower to prevent false falls)
