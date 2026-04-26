@@ -1,204 +1,100 @@
 #!/usr/bin/env python3
 """
-UNIFIED TRAINING SYSTEM for gibbonBot-RL
+UNIFIED TRAINING SYSTEM
 
-Single command for all training needs:
-  python train_unified.py stand          # Auto-detect GPU/CPU, launch viewer
-  python train_unified.py reach          # Train reach task
-  python train_unified.py --help         # Show all options
-
-Features:
-  ✅ Auto GPU/CPU detection
-  ✅ Automatic viewer launch
-  ✅ Unified interface
-  ✅ Clean output
-  ✅ Easy to extend
+Merges all past training data and saves to single location.
 """
 
 import argparse
 import os
-import signal
-import subprocess
+import shutil
 import sys
-import time
 from pathlib import Path
 
+# Add project to Python path
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
+sys.path.insert(0, str(project_root / "src"))
 
-class TrainingSession:
-    def __init__(self):
-        self.process = None
-        self.viewer_process = None
-        self.args = None
-        self.start_time = None
 
-    def parse_args(self):
-        parser = argparse.ArgumentParser(
-            description="Unified gibbonBot-RL Training System",
-            formatter_class=argparse.RawTextHelpFormatter,
-        )
+def merge_training_data(target_dir="runs/unified"):
+    """Merge all past training data into unified location"""
+    target = Path(target_dir)
+    target.mkdir(exist_ok=True)
 
-        # Task selection
-        parser.add_argument(
-            "task",
-            nargs="?",
-            default="stand",
-            choices=["stand", "reach"],
-            help="Training task (stand or reach)",
-        )
+    # Find all past training runs
+    past_runs = []
+    for run_dir in Path("runs").glob("*"):
+        if run_dir.is_dir() and "stand" in str(run_dir):
+            past_runs.append(run_dir)
 
-        # Mode selection
-        parser.add_argument(
-            "--cpu", action="store_true", help="Force CPU training (SB3)"
-        )
-        parser.add_argument(
-            "--gpu", action="store_true", help="Force GPU training (MJX)"
-        )
+    print(f"Found {len(past_runs)} past training runs:")
+    for i, run in enumerate(past_runs, 1):
+        print(f"  {i}. {run.name}")
 
-        # Training options
-        parser.add_argument(
-            "--envs", type=int, default=None, help="Number of parallel environments"
-        )
-        parser.add_argument(
-            "--no-watch", action="store_true", help="Disable automatic viewer"
-        )
-        parser.add_argument(
-            "--inherit", action="store_true", help="Inherit from best checkpoint"
-        )
-        parser.add_argument(
-            "--resume", action="store_true", help="Resume previous training"
-        )
+    # Copy best models to unified location
+    best_models = []
+    for run in past_runs:
+        best_model = run / "best" / "best_model.zip"
+        if best_model.exists():
+            new_name = target / f"best_model_{run.name}.zip"
+            shutil.copy2(best_model, new_name)
+            best_models.append(new_name)
 
-        # Info
-        parser.add_argument(
-            "--info", action="store_true", help="Show system info and exit"
-        )
+    print(f"\n✅ Merged {len(best_models)} best models to: {target}")
+    return best_models
 
-        self.args = parser.parse_args()
-        return self.args
 
-    def detect_hardware(self):
-        """Detect GPU availability"""
-        try:
-            import jax
+def main():
+    parser = argparse.ArgumentParser(description="Unified Training System")
+    parser.add_argument("--task", default="stand", help="Task name")
+    parser.add_argument("--steps", type=int, default=1000000, help="Training steps")
+    parser.add_argument("--no-merge", action="store_true", help="Don't merge past data")
+    args = parser.parse_args()
 
-            devices = jax.devices()
-            has_gpu = any("cuda" in str(d).lower() for d in devices)
-            return has_gpu, len(devices)
-        except:
-            return False, 0
+    # Set up unified directory
+    unified_dir = Path(f"runs/unified_{args.task}")
+    unified_dir.mkdir(exist_ok=True)
 
-    def show_info(self):
-        """Display system information"""
-        has_gpu, device_count = self.detect_hardware()
+    print(f"🔄 Unified Training System")
+    print(f"   Task: {args.task}")
+    print(f"   Target: {unified_dir}")
+    print()
 
-        print("🔧 gibbonBot-RL Training System")
-        print(f"   GPU Detected: {'✅ Yes' if has_gpu else '❌ No'}")
-        print(f"   Devices: {device_count}")
-        print(f"   Current Task: {self.args.task}")
-        print(f"   Mode: {'GPU' if (has_gpu and not self.args.cpu) else 'CPU'}")
-        print(f"   Viewer: {'Enabled' if not self.args.no_watch else 'Disabled'}")
-        if self.args.envs:
-            print(f"   Environments: {self.args.envs}")
-        if self.args.inherit:
-            print(f"   Inherit: ✅")
-        if self.args.resume:
-            print(f"   Resume: ✅")
+    if not args.no_merge:
+        # Merge all past training data
+        best_models = merge_training_data(unified_dir)
 
-    def build_command(self):
-        """Construct the training command"""
-        has_gpu, _ = self.detect_hardware()
-        use_gpu = has_gpu and not self.args.cpu or self.args.gpu
+        if best_models:
+            print(f"\n📊 Past Training Data Available:")
+            for model in best_models:
+                print(f"   - {model.name}")
 
-        if use_gpu:
-            # GPU training
-            cmd = [sys.executable, "config/train_mjx.py"]
-            if self.args.envs:
-                cmd.extend(["--envs", str(self.args.envs)])
-            if self.args.inherit:
-                cmd.append("--inherit")
-            if self.args.resume:
-                cmd.append("--resume")
+            # Set up inheritance
+            latest_model = max(best_models, key=lambda x: x.stat().st_mtime)
+            print(f"\n🎯 Will inherit from: {latest_model.name}")
         else:
-            # CPU training
-            cmd = [sys.executable, "train_fixed.py", "--task", self.args.task]
-            if self.args.envs:
-                cmd.extend(["--envs", str(self.args.envs)])
-            if self.args.inherit:
-                cmd.append("--inherit")
-            if self.args.resume:
-                cmd.append("--resume")
-            if not self.args.no_watch:
-                cmd.append("--watch")
+            print("\n⚠️  No past training data found")
+    else:
+        print("📝 Starting fresh (no past data merging)")
 
-        return cmd
+    # Run training with unified approach
+    import subprocess
 
-    def launch_viewer(self):
-        """Launch viewer in background"""
-        if self.args.no_watch:
-            return
+    cmd = [sys.executable, "scripts/train_simple.py", f"--steps", str(args.steps)]
 
-        viewer_cmd = [sys.executable, "tools/watch.py", "--task", self.args.task]
-        print(f"\n🎬 Launching viewer: {' '.join(viewer_cmd)}")
+    if not args.no_merge:
+        cmd.append("--inherit")
 
-        # Use setsid to make it independent
-        self.viewer_process = subprocess.Popen(viewer_cmd, preexec_fn=os.setsid)
+    print(f"🚀 Starting unified training: {' '.join(cmd)}")
 
-    def start_training(self):
-        """Start the training process"""
-        cmd = self.build_command()
-        print(f"🚀 Starting training: {' '.join(cmd)}")
-        print(f"   Task: {self.args.task}")
-        print(f"   Mode: {'GPU' if 'train_mjx.py' in cmd[1] else 'CPU'}")
-
-        self.process = subprocess.Popen(cmd)
-        self.start_time = time.time()
-
-        # Launch viewer after a short delay
-        time.sleep(2)
-        self.launch_viewer()
-
-    def stop(self):
-        """Cleanly stop training and viewer"""
-        if self.process:
-            print("\n⏹️  Stopping training...")
-            self.process.terminate()
-            try:
-                self.process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                self.process.kill()
-
-        if self.viewer_process:
-            print("🎬 Stopping viewer...")
-            try:
-                os.killpg(os.getpgid(self.viewer_process.pid), signal.SIGTERM)
-            except:
-                pass
-
-    def run(self):
-        """Main execution"""
-        try:
-            args = self.parse_args()
-
-            if args.info:
-                self.show_info()
-                return
-
-            self.start_training()
-            self.process.wait()
-
-        except KeyboardInterrupt:
-            print("\n🛑 Interrupted by user")
-            self.stop()
-        except Exception as e:
-            print(f"\n❌ Error: {e}")
-            self.stop()
-        finally:
-            if self.process:
-                print(
-                    f"\n✅ Training completed in {time.time() - self.start_time:.1f}s"
-                )
+    try:
+        subprocess.run(cmd, check=True)
+    finally:
+        print(f"\n✅ Training completed!")
+        print(f"   All data saved to: {unified_dir}")
+        print(f"   Use '--no-merge' to start fresh next time")
 
 
 if __name__ == "__main__":
-    session = TrainingSession()
-    session.run()
+    main()
