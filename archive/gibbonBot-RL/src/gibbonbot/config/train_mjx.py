@@ -30,7 +30,24 @@ from flax import struct
 from flax.training.train_state import TrainState
 
 # Add project root to Python path for imports
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+project_root = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+)
+src_path = project_root  # This should be the src directory
+sys.path.insert(0, src_path)
+
+# Verify the path is correct
+check_path = os.path.join(src_path, "gibbonbot", "envs", "stand_env_mjx.py")
+if not os.path.exists(check_path):
+    # Try alternative path (src_path might already be the gibbonbot directory)
+    alt_check_path = os.path.join(src_path, "envs", "stand_env_mjx.py")
+    if os.path.exists(alt_check_path):
+        src_path = os.path.dirname(src_path)  # Adjust src_path to parent
+    else:
+        raise ImportError(
+            f"Cannot find stand_env_mjx.py at {src_path} or {alt_check_path}"
+        )
+
 from gibbonbot.envs.stand_env_mjx import (
     ACT_DIM,
     MAX_STEPS,
@@ -45,16 +62,17 @@ RUNS = pathlib.Path("runs/ape_stand_mjx")
 SCENE = pathlib.Path("scene.xml")
 
 # ── hyperparameters ───────────────────────────────────────────────────────────
+# AGGRESSIVE TRAINING CONFIGURATION - More risk, faster learning
 N_STEPS = 128  # rollout steps per env per update
 EPOCHS = 4  # PPO epochs per update
 MINIBATCHES = 8  # minibatches per epoch
 GAMMA = 0.99
 GAE_LAMBDA = 0.95
 CLIP_EPS = 0.2
-ENT_COEF = 0.02
+ENT_COEF = 0.03  # Increased entropy for more exploration
 VF_COEF = 0.5
 MAX_GRAD = 0.5
-LR = 3e-4
+LR = 5e-4  # Increased learning rate for faster policy updates
 TOTAL_STEPS = 100_000_000
 SAVE_EVERY = 500_000  # env steps between checkpoints
 LOG_EVERY = 2  # updates between console prints

@@ -1,5 +1,6 @@
-# Minimal hints for stability
+# Aggressive hints for faster learning - more risk, more reward
 HINTS = {
-    "upright": 0.5,      # Keep torso upright
-    "stillness": 0.1,    # Stronger stability penalty
+    "upright": 0.3,  # Less upright penalty - allow more movement
+    "stillness": 0.05,  # Reduced stability penalty - encourage exploration
+    "arm_spacing": 0.2,  # Encourage arm separation for better standing
 }
