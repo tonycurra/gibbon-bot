@@ -12,14 +12,6 @@ build/
 MUJOCO_LOG.TXT
 
 # ===== Project-Specific Ignores =====
-# Training checkpoints
-runs/*/*.npz
-runs/*/*.zip
-runs/*/best/*.zip
-runs/*/checkpoints/*.zip
-mjx_*.npz
-*.npz
-
 # Evaluation results
 *.npy
 *.pkl
