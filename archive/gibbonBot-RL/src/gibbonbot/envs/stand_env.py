@@ -43,8 +43,9 @@ SPAWN_Z = 0.35     # drop from here, arms clear the floor
 SETTLE_VEL = 0.05  # max joint velocity considered "still"
 SETTLE_STEPS = 2000  # max physics steps to wait for settle
 MAX_STEPS = 2000
-PHYSICS_STEPS_PER_ACTION = 30   # 30 × 0.002s = 0.06s per action → slower, wider movements
-ACTION_SMOOTHING = 0.5          # blend: ctrl = 0.5*new + 0.5*prev (low-pass filter)
+PHYSICS_STEPS_PER_ACTION = 30   # 30 × 0.002s = 0.06s per action
+MOTOR_MAX_SPEED = 0.08          # max normalized position change per step (~5° for a 120° joint)
+                                # full sweep [-1→+1] takes 25 steps ≈ 1.5s real-time
 
 # Arms splayed down — a reasonable starting pose for learning to stand.
 # Each leg: base(link1) rotated outward, link2 angled down, rest relaxed.
@@ -111,6 +112,7 @@ class StandEnv(gym.Env):
 
         self._step_count = 0
         self._prev_action = np.zeros(24, dtype=np.float32)
+        self._motor_pos = np.zeros(24, dtype=np.float32)  # current motor position in [-1,1]
         self._hints_mtime = 0.0
         self._hints = dict(hints_mod.HINTS)
 
@@ -145,16 +147,23 @@ class StandEnv(gym.Env):
 
         mujoco.mj_forward(self.model, self.data)
         self._step_count = 0
-        self._prev_action = np.zeros(24, dtype=np.float32)
+        # initialize motor positions from actual settled joint positions
+        settled_pos = self.data.qpos[7:].astype(np.float32)
+        self._motor_pos = np.clip(
+            2.0 * (settled_pos - self._jnt_lo) / (self._jnt_hi - self._jnt_lo) - 1.0,
+            -1.0, 1.0,
+        )
+        self._prev_action = self._motor_pos.copy()
         self._reload_hints()
 
         return self._get_obs(), {}
 
     def step(self, action):
         action = np.asarray(action, dtype=np.float32)
-        # low-pass filter: blend with previous action to smooth out twitching
-        action = ACTION_SMOOTHING * self._prev_action + (1.0 - ACTION_SMOOTHING) * action
-        ctrl = 0.5 * (action + 1.0) * (self._jnt_hi - self._jnt_lo) + self._jnt_lo
+        # motor model: each joint moves at most MOTOR_MAX_SPEED per step toward target
+        delta = np.clip(action - self._motor_pos, -MOTOR_MAX_SPEED, MOTOR_MAX_SPEED)
+        self._motor_pos = self._motor_pos + delta
+        ctrl = 0.5 * (self._motor_pos + 1.0) * (self._jnt_hi - self._jnt_lo) + self._jnt_lo
         self.data.ctrl[:] = ctrl
 
         for _ in range(PHYSICS_STEPS_PER_ACTION):
