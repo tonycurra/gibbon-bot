@@ -92,6 +92,8 @@ class StandEnv(gym.Env):
         speed = max(getattr(p, "REALTIME_FACTOR", 1.0), 0.01)
         sleep_dt = (dt / speed) if self._viewer is not None else 0.0
 
+        no_settle = (options or {}).get("no_settle", False)
+
         # retry spawn until robot settles right-side up
         for _attempt in range(5):
             self.data.qpos[0] = rng.uniform(-0.1, 0.1)  # x
@@ -108,21 +110,22 @@ class StandEnv(gym.Env):
             self.data.qvel[:] = 0.0
             self.data.ctrl[:] = 0
 
-            still_steps = 0
-            for _ in range(SETTLE_STEPS):
-                mujoco.mj_step(self.model, self.data)
-                if self._viewer is not None:
-                    self._viewer.sync()
-                    if sleep_dt > 0:
-                        time.sleep(sleep_dt)
-                if np.max(np.abs(self.data.qvel)) < SETTLE_VEL:
-                    still_steps += 1
-                    if still_steps >= 150:
-                        break
-                else:
-                    still_steps = 0
+            if not no_settle:
+                still_steps = 0
+                for _ in range(SETTLE_STEPS):
+                    mujoco.mj_step(self.model, self.data)
+                    if self._viewer is not None:
+                        self._viewer.sync()
+                        if sleep_dt > 0:
+                            time.sleep(sleep_dt)
+                    if np.max(np.abs(self.data.qvel)) < SETTLE_VEL:
+                        still_steps += 1
+                        if still_steps >= 150:
+                            break
+                    else:
+                        still_steps = 0
 
-            # accept only if torso settled right-side up
+            # accept only if torso is right-side up
             if float(self.data.qpos[3]) > 0:
                 break
 

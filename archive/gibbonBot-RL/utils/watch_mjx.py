@@ -87,8 +87,7 @@ def main():
                     net, params = load_policy(new_ckpt)
                     last_mtime = mtime
 
-            obs, _ = env.reset(seed=ep)
-            # MJX obs is 59-dim; stand_env obs is 83-dim — drop the last 24 (joint torques)
+            obs, _ = env.reset(seed=ep, options={"no_settle": True})
             done = False
             total_reward = 0.0
             step = 0
