@@ -76,3 +76,18 @@ python utils/watch_mjx.py --since 0  # explicitly load any checkpoint
 ```
 
 The viewer hot-reloads `envs/params_mjx.py` — `VIEWER_SPEED` and `MOTOR_MAX_SPEED` change live.
+
+---
+
+## Track what worked
+
+Every saved checkpoint automatically writes a `.params.json` sidecar capturing the params active at that moment. So you can always go back and see what produced a good policy.
+
+```bash
+python utils/tag.py "first stable stand, smooth motion"   # tag latest checkpoint
+python utils/tag.py 262144 "before W_SMOOTH bump"         # tag by partial match
+python utils/tag.py --list                                # list all tagged ckpts
+python utils/lineage.py --checkpoints                     # tabular params per ckpt
+```
+
+Tags go to `runs/ape_stand_mjx/notes.md` (git-tracked). Workflow: train → spot a great episode in the viewer → grab the checkpoint name from the terminal → tag it. Future-you will thank present-you.

@@ -13,6 +13,7 @@ Usage:
 
 import argparse
 import functools
+import importlib
 import os
 import pathlib
 import subprocess
@@ -159,11 +160,29 @@ def update_step(train_state, rollout, ent_coef, clip_eps):
 # ── checkpointing ─────────────────────────────────────────────────────────────
 
 def save(train_state, steps):
+    """Save policy weights + a params snapshot sidecar for full reproducibility."""
+    import json
+    import datetime
+    import envs.params_mjx as _pmjx
+    importlib.reload(_pmjx)  # capture latest hot-reloaded values
+
     RUNS.mkdir(parents=True, exist_ok=True)
     path = RUNS / f"mjx_{steps:012d}.npz"
     flat, _ = jax.tree_util.tree_flatten(jax.device_get(train_state.params))
     np.savez(str(path), *flat)
-    print(f"[save] {path.name}")
+
+    # Sidecar: every uppercase scalar in params_mjx.py + a timestamp
+    snapshot = {"_saved_at": datetime.datetime.now().isoformat(timespec="seconds"),
+                "_steps": steps}
+    for k in dir(_pmjx):
+        if k.isupper() and not k.startswith("_"):
+            v = getattr(_pmjx, k)
+            if isinstance(v, (int, float, bool, str)):
+                snapshot[k] = v
+    sidecar = RUNS / f"mjx_{steps:012d}.params.json"
+    sidecar.write_text(json.dumps(snapshot, indent=2))
+
+    print(f"[save] {path.name}  (+ {sidecar.name})")
 
 
 def load_latest(train_state):

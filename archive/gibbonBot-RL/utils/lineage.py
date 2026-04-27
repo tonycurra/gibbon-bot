@@ -93,3 +93,46 @@ def show(runs_dir: pathlib.Path) -> None:
         inh = e.get("inherited_from") or "scratch"
         print(f"{i:<4} {e['timestamp']:<22} {e['n_envs']:<6} {inh:<40} {str(kp):<6} {spa}")
     print()
+
+
+def show_checkpoints(runs_dir: pathlib.Path) -> None:
+    """Print every checkpoint with its key params from its sidecar snapshot."""
+    ckpts = sorted(runs_dir.glob("mjx_*.npz"))
+    if not ckpts:
+        print("No checkpoints yet.")
+        return
+
+    # Columns to display from each sidecar
+    cols = ("PHYSICS_STEPS_PER_ACTION", "MOTOR_MAX_SPEED", "ACTION_SMOOTH_ALPHA",
+            "TARGET_Z", "W_HEIGHT", "W_SMOOTH", "LEARNING_RATE")
+    header = f"{'checkpoint':<28} " + " ".join(f"{c[:10]:>10}" for c in cols)
+    print("\n" + header)
+    print("-" * len(header))
+    for c in ckpts:
+        sidecar = c.with_suffix("").with_suffix(".params.json")
+        if not sidecar.exists():
+            print(f"{c.name:<28} " + " ".join(f"{'—':>10}" for _ in cols))
+            continue
+        try:
+            p = json.loads(sidecar.read_text())
+        except Exception:
+            continue
+        vals = []
+        for col in cols:
+            v = p.get(col, "—")
+            if isinstance(v, float):
+                vals.append(f"{v:>10.4g}")
+            else:
+                vals.append(f"{str(v):>10}")
+        print(f"{c.name:<28} " + " ".join(vals))
+    print()
+
+
+if __name__ == "__main__":
+    import sys
+    runs = pathlib.Path("runs/ape_stand_mjx")
+    if "--checkpoints" in sys.argv or "-c" in sys.argv:
+        show_checkpoints(runs)
+    else:
+        show(runs)
+        show_checkpoints(runs)

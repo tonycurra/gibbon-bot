@@ -18,6 +18,8 @@ See [QUICKSTART.md](QUICKSTART.md) for the recommended workflow.
 |--------|-------------|
 | `train_mjx.py` | MJX/JAX GPU training loop with vmapped parallel envs |
 | `utils/watch_mjx.py` | Live MuJoCo viewer — hot-swaps to the latest checkpoint |
+| `utils/tag.py` | Tag checkpoints with notes ("this one was good") |
+| `utils/lineage.py` | Show run history + per-checkpoint params snapshot table |
 | `envs/params_mjx.py` | Run directly to open the categorised slider UI for live tuning |
 | `envs/stand_env.py` | CPU Gymnasium reference env (kept for reference, not the main path) |
 | `envs/params.py` | Params for the CPU reference env |
@@ -44,6 +46,20 @@ Live feedback bars next to motor / smoothness / goal params are driven by `runs/
 
 Three preset buttons at the top: **Smooth**, **Fast train**, **Reset defaults**.
 
+## Saving notes & checkpoint history
+
+Every saved checkpoint automatically gets a `.params.json` sidecar capturing the *exact* params active at save time — so you can always go back and see what produced a good policy.
+
+```bash
+python utils/tag.py "first stable stand, smooth motion"   # tag latest checkpoint
+python utils/tag.py 262144 "before the W_SMOOTH bump"     # tag by partial match
+python utils/tag.py --list                                # one-line per checkpoint w/ tags
+python utils/tag.py --show                                # full notes.md
+python utils/lineage.py --checkpoints                     # tabular params per checkpoint
+```
+
+Notes go to `runs/ape_stand_mjx/notes.md` (git-tracked, survives across machines). The `.params.json` sidecars are gitignored but always present locally.
+
 ## Files
 
 ```
@@ -58,5 +74,9 @@ utils/
   watch_mjx.py     — Live checkpoint viewer (filters by --since timestamp)
   lineage.py       — Run metadata logger
 runs/
-  ape_stand_mjx/   — MJX checkpoints (mjx_<steps>.npz) + lineage.json
+  ape_stand_mjx/
+    mjx_<steps>.npz             — policy weights
+    mjx_<steps>.params.json     — params snapshot at save time (auto)
+    lineage.json                — per-run hardware/env metadata
+    notes.md                    — your tagged checkpoints (via utils/tag.py)
 ```

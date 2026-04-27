@@ -5,7 +5,7 @@
 
 # --- timing ---
 PHYSICS_STEPS_PER_ACTION = 200  # physics steps per policy action (16 × 0.002s = 0.032s)
-VIEWER_SPEED = 1.000000  # how fast the viewer plays back: 1=real-time, 10=10× faster
+VIEWER_SPEED = 17.000000  # how fast the viewer plays back: 1=real-time, 10=10× faster
 
 # --- motor ---
 MOTOR_MAX_SPEED = 0.070000  # max normalised joint travel per action
@@ -20,22 +20,22 @@ W_UPRIGHT = 5.000000  # scale of the upright orientation reward
 
 # --- arm spacing ---
 ARM_SAFETY_MARGIN = 0.050000  # arms closer than this (metres) incur a penalty
-W_PROXIMITY = 1.500000  # how strongly the arm-spacing penalty is applied
+W_PROXIMITY = 20.000000  # how strongly the arm-spacing penalty is applied
 
 # --- termination ---
 FLIP_PENALTY = 200.000000  # one-time penalty when robot flips upside-down
 
 # --- learning (hot-reloadable between rollouts) ---
 LEARNING_RATE = 0.000900  # Adam learning rate — reduce if training is unstable
-ENT_COEF = 0.016000  # entropy bonus: 0=exploit, 0.02=explore more
+ENT_COEF = 0.027000  # entropy bonus: 0=exploit, 0.02=explore more
 CLIP_EPS = 0.150000  # PPO clip range: how much policy can change per update
 
 # --- smoothness penalties (set to 0 to disable) ---
 ACTION_SMOOTH_ALPHA = 0.300000  # action low-pass filter: filt = α·raw + (1-α)·prev. 1=no filter, 0.1=heavy
 W_SMOOTH = 0.050000  # penalises action delta each step (filtered) — reduces twitching
 W_JVEL = 0.001000  # penalises fast joint velocities — reduces flailing
-W_ENERGY = 0.000500  # penalises sum(ctrl²) — discourages high motor effort
-W_ALIVE = 0.050000  # small per-step bonus for staying alive (not flipped)
+W_ENERGY = 0.049600  # penalises sum(ctrl²) — discourages high motor effort
+W_ALIVE = 0.500000  # small per-step bonus for staying alive (not flipped)
 
 
 # ── slider UI (run this file directly to open) ────────────────────────────────
@@ -51,69 +51,161 @@ if __name__ == "__main__":
     # live_key (or None) names a key in the live_stats JSON to drive a feedback bar.
     # Categories are an ordered list of (name, default_open, [params...])
     _CATEGORIES = [
-        ("⚡  Motion", True, [
+        ("⚡  Motion  —  what the robot can physically do per step", True, [
             ("PHYSICS_STEPS_PER_ACTION", 4, 300, 1, False, True, None,
-             "How many physics steps per policy decision (each step = 0.002s).\n"
-             "Higher = more time per decision = smoother, more deliberate motion.\n"
-             "16 = 0.032s/decision (fast train). 200 = 0.4s/decision (smooth).\n"
+             "Physics steps per policy decision. Each physics step = 0.002s.\n"
+             "  16  → 0.032s/decision  — twitchy, fast training, less realistic\n"
+             "  64  → 0.128s/decision  — balanced\n"
+             "  200 → 0.400s/decision  — slow, deliberate, very smooth\n"
+             "What you'll see: low values = jittery, high values = each motion plays\n"
+             "out fully before the next decision. Slow physics ≠ slow training: more\n"
+             "physics per action = each rollout covers more sim-time, so the policy\n"
+             "sees longer-horizon consequences per gradient step.\n"
              "⚙ RESTART REQUIRED — baked into JIT compile."),
             ("MOTOR_MAX_SPEED", 0.01, 1.0, 0.01, True, False, "max_action_delta",
-             "Max joint travel per action (normalised). Hard cap on motor speed.\n"
-             "0.07 = slow/deliberate. 0.5 = fast/jerky.\n"
-             "Live bar = actual max joint travel this action (bounded by this value).\n"
-             "If bar is much lower than slider, policy isn't using full speed budget."),
+             "Hard cap on how far a joint can travel per action (normalised [-1, 1]).\n"
+             "  0.05 → barely moves, looks frozen\n"
+             "  0.15 → slow, controlled (good with PHYSICS_STEPS_PER_ACTION = 200)\n"
+             "  0.30 → moderate\n"
+             "  0.60+ → jerky, robot can fling itself\n"
+             "Live bar = actual max joint travel this action. If bar fills to the\n"
+             "right, the policy is saturating the cap (consider raising the slider).\n"
+             "If bar stays low, the policy isn't using the budget — lower the cap to\n"
+             "force tighter, smoother motion."),
             ("ACTION_SMOOTH_ALPHA", 0.05, 1.0, 0.05, True, False, None,
-             "Action low-pass filter: filt = α·raw + (1−α)·prev.\n"
-             "1.0 = raw policy. 0.3 = heavy smoothing (forces smooth motion)."),
+             "Low-pass filter applied to policy output before motors:\n"
+             "    filt_action = α · raw_action + (1 − α) · prev_filt\n"
+             "  1.0 → no filter (raw policy passes through)\n"
+             "  0.5 → 50/50 mix with previous (light smoothing)\n"
+             "  0.3 → strong smoothing (each action is mostly the previous one)\n"
+             "  0.1 → very heavy, robot reacts slowly\n"
+             "Try lowering this FIRST if the robot twitches. It forces smooth motion\n"
+             "regardless of what the policy outputs — no retraining needed to see\n"
+             "the effect (hot-reloads instantly)."),
             ("VIEWER_SPEED", 1.0, 100.0, 1.0, True, False, None,
-             "Display speed only — does NOT affect physics or training.\n"
-             "1 = real time. 10 = 10× faster. 100 = as fast as possible."),
+             "Display playback speed for the viewer. Does NOT affect physics,\n"
+             "training, or what the robot learns — purely visual.\n"
+             "  1   → real time (good for studying motion details)\n"
+             "  10  → 10× faster (see more episodes per minute)\n"
+             "  100 → as fast as the viewer can render"),
         ]),
-        ("🧊  Smoothness Penalties", True, [
+        ("🧊  Smoothness Penalties  —  reward shaping for non-twitchy motion", True, [
             ("W_SMOOTH", 0.0, 2.0, 0.01, True, False, "smooth_delta",
-             "Penalty per step on action change: sum((filt − prev_filt)²).\n"
-             "0.05 = light, 0.5 = moderate, 2.0 = heavy.\n"
-             "Live bar = mean |filt − prev_filt| this step."),
+             "Penalty on action change between steps: w · sum((filt − prev_filt)²).\n"
+             "  0.0  → off, policy free to twitch\n"
+             "  0.05 → light, gentle nudge toward consistent actions\n"
+             "  0.5  → moderate\n"
+             "  2.0  → heavy, motion becomes very controlled but might learn slowly\n"
+             "Pairs with ACTION_SMOOTH_ALPHA: ALPHA prevents twitch in motion now,\n"
+             "W_SMOOTH teaches the policy to not want to twitch in the first place.\n"
+             "Live bar = mean |filt − prev| this step (lower = smoother motion)."),
             ("W_JVEL", 0.0, 0.5, 0.001, True, False, "jvel_sq",
-             "Penalty on fast joint velocities. Reduces flailing.\n"
-             "0.001 = light. 0.05 = heavy.\n"
-             "Live bar = mean(qvel²) this step."),
+             "Penalty on joint velocity magnitude: w · sum(qvel²).\n"
+             "  0.0   → no damping, limbs can spin freely\n"
+             "  0.001 → light damping (good default)\n"
+             "  0.01  → moderate\n"
+             "  0.05+ → heavy, joints feel sluggish\n"
+             "Use when limbs flail or oscillate wildly. Different from W_SMOOTH:\n"
+             "this targets actual joint velocity (physics), W_SMOOTH targets policy\n"
+             "decisions. Live bar = mean(qvel²) this step."),
             ("W_ENERGY", 0.0, 0.05, 0.0001, True, False, "ctrl_sq",
-             "Penalty on motor effort sum(ctrl²). Rewards efficient movement.\n"
-             "5e-4 = light. 0.01 = heavy.\n"
+             "Penalty on total motor effort: w · sum(ctrl²).\n"
+             "  0.0    → no penalty, motors run at any torque\n"
+             "  5e-4   → light, encourages efficiency\n"
+             "  0.005  → moderate\n"
+             "  0.05   → heavy, robot barely actuates anything\n"
+             "Higher values reward minimal-force solutions. Useful for sim-to-real\n"
+             "(real motors burn out at full power) but slows learning if too strong.\n"
              "Live bar = mean(ctrl²) this step."),
         ]),
-        ("🎯  Goal Shaping", False, [
+        ("🎯  Goal Shaping  —  what counts as 'success'", False, [
             ("TARGET_Z", 0.05, 0.60, 0.01, True, False, "torso_z",
-             "Target torso height (metres).\n"
-             "Live bar = current torso z."),
+             "Target torso height in metres. Reward peaks here.\n"
+             "  0.10 → nearly lying down (very easy)\n"
+             "  0.20 → crouching low (easy, good early target)\n"
+             "  0.30 → half-upright (moderate)\n"
+             "  0.45 → fully standing (hard)\n"
+             "Strategy: start LOW and raise as the policy succeeds — curriculum\n"
+             "learning beats aiming high from scratch.\n"
+             "Live bar = current torso z (filled when at target)."),
             ("TARGET_TOL", 0.005, 0.20, 0.005, True, False, None,
-             "Gaussian sigma — width of the height-reward peak."),
+             "Width of the Gaussian height-reward peak (sigma, in metres).\n"
+             "  0.01 → very tight, reward only right at TARGET_Z (hard)\n"
+             "  0.05 → moderate\n"
+             "  0.10 → wide and forgiving (easy, good for early training)\n"
+             "  0.20 → very wide, reward over a big band\n"
+             "Start wide, narrow as the policy gets close to target."),
             ("W_HEIGHT", 0.0, 10.0, 0.1, True, False, None,
-             "Scale of the height reward (main objective)."),
+             "Scale of the height-reward Gaussian. The main objective signal.\n"
+             "  0.0  → height doesn't matter (robot will just survive)\n"
+             "  2.0  → mild pull toward target\n"
+             "  5.0  → strong (typical)\n"
+             "  10.0 → dominant — overrides most other rewards\n"
+             "If robot ignores height: increase. If reward feels noisy: decrease."),
             ("W_UPRIGHT", 0.0, 5.0, 0.05, True, False, "upright",
-             "Reward for staying level (proportional to quat w²).\n"
-             "Live bar = quat w (1.0 = perfectly upright)."),
+             "Reward for keeping torso level: w · w_quat² (only when w > 0).\n"
+             "  0.0 → leaning is fine\n"
+             "  1.0 → mild encouragement to stay vertical\n"
+             "  3.0 → strong\n"
+             "  5.0 → dominant, robot prioritises orientation over height\n"
+             "Use when the robot reaches height but constantly tips over.\n"
+             "Live bar = quat w (1.0 = perfectly upright, 0 = sideways, < 0 = flipped)."),
         ]),
-        ("💀  Survival", False, [
+        ("💀  Survival  —  staying alive across episodes", False, [
             ("W_ALIVE", 0.0, 0.5, 0.005, True, False, None,
-             "Small per-step bonus for not flipping. Prevents early give-up."),
+             "Per-step bonus for not flipping. Counters early give-up behaviour.\n"
+             "  0.0  → no bonus, episode ends with no reward earned\n"
+             "  0.05 → light (good default)\n"
+             "  0.2  → strong (robot may learn to do nothing forever)\n"
+             "Increase if the robot keeps flipping deliberately to end episodes\n"
+             "early. Decrease if it just sits there frozen."),
             ("FLIP_PENALTY", 0.0, 200.0, 1.0, True, False, None,
-             "One-time penalty + episode termination when robot flips upside-down."),
+             "One-time penalty applied when torso flips (quat w < 0). Episode ends.\n"
+             "  10  → mild, robot may still flip occasionally on the way to a goal\n"
+             "  100 → strong\n"
+             "  200 → very strong (robot will avoid risky moves)\n"
+             "Combined with W_ALIVE shapes how much the policy values staying upright."),
         ]),
-        ("🤝  Arm Safety", False, [
+        ("🤝  Arm Safety  —  preventing self-tangling", False, [
             ("ARM_SAFETY_MARGIN", 0.05, 0.50, 0.01, True, False, None,
-             "Soft penalty fires when arms come within this distance (metres)."),
+             "Distance (metres) at which arms start incurring a penalty for\n"
+             "being too close to each other.\n"
+             "  0.05 → tight (arms can almost touch before penalised)\n"
+             "  0.20 → generous spacing\n"
+             "  0.40 → very generous, arms forced wide apart\n"
+             "Reduce if arms need to cross naturally. Increase if they tangle."),
             ("W_PROXIMITY", 0.0, 20.0, 0.5, True, False, None,
-             "Strength of the arm-spacing penalty."),
+             "Strength of the arm-spacing penalty (quadratic inside the margin).\n"
+             "  0   → off, arms can touch and cross\n"
+             "  3   → moderate\n"
+             "  10  → strong, arms strongly repel\n"
+             "  20  → very strong, arms maintain wide spacing always\n"
+             "Combined with ARM_SAFETY_MARGIN to define the soft-collision zone."),
         ]),
-        ("🧠  Learning", False, [
+        ("🧠  Learning  —  PPO algorithm knobs (rarely touched)", False, [
             ("LEARNING_RATE", 1e-5, 1e-3, 1e-5, True, False, None,
-             "Adam optimiser step size. Hot-reloadable (rebuilds optimiser)."),
+             "Adam optimiser step size. How fast network weights change.\n"
+             "  1e-5  → very slow, ultra-stable\n"
+             "  3e-4  → standard PPO default\n"
+             "  9e-4  → fast (good for early training, may oscillate later)\n"
+             "  1e-3  → very fast, often unstable\n"
+             "If reward swings wildly between updates: lower this. If learning is\n"
+             "glacial: raise it. Hot-reloadable (rebuilds the optimiser)."),
             ("ENT_COEF", 0.0, 0.05, 0.001, True, False, None,
-             "Entropy bonus — rewards exploration."),
+             "Entropy bonus on the policy. Rewards trying varied actions.\n"
+             "  0.0   → pure exploitation, policy locks onto best-known strategy\n"
+             "  0.005 → mild exploration (good late in training)\n"
+             "  0.02  → moderate (good early)\n"
+             "  0.05  → heavy exploration, policy tries many things\n"
+             "Higher early, lower as the policy converges. Raise if stuck in a\n"
+             "local optimum (e.g. always picks the same dumb behaviour)."),
             ("CLIP_EPS", 0.05, 0.50, 0.01, True, False, None,
-             "PPO clip range — limits per-update policy change."),
+             "PPO clip range — limits how much the policy can change per update.\n"
+             "  0.1  → very conservative (slow but stable)\n"
+             "  0.2  → standard\n"
+             "  0.3  → aggressive\n"
+             "  0.5  → can collapse training if too high\n"
+             "Lower if you see sudden reward crashes. Raise if learning is too slow."),
         ]),
     ]
 
@@ -187,16 +279,16 @@ if __name__ == "__main__":
     root = tk.Tk()
     root.title("MJX Training Params")
     root.resizable(False, True)
-    root.geometry("720x900")
+    root.geometry("880x1050")
 
-    # Fonts (120% of standard sizes)
-    F_NAME    = ("Courier", 12, "bold")
-    F_DESC    = ("TkDefaultFont", 9)
-    F_ENTRY   = ("Courier", 11)
-    F_CAT     = ("TkDefaultFont", 13, "bold")
-    F_PRESET  = ("TkDefaultFont", 10, "bold")
-    F_STATS   = ("Courier", 11)
-    F_STATS_L = ("TkDefaultFont", 9)
+    # Fonts (~150% of standard sizes — easier to read)
+    F_NAME    = ("Courier", 15, "bold")
+    F_DESC    = ("TkDefaultFont", 11)
+    F_ENTRY   = ("Courier", 13)
+    F_CAT     = ("TkDefaultFont", 16, "bold")
+    F_PRESET  = ("TkDefaultFont", 12, "bold")
+    F_STATS   = ("Courier", 13)
+    F_STATS_L = ("TkDefaultFont", 11)
 
     # ── Header: preset buttons ───────────────────────────────────────────────
     header = tk.Frame(root, bg="#222222")
@@ -207,7 +299,7 @@ if __name__ == "__main__":
     # ── Scrollable params area ───────────────────────────────────────────────
     container = tk.Frame(root)
     container.pack(fill="both", expand=True, padx=8, pady=4)
-    canvas = tk.Canvas(container, width=700, highlightthickness=0)
+    canvas = tk.Canvas(container, width=860, highlightthickness=0)
     scrollbar = tk.Scrollbar(container, orient="vertical", command=canvas.yview)
     canvas.configure(yscrollcommand=scrollbar.set)
     scrollbar.pack(side="right", fill="y")
@@ -243,10 +335,10 @@ if __name__ == "__main__":
     def _make_live_bar(parent, hi):
         """Returns (frame_with_canvas_and_label, canvas, fill_rect, label_var)."""
         frame = tk.Frame(parent)
-        c = tk.Canvas(frame, width=120, height=10, bg="#dddddd",
+        c = tk.Canvas(frame, width=140, height=14, bg="#dddddd",
                       highlightthickness=0)
         c.pack(side="left")
-        rect = c.create_rectangle(0, 0, 0, 10, fill="#888888", width=0)
+        rect = c.create_rectangle(0, 0, 0, 14, fill="#888888", width=0)
         var = tk.StringVar(value="—")
         tk.Label(frame, textvariable=var, font=F_STATS_L,
                  fg="#555555", width=8, anchor="w").pack(side="left", padx=(4, 0))
@@ -266,14 +358,14 @@ if __name__ == "__main__":
                  fg=("#a52a2a" if restart else "#000000")).pack(side="left")
 
         tk.Label(section, text=desc, anchor="w", justify="left",
-                 font=F_DESC, fg="#444444", wraplength=680).pack(
-            fill="x", padx=6, pady=(0, 2))
+                 font=F_DESC, fg="#444444", wraplength=830).pack(
+            fill="x", padx=6, pady=(2, 4))
 
         row = tk.Frame(section)
-        row.pack(fill="x", padx=6, pady=(0, 5))
+        row.pack(fill="x", padx=6, pady=(0, 6))
 
         slider = tk.Scale(row, from_=lo, to=hi, resolution=step,
-                          orient="horizontal", length=380, showvalue=False)
+                          orient="horizontal", length=440, showvalue=False)
         slider.set(val)
         slider.pack(side="left")
 
@@ -405,7 +497,7 @@ if __name__ == "__main__":
                 for name, (c, rect, hi, label_var, key) in live_bars.items():
                     val = float(stats.get(key, 0.0))
                     frac = max(0.0, min(1.0, val / hi if hi > 0 else 0))
-                    width = int(120 * frac)
+                    width = int(140 * frac)
                     # Colour by saturation
                     if frac < 0.5:
                         col = "#1a7f1a"
@@ -413,7 +505,7 @@ if __name__ == "__main__":
                         col = "#cc8800"
                     else:
                         col = "#cc1a1a"
-                    c.coords(rect, 0, 0, width, 10)
+                    c.coords(rect, 0, 0, width, 14)
                     c.itemconfig(rect, fill=col)
                     label_var.set(f"{val:.3g}")
         except Exception:
