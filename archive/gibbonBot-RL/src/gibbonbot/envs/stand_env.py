@@ -34,7 +34,7 @@ from gymnasium import spaces
 from . import hints as hints_mod
 
 ROOT = pathlib.Path(__file__).parent.parent.parent.parent  # Project root
-SCENE = ROOT / "data" / "scene_fixed.xml"  # Use the fixed collision version
+SCENE = ROOT / "data" / "scene.xml"
 HINTS_FILE = pathlib.Path(__file__).parent / "hints.py"
 TARGET_Z = 0.30  # tall-stance target — torso high, grippers on floor
 MIN_HEIGHT = (

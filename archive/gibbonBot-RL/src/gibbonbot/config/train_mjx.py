@@ -74,7 +74,7 @@ from gibbonbot.envs.stand_env_mjx import (
 from gibbonbot.utils import lineage as lineage_mod
 
 RUNS = pathlib.Path("runs/ape_stand_mjx")
-SCENE = pathlib.Path("scene.xml")
+SCENE = pathlib.Path("data/scene.xml")
 
 # ── hyperparameters ───────────────────────────────────────────────────────────
 # AGGRESSIVE TRAINING CONFIGURATION - More risk, faster learning
