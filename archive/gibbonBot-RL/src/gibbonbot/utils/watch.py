@@ -10,7 +10,7 @@ Usage:
 """
 
 import sys, pathlib
-sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
+sys.path.insert(0, str(pathlib.Path(__file__).parent.parent.parent.parent / "src"))
 
 import argparse
 import time
@@ -41,9 +41,9 @@ def main():
     runs_dir = pathlib.Path(runs_path)
 
     if args.task == "reach":
-        from envs import ApeEnv as EnvClass
+        from gibbonbot.envs.ape_env import ApeEnv as EnvClass
     else:
-        from envs import StandEnv as EnvClass
+        from gibbonbot.envs.stand_env import StandEnv as EnvClass
 
     print(f"[watch] task={args.task}  waiting for first checkpoint in {runs_dir} ...")
     while True:
