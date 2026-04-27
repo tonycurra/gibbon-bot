@@ -43,11 +43,14 @@ SPAWN_Z = 0.35     # drop from here, arms clear the floor
 SETTLE_VEL = 0.05  # max joint velocity considered "still"
 SETTLE_STEPS = 2000  # max physics steps to wait for settle
 MAX_STEPS = 2000
-PHYSICS_STEPS_PER_ACTION = 50   # 50 × 0.002s = 0.1s per action — slow, deliberate
+PHYSICS_STEPS_PER_ACTION = 250  # 250 × 0.002s = 0.5s per action — one slow deliberate move
 MOTOR_MAX_SPEED = 0.015         # max change per step — full sweep takes ~8s real-time
 MAX_ACTIVE_JOINTS = 3           # penalize moving more than this many joints at once
 
 FLOOR_Z = 0.04          # body below this = in contact with floor
+ARM_SAFETY_MARGIN = 0.06        # min distance between bodies of different arms (m)
+# body IDs: FL=2..7, FR=8..13, BL=14..19, BR=20..25
+_ARM_GROUPS = [[2,3,4,5,6,7], [8,9,10,11,12,13], [14,15,16,17,18,19], [20,21,22,23,24,25]]
 # body IDs that should plant on floor, not drag: gripper tips (7,13,19,25) + link3s (4,10,16,22)
 _CONTACT_BODIES = [4, 7, 10, 13, 16, 19, 22, 25]
 
@@ -197,6 +200,16 @@ class StandEnv(gym.Env):
         motor_delta = float(np.sum(delta ** 2))  # actual motor movement this step
         self._prev_action = action.copy()
 
+        # proximity penalty: arms too close to each other
+        proximity_penalty = 0.0
+        for i, grp_a in enumerate(_ARM_GROUPS):
+            for grp_b in _ARM_GROUPS[i+1:]:
+                for a in grp_a:
+                    for b in grp_b:
+                        dist = float(np.linalg.norm(self.data.xpos[a] - self.data.xpos[b]))
+                        if dist < ARM_SAFETY_MARGIN:
+                            proximity_penalty += (ARM_SAFETY_MARGIN - dist) ** 2
+
         # drag penalty: bodies near floor moving horizontally = dragging
         drag_penalty = 0.0
         grippers_planted = 0
@@ -224,6 +237,7 @@ class StandEnv(gym.Env):
             - 1e-3 * float(np.sum(jvel**2))   # joint velocity / flailing
             - 5e-2 * motor_delta               # penalize actual motor movement (shaking)
             - 0.5 * drag_penalty               # dragging bodies along floor = bad
+            - 2.0 * proximity_penalty          # arms too close = bad
             + too_many_joints_penalty
         )
 

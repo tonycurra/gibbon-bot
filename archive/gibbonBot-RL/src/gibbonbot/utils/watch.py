@@ -18,6 +18,16 @@ import numpy as np
 from stable_baselines3 import PPO
 from gibbonbot.envs.stand_env import StandEnv as _StandEnv
 
+# Live controls — adjust with keyboard in terminal while viewer runs:
+#   +/-  speed up / slow down playback
+#   p    pause / unpause
+_speed  = 0.5    # seconds per action step (matches PHYSICS_STEPS_PER_ACTION × 0.002)
+_paused = False
+
+def _print_controls():
+    print("\n[watch] keyboard controls (type in this terminal):")
+    print("  +  speed up    -  slow down    p  pause/unpause    q  quit\n")
+
 TASKS = {
     "reach": ("runs/ape_reach", "ape_reach"),
     "stand": ("runs/ape_stand", "ape_stand"),
@@ -59,6 +69,38 @@ def main():
         policy = PPO.load(str(ckpt))
         last_mtime = ckpt.stat().st_mtime
     ep  = 0
+    _print_controls()
+
+    import threading, select, tty, termios, os
+
+    def _key_listener():
+        global _speed, _paused
+        if not os.isatty(0):
+            return
+        old = termios.tcgetattr(0)
+        try:
+            tty.setcbreak(0)
+            while viewer_alive():
+                if select.select([sys.stdin], [], [], 0.1)[0]:
+                    ch = sys.stdin.read(1)
+                    if ch == '+':
+                        _speed = max(0.05, _speed * 0.7)
+                        print(f"\r[speed] {_speed:.2f}s/step", flush=True)
+                    elif ch == '-':
+                        _speed = min(5.0, _speed * 1.4)
+                        print(f"\r[speed] {_speed:.2f}s/step", flush=True)
+                    elif ch == 'p':
+                        _paused = not _paused
+                        print(f"\r[{'PAUSED' if _paused else 'RUNNING'}]", flush=True)
+                    elif ch == 'q':
+                        break
+        except Exception:
+            pass
+        finally:
+            try: termios.tcsetattr(0, termios.TCSADRAIN, old)
+            except Exception: pass
+
+    threading.Thread(target=_key_listener, daemon=True).start()
 
     def viewer_alive():
         v = getattr(env, "_viewer", None)
@@ -89,7 +131,9 @@ def main():
                 total_reward += reward
                 step += 1
                 done = terminated or truncated
-                time.sleep(0.1)   # real-time: 50 physics steps × 0.002s per step
+                while _paused and viewer_alive():
+                    time.sleep(0.1)
+                time.sleep(_speed)
 
             if not viewer_alive():
                 break
