@@ -73,6 +73,7 @@ def read_params():
         float(_p.W_JVEL),
         float(_p.W_ENERGY),
         float(_p.W_ALIVE),
+        float(getattr(_p, "ACTION_SMOOTH_ALPHA", 1.0)),
     )
 
 
@@ -114,22 +115,25 @@ def reset(mx, jnt_lo, jnt_hi, rng):
     dx = dx.replace(qpos=qpos, qvel=jnp.zeros_like(dx.qvel), ctrl=jnp.zeros_like(dx.ctrl))
     dx = mjx.forward(mx, dx)
 
-    motor_pos = jnp.zeros(ACT_DIM)
+    motor_pos   = jnp.zeros(ACT_DIM)
+    prev_action = jnp.zeros(ACT_DIM)
     obs = _get_obs(dx)
-    return dx, obs, motor_pos
+    return dx, obs, motor_pos, prev_action
 
 
-def step(mx, jnt_lo, jnt_hi, dx, action, motor_pos, rparams):
+def step(mx, jnt_lo, jnt_hi, dx, action, motor_pos, prev_action, rparams):
     target_z, target_tol, w_height, w_upright, \
         arm_safety_margin, w_proximity, flip_penalty, motor_max_speed, \
-        w_smooth, w_jvel, w_energy, w_alive = rparams
+        w_smooth, w_jvel, w_energy, w_alive, action_alpha = rparams
+
+    # Action low-pass filter: smooths raw policy output before it ever hits motors.
+    filt_action = action_alpha * action + (1.0 - action_alpha) * prev_action
 
     substep_speed = motor_max_speed / PHYSICS_STEPS_PER_ACTION
-    prev_motor_pos = motor_pos
 
     def substep(carry, _):
         mpos, d = carry
-        delta = jnp.clip(action - mpos, -substep_speed, substep_speed)
+        delta = jnp.clip(filt_action - mpos, -substep_speed, substep_speed)
         mpos  = mpos + delta
         ctrl  = 0.5 * (mpos + 1.0) * (jnt_hi - jnt_lo) + jnt_lo
         d = d.replace(ctrl=ctrl)
@@ -148,7 +152,7 @@ def step(mx, jnt_lo, jnt_hi, dx, action, motor_pos, rparams):
     height_reward = w_height * jnp.exp(-0.5 * height_err ** 2)
     upright_reward = jnp.where(w > 0, w_upright * w * w, 0.0)
     prox_penalty   = w_proximity * _proximity_penalty(dx.xpos, arm_safety_margin)
-    smooth_penalty = w_smooth * jnp.sum(jnp.abs(motor_pos - prev_motor_pos))
+    smooth_penalty = w_smooth * jnp.sum((filt_action - prev_action) ** 2)
     jvel_penalty   = w_jvel * jnp.sum(dx.qvel[6:] ** 2)
     energy_penalty = w_energy * jnp.sum(dx.ctrl ** 2)
 
@@ -159,7 +163,7 @@ def step(mx, jnt_lo, jnt_hi, dx, action, motor_pos, rparams):
               - flip_penalty * upside_down)
     done   = upside_down
 
-    return dx, obs, reward, done, motor_pos
+    return dx, obs, reward, done, motor_pos, filt_action
 
 
 def _proximity_penalty(xpos, arm_safety_margin):

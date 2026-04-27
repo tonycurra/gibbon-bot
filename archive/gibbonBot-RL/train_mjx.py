@@ -183,32 +183,47 @@ def load_latest(train_state):
 
 # ── main ──────────────────────────────────────────────────────────────────────
 
+def _auto_envs():
+    """Pick a sensible default env count based on whether a GPU is available."""
+    devs = jax.devices()
+    has_gpu = any(d.platform != "cpu" for d in devs)
+    return 2048 if has_gpu else 64
+
+
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument("--tune",     action="store_true",
+                        help="tune mode: 32 envs, saves often, params UI auto-launches")
     parser.add_argument("--test",     action="store_true",
-                        help="test mode: 32 envs, saves every 25k steps, always shows viewer")
+                        help="alias for --tune (back-compat)")
     parser.add_argument("--envs",     type=int, default=None,
-                        help="number of parallel environments (default: 32 in test, 1024 otherwise)")
+                        help="number of parallel environments (default: auto-pick)")
     parser.add_argument("--resume",   action="store_true", help="continue from latest mjx checkpoint")
     parser.add_argument("--no-watch", dest="watch", action="store_false")
     parser.set_defaults(watch=True)
     args = parser.parse_args()
 
+    tune_mode = args.tune or args.test
+
     RUNS.mkdir(parents=True, exist_ok=True)
 
-    if args.test:
+    if tune_mode:
         N_ENVS     = args.envs or TEST_N_ENVS
         save_every = TEST_SAVE
         log_every  = TEST_LOG
-        print("=" * 48)
-        print("  TEST MODE — tune params_mjx.py in real time")
+        print("=" * 60)
+        print("  TUNE MODE — slider UI will auto-open. Iterate on params.")
         print(f"  {N_ENVS} envs  |  save every {save_every:,} steps")
-        print("  Run: python envs/params_mjx.py  for slider UI")
-        print("=" * 48)
+        print("=" * 60)
     else:
-        N_ENVS     = args.envs or 1024
+        N_ENVS     = args.envs or _auto_envs()
         save_every = SAVE_EVERY
         log_every  = LOG_EVERY
+        print("=" * 60)
+        print("  GO MODE — no tuning UI. Train, watch, evaluate.")
+        print(f"  {N_ENVS} envs  |  save every {save_every:,} steps")
+        print(f"  For slider tuning instead, run: python train_mjx.py --tune")
+        print("=" * 60)
 
     print(f"JAX devices: {jax.devices()}")
     print(f"Loading model and compiling...")
@@ -231,11 +246,11 @@ def main():
 
     v_reset = jax.jit(jax.vmap(lambda rng: reset(mx, jnt_lo, jnt_hi, rng)))
     v_step  = jax.jit(jax.vmap(
-        lambda dx, a, pa: step(mx, jnt_lo, jnt_hi, dx, a, pa, rparams)
+        lambda dx, a, mp, pa: step(mx, jnt_lo, jnt_hi, dx, a, mp, pa, rparams)
     ))
 
     env_rngs = jax.random.split(env_rng, N_ENVS)
-    dx_batch, obs_batch, prev_action_batch = v_reset(env_rngs)
+    dx_batch, obs_batch, motor_pos_batch, prev_action_batch = v_reset(env_rngs)
     step_counts = jnp.zeros(N_ENVS, dtype=jnp.int32)
 
     lineage_mod.record(
@@ -256,9 +271,10 @@ def main():
         watch_cmd = [sys.executable, "utils/watch_mjx.py", "--since", str(time.time())]
         print(f"[watch] spawning viewer:    {' '.join(watch_cmd)}")
         watcher = subprocess.Popen(watch_cmd)
-        params_cmd = [sys.executable, "envs/params_mjx.py"]
-        print(f"[watch] spawning params UI: {' '.join(params_cmd)}")
-        params_ui = subprocess.Popen(params_cmd)
+        if tune_mode:
+            params_cmd = [sys.executable, "envs/params_mjx.py"]
+            print(f"[watch] spawning params UI: {' '.join(params_cmd)}")
+            params_ui = subprocess.Popen(params_cmd)
 
     print(f"Training with {N_ENVS} parallel envs — {TOTAL_STEPS:,} steps total.")
     print(f"{'updates':>8}  {'steps':>12}  {'sps':>8}  {'mean_rew':>10}")
@@ -270,7 +286,7 @@ def main():
         if any(float(a) != float(b) for a, b in zip(new_rparams, rparams)):
             rparams = new_rparams
             v_step = jax.jit(jax.vmap(
-                lambda dx, a, pa: step(mx, jnt_lo, jnt_hi, dx, a, pa, rparams)
+                lambda dx, a, mp, pa: step(mx, jnt_lo, jnt_hi, dx, a, mp, pa, rparams)
             ))
 
         new_lr  = float(_pmjx.LEARNING_RATE)
@@ -303,8 +319,8 @@ def main():
             buf_logp.append(log_probs)
             buf_val.append(values)
 
-            dx_batch, obs_batch, rewards, dones, prev_action_batch = v_step(
-                dx_batch, actions, prev_action_batch
+            dx_batch, obs_batch, rewards, dones, motor_pos_batch, prev_action_batch = v_step(
+                dx_batch, actions, motor_pos_batch, prev_action_batch
             )
             step_counts = step_counts + 1
             done_mask = dones | (step_counts >= MAX_STEPS)
@@ -312,12 +328,13 @@ def main():
             if jnp.any(done_mask):
                 rng, reset_rng = jax.random.split(rng)
                 reset_rngs = jax.random.split(reset_rng, N_ENVS)
-                new_dx, new_obs, new_pa = v_reset(reset_rngs)
+                new_dx, new_obs, new_mp, new_pa = v_reset(reset_rngs)
                 dx_batch = jax.tree.map(
                     lambda n, o: jnp.where(done_mask.reshape(done_mask.shape + (1,) * (n.ndim - 1)), n, o) if n.ndim > 0 else n,
                     new_dx, dx_batch,
                 )
-                obs_batch = jnp.where(done_mask[:, None], new_obs, obs_batch)
+                obs_batch         = jnp.where(done_mask[:, None], new_obs, obs_batch)
+                motor_pos_batch   = jnp.where(done_mask[:, None], new_mp, motor_pos_batch)
                 prev_action_batch = jnp.where(done_mask[:, None], new_pa, prev_action_batch)
                 step_counts = jnp.where(done_mask, 0, step_counts)
 

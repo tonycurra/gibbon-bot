@@ -55,4 +55,5 @@ results/
 
 # MJX checkpoints + local archives
 runs/ape_stand_mjx/mjx_*.npz
+runs/ape_stand_mjx/live_stats.json
 mjx_history/
