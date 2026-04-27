@@ -44,8 +44,8 @@ SETTLE_VEL = 0.05  # max joint velocity considered "still"
 SETTLE_STEPS = 2000  # max physics steps to wait for settle
 MAX_STEPS = 2000
 PHYSICS_STEPS_PER_ACTION = 30   # 30 × 0.002s = 0.06s per action
-MOTOR_MAX_SPEED = 0.08          # max normalized position change per step (~5° for a 120° joint)
-                                # full sweep [-1→+1] takes 25 steps ≈ 1.5s real-time
+MOTOR_MAX_SPEED = 0.03          # max normalized position change per step (~2° for a 120° joint)
+                                # full sweep [-1→+1] takes 67 steps ≈ 4s real-time
 
 # Arms splayed down — a reasonable starting pose for learning to stand.
 # Each leg: base(link1) rotated outward, link2 angled down, rest relaxed.
@@ -191,7 +191,7 @@ class StandEnv(gym.Env):
         upside_down_penalty = -2.0 if w < 0 else 0.0
 
         jvel = self.data.qvel[6:]
-        action_delta = float(np.sum((action - self._prev_action) ** 2))
+        motor_delta = float(np.sum(delta ** 2))  # actual motor movement this step
         self._prev_action = action.copy()
 
         # Penalize moving too many joints at once - encourage coordinated movement
@@ -208,7 +208,7 @@ class StandEnv(gym.Env):
             + 0.05  # alive bonus
             - 5e-4 * float(np.sum(ctrl**2))  # energy
             - 1e-3 * float(np.sum(jvel**2))  # joint velocity / flailing
-            - 5e-2 * action_delta  # action smoothness
+            - 5e-2 * motor_delta   # penalize actual motor movement (shaking)
             + upside_down_penalty
             + too_many_joints_penalty
         )
