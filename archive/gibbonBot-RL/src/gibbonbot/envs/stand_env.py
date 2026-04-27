@@ -43,9 +43,8 @@ SPAWN_Z = 0.35     # drop from here, arms clear the floor
 SETTLE_VEL = 0.05  # max joint velocity considered "still"
 SETTLE_STEPS = 2000  # max physics steps to wait for settle
 MAX_STEPS = 2000
-PHYSICS_STEPS_PER_ACTION = (
-    12  # longer per-action window → slower, more deliberate motion
-)
+PHYSICS_STEPS_PER_ACTION = 30   # 30 × 0.002s = 0.06s per action → slower, wider movements
+ACTION_SMOOTHING = 0.5          # blend: ctrl = 0.5*new + 0.5*prev (low-pass filter)
 
 # Arms splayed down — a reasonable starting pose for learning to stand.
 # Each leg: base(link1) rotated outward, link2 angled down, rest relaxed.
@@ -153,6 +152,8 @@ class StandEnv(gym.Env):
 
     def step(self, action):
         action = np.asarray(action, dtype=np.float32)
+        # low-pass filter: blend with previous action to smooth out twitching
+        action = ACTION_SMOOTHING * self._prev_action + (1.0 - ACTION_SMOOTHING) * action
         ctrl = 0.5 * (action + 1.0) * (self._jnt_hi - self._jnt_lo) + self._jnt_lo
         self.data.ctrl[:] = ctrl
 
@@ -198,7 +199,7 @@ class StandEnv(gym.Env):
             + 0.05  # alive bonus
             - 5e-4 * float(np.sum(ctrl**2))  # energy
             - 1e-3 * float(np.sum(jvel**2))  # joint velocity / flailing
-            - 2e-2 * action_delta  # action smoothness
+            - 5e-2 * action_delta  # action smoothness
             + upside_down_penalty
             + too_many_joints_penalty
         )
