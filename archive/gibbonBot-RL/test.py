@@ -80,8 +80,12 @@ def best_checkpoint(runs_dir: pathlib.Path):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--inherit", action="store_true", help="warm-start weights from runs/ape_stand/")
-    parser.add_argument("--resume", action="store_true", help="continue from last test checkpoint")
+    parser.add_argument(
+        "--inherit", action="store_true", help="warm-start weights from runs/ape_stand/"
+    )
+    parser.add_argument(
+        "--resume", action="store_true", help="continue from last test checkpoint"
+    )
     parser.add_argument("--no-watch", dest="watch", action="store_false")
     parser.set_defaults(watch=True)
     args = parser.parse_args()
@@ -92,7 +96,9 @@ def main():
     env = make_vec_env(StandEnv, n_envs=1, env_kwargs={"render_mode": render})
 
     callbacks = [
-        CheckpointCallback(save_freq=10_000, save_path=str(RUNS), name_prefix="ape_stand"),
+        CheckpointCallback(
+            save_freq=10_000, save_path=str(RUNS), name_prefix="ape_stand"
+        ),
         EpisodeLogger(),
     ]
 
@@ -118,7 +124,11 @@ def main():
         else:
             print(f"Resuming from {ckpt.name}")
             model = PPO.load(str(ckpt), env=env, device="cpu")
-            model.learn(total_timesteps=TOTAL_STEPS, callback=callbacks, reset_num_timesteps=False)
+            model.learn(
+                total_timesteps=TOTAL_STEPS,
+                callback=callbacks,
+                reset_num_timesteps=False,
+            )
             return
 
     elif args.inherit:
@@ -135,7 +145,9 @@ def main():
     else:
         model = PPO(**ppo_kwargs)
 
-    print(f"{'Ep':>4} | {'Status':<10} | {'steps':>5} | {'height':>8} | {'h_rew':>6} | {'prox':>6} | {'reward':>8}")
+    print(
+        f"{'Ep':>4} | {'Status':<10} | {'steps':>5} | {'height':>8} | {'h_rew':>6} | {'prox':>6} | {'reward':>8}"
+    )
     print("-" * 70)
     print(f"Training for {TOTAL_STEPS:,} steps...")
     model.learn(total_timesteps=TOTAL_STEPS, callback=callbacks)
