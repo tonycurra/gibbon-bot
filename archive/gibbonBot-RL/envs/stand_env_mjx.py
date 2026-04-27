@@ -13,26 +13,11 @@ import jax.numpy as jnp
 import mujoco
 import mujoco.mjx as mjx
 import numpy as np
-import pathlib
 
-SCENE = pathlib.Path(__file__).parent.parent / "data" / "scene.xml"
-MAX_STEPS = 2000
+from envs.common import SCENE, MAX_STEPS, ACT_DIM, ARM_GROUPS_NP, PAIR_A, PAIR_B
+
 PHYSICS_STEPS_PER_ACTION = 16  # 16 × 0.002s = 0.032s per action
-
-# body IDs for proximity penalty — same groups as stand_env.py
-_ARM_GROUPS = np.array([
-    [2, 3, 4, 5, 6, 7],
-    [8, 9, 10, 11, 12, 13],
-    [14, 15, 16, 17, 18, 19],
-    [20, 21, 22, 23, 24, 25],
-], dtype=np.int32)
-
-# pairs of arm groups to check: (0,1),(0,2),(0,3),(1,2),(1,3),(2,3)
-_PAIR_A = np.array([0, 0, 0, 1, 1, 2], dtype=np.int32)
-_PAIR_B = np.array([1, 2, 3, 2, 3, 3], dtype=np.int32)
-
 OBS_DIM = 59  # torso z(1) + quat(4) + lin_vel(3) + ang_vel(3) + jpos(24) + jvel(24)
-ACT_DIM = 24
 
 
 def load_model():
@@ -113,9 +98,9 @@ def step(mx, jnt_lo, jnt_hi, dx, action, prev_action, rparams):
 
 def _proximity_penalty(xpos, arm_safety_margin):
     # xpos shape: (nbody, 3)
-    groups = jnp.array(_ARM_GROUPS)   # (4, 6)
-    pair_a = jnp.array(_PAIR_A)       # (6,)
-    pair_b = jnp.array(_PAIR_B)       # (6,)
+    groups = jnp.array(ARM_GROUPS_NP)  # (4, 6)
+    pair_a = jnp.array(PAIR_A)         # (6,)
+    pair_b = jnp.array(PAIR_B)         # (6,)
 
     def pair_penalty(a_idx, b_idx):
         pos_a = xpos[groups[a_idx]]   # (6, 3)

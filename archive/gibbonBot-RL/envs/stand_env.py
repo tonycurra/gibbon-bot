@@ -21,7 +21,6 @@ Reward per step:
   - W_PROXIMITY * quadratic penalty when arms enter ARM_SAFETY_MARGIN zone
 """
 
-import importlib
 import pathlib
 import time
 
@@ -31,29 +30,14 @@ import mujoco.viewer
 import numpy as np
 from gymnasium import spaces
 
-import envs.params as params_mod
+from envs.common import (
+    SCENE, PARAMS_FILE, MAX_STEPS, ACT_DIM,
+    ARM_CONTACT_DIST, ARM_GROUPS as _ARM_GROUPS, load_params,
+)
 
-ROOT = pathlib.Path(__file__).parent.parent  # Project root
-SCENE = ROOT / "data" / "scene.xml"
-PARAMS_FILE = pathlib.Path(__file__).parent / "params.py"
-
-# Static constants (not hot-reloaded)
-SETTLE_VEL = 0.05
-SETTLE_STEPS = 3000  # enough for a full fall + 150-step stillness confirmation
-MAX_STEPS = 2000
-ARM_CONTACT_DIST = 0.02  # distance below which arms are flagged as colliding (info only)
-# body IDs: FL=2..7, FR=8..13, BL=14..19, BR=20..25
-_ARM_GROUPS = [
-    [2, 3, 4, 5, 6, 7],
-    [8, 9, 10, 11, 12, 13],
-    [14, 15, 16, 17, 18, 19],
-    [20, 21, 22, 23, 24, 25],
-]
-# Arms horizontal — all joints zeroed so arms extend straight out from the torso.
-# No part goes below the torso at spawn, avoiding floor collisions before settle.
-# Gravity then pulls them into a natural resting pose during the settle phase.
-# Indices per leg: [base, l1l2, l2l3, l3l4, l4l5, gripper]  × 4 legs
-_STAND_INIT = np.zeros(24, dtype=np.float64)
+SETTLE_VEL   = 0.05
+SETTLE_STEPS = 3000
+_STAND_INIT  = np.zeros(ACT_DIM, dtype=np.float64)
 
 
 class StandEnv(gym.Env):
@@ -231,14 +215,8 @@ class StandEnv(gym.Env):
     # ── helpers ───────────────────────────────────────────────────────────────
 
     def _load_params(self):
-        try:
-            mtime = PARAMS_FILE.stat().st_mtime
-            if mtime != self._params_mtime:
-                importlib.reload(params_mod)
-                self._params_mtime = mtime
-        except Exception as e:
-            print(f"[params] reload error: {e}")
-        return params_mod
+        p, self._params_mtime = load_params(self._params_mtime)
+        return p
 
     def _get_obs(self):
         qpos = self.data.qpos

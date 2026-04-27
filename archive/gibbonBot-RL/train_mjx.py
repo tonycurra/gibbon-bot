@@ -27,8 +27,7 @@ import mujoco
 
 from flax.training.train_state import TrainState
 
-import envs.params as params_mod
-import importlib
+from envs.common import read_reward_params
 from envs.stand_env_mjx import (
     load_model, reset, step,
     OBS_DIM, ACT_DIM, MAX_STEPS,
@@ -36,7 +35,6 @@ from envs.stand_env_mjx import (
 import utils.lineage as lineage_mod
 
 RUNS = pathlib.Path("runs/ape_stand_mjx")
-PARAMS_FILE = pathlib.Path("envs/params.py")
 
 # PPO hyperparameters
 N_STEPS     = 128
@@ -150,31 +148,6 @@ def update_step(train_state, rollout):
     return train_state, metrics
 
 
-# ── params ────────────────────────────────────────────────────────────────────
-
-_params_mtime = 0.0
-
-def read_rparams():
-    global _params_mtime
-    try:
-        mtime = PARAMS_FILE.stat().st_mtime
-        if mtime != _params_mtime:
-            importlib.reload(params_mod)
-            _params_mtime = mtime
-    except Exception as e:
-        print(f"[params] reload error: {e}")
-    p = params_mod
-    return (
-        jnp.float32(p.TARGET_Z),
-        jnp.float32(p.TARGET_TOL),
-        jnp.float32(p.W_HEIGHT),
-        jnp.float32(p.W_UPRIGHT),
-        jnp.float32(p.ARM_SAFETY_MARGIN),
-        jnp.float32(p.W_PROXIMITY),
-        jnp.float32(p.FLIP_PENALTY),
-    )
-
-
 # ── checkpointing ─────────────────────────────────────────────────────────────
 
 def save(train_state, steps):
@@ -225,7 +198,7 @@ def main():
     if args.resume:
         train_state, start_steps = load_latest(train_state)
 
-    rparams = read_rparams()
+    rparams = tuple(jnp.float32(v) for v in read_reward_params())
 
     v_reset = jax.jit(jax.vmap(lambda rng: reset(mx, jnt_lo, jnt_hi, rng)))
     v_step  = jax.jit(jax.vmap(
@@ -258,7 +231,7 @@ def main():
 
     while total_steps < TOTAL_STEPS:
         # re-read params each rollout (hot-reload support)
-        new_rparams = read_rparams()
+        new_rparams = tuple(jnp.float32(v) for v in read_reward_params())
         if any(float(a) != float(b) for a, b in zip(new_rparams, rparams)):
             rparams = new_rparams
             v_step = jax.jit(jax.vmap(
