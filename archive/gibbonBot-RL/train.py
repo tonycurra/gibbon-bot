@@ -40,17 +40,15 @@ def best_checkpoint():
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--envs", type=int, default=1)
-    parser.add_argument("--cpu", action="store_true", help="force CPU even if GPU is available")
+    parser.add_argument("--gpu", action="store_true", help="use GPU (not recommended for MLP policies — slower than CPU)")
     parser.add_argument("--inherit", action="store_true", help="warm-start weights from best checkpoint")
     parser.add_argument("--resume", action="store_true", help="continue exact run from last checkpoint")
     parser.add_argument("--no-watch", dest="watch", action="store_false")
     parser.set_defaults(watch=True)
     args = parser.parse_args()
 
-    device = torch.device("cpu" if args.cpu else ("cuda" if torch.cuda.is_available() else "cpu"))
+    device = torch.device("cuda" if args.gpu and torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
-    if device.type == "cuda":
-        print(f"GPU: {torch.cuda.get_device_name(0)}")
 
     RUNS.mkdir(parents=True, exist_ok=True)
     env = make_vec_env(StandEnv, n_envs=args.envs)

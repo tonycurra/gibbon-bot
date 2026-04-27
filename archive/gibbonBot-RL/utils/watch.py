@@ -52,8 +52,7 @@ def _get_realtime():
 
 
 def _print_controls():
-    print("\n[watch] keyboard controls (type in this terminal):")
-    print("  +  speed up    -  slow down    p  pause/unpause    q  quit\n")
+    pass
 
 
 TASKS = {

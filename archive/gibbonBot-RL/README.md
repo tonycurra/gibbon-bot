@@ -17,7 +17,7 @@ See [QUICKSTART.md](QUICKSTART.md) for the recommended workflow.
 | Script | What it does |
 |--------|-------------|
 | `test.py` | CPU training with embedded viewer — watch the actual training robot |
-| `train.py` | GPU training (auto-detect), headless + separate replay viewer |
+| `train.py` | CPU training (default), headless + separate replay viewer |
 | `envs/params.py` | Run directly to open the slider UI for live parameter tuning |
 | `utils/watch.py` | Standalone replay viewer — hot-swaps to latest checkpoint |
 | `utils/sim.py` | Open the MuJoCo scene without any training |

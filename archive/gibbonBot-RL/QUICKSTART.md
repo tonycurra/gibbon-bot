@@ -71,12 +71,12 @@ This auto-detects your GPU, trains headless, and opens a separate replay window 
 **Options:**
 
 ```bash
-python train.py                # GPU auto-detect + replay viewer
-python train.py --cpu          # force CPU
+python train.py                # CPU training + replay viewer
 python train.py --no-watch     # fully headless, no window
-python train.py --envs 4       # parallel environments (faster on GPU)
+python train.py --envs 4       # parallel environments
 python train.py --inherit      # warm-start from best checkpoint in runs/ape_stand/
 python train.py --resume       # continue exact run from last checkpoint
+python train.py --gpu          # use GPU (MLP policies are faster on CPU — rarely needed)
 ```
 
 Checkpoints save to `runs/ape_stand/` every 50k steps. The best checkpoint is always at `runs/ape_stand/best/best_model.zip`.
