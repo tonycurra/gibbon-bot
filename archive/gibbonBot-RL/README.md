@@ -95,7 +95,34 @@ Fixed floor penetration issues by:
 - Reducing floor friction for stable contacts
 - Updating constraint dimensions for proper plane contacts
 
-## Scene History
 
-Historical scene files are preserved in  folder for reference and debugging.
-Historical scene files are preserved in scenes_history/ folder for reference and debugging.
+## Technical Details: Floor Contact System
+
+The floor contact system has been completely overhauled to prevent penetration issues:
+
+### Key Fixes
+
+1. **Visual-Physics Alignment**
+   - Floor visual position: 
+   - Floor physics position: 
+   - Floor physics position: FLOOR_Z = 0.0
+   - Result: Perfect alignment between visual and physics floors
+
+2. **STL Mesh Contact Affinity**
+   - Changed all robot mesh geoms from  to 
+   - Floor can now properly contact all robot mesh surfaces
+   - Fixes the "parts going below floor" issue
+
+3. **Physics Parameters**
+   - Reduced friction:  (was 5.0 0.5 0.1)
+   - Fixed constraint dimensions:  (was 4)
+   - Result: Stable contacts without jittering
+
+### Scene History
+
+Historical scene files from different development stages are preserved in the  folder. This allows:
+Historical scene files from different development stages are preserved in the scenes_history/ folder. This allows:
+
+- Comparing evolution of robot configuration
+- Debugging regressions by reverting to known-working configurations
+- Researching the development history of simulation parameters
