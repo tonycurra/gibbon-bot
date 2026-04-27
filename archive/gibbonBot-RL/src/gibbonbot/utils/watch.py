@@ -102,9 +102,14 @@ def main():
                       f"closest={info.get('dist_to_tree', 0):.2f}m  "
                       f"reward={total_reward:.1f}  steps={step}  [{ckpt_name}]")
             else:
-                status = "FALLEN" if info["fallen"] else "ALIVE"
+                if info.get("upside_down"):
+                    status = "FLIPPED"
+                elif info["fallen"]:
+                    status = "FALLEN"
+                else:
+                    status = "ALIVE"
                 above  = info.get("above_ground", info["torso_z"])
-                print(f"Ep {ep:3d}: {status:<6}  "
+                print(f"Ep {ep:3d}: {status:<7}  "
                       f"height={above:.3f}m  "
                       f"h_rew={info['height_reward']:.3f}  "
                       f"reward={total_reward:.1f}  steps={step}  [{ckpt_name}]")

@@ -186,9 +186,8 @@ class StandEnv(gym.Env):
 
         # upright reward: penalise tilt — quat[0] is w
         w = float(self.data.qpos[3])
-        # Only reward upright position (w > 0), strongly penalize upside down
         upright_reward = 0.3 * w * w if w > 0 else 0.0
-        upside_down_penalty = -2.0 if w < 0 else 0.0
+        upside_down = w < 0  # w < 0 means torso rotated more than 90° — on its back
 
         jvel = self.data.qvel[6:]
         motor_delta = float(np.sum(delta ** 2))  # actual motor movement this step
@@ -209,19 +208,22 @@ class StandEnv(gym.Env):
             - 5e-4 * float(np.sum(ctrl**2))  # energy
             - 1e-3 * float(np.sum(jvel**2))  # joint velocity / flailing
             - 5e-2 * motor_delta   # penalize actual motor movement (shaking)
-            + upside_down_penalty
             + too_many_joints_penalty
         )
 
         reward += self._hints_reward()
 
-        terminated = False
+        if upside_down:
+            reward -= 10.0  # big penalty for flipping onto back
+
+        terminated = upside_down
         truncated = self._step_count >= MAX_STEPS
 
         info = {
             "torso_z": torso_z,
             "above_ground": above_ground,
             "fallen": fallen,
+            "upside_down": upside_down,
             "got_up": got_up,
             "height_reward": height_reward,
             "upright_reward": upright_reward,
