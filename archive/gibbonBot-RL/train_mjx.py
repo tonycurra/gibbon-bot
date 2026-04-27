@@ -6,13 +6,16 @@ Runs 1024 parallel environments entirely on the GPU.
 Expected speedup: ~50x over train.py on an RTX 4070.
 
 Usage:
-    python train_mjx.py                  # 1024 envs, train from scratch
+    python train_mjx.py                  # 1024 envs + live viewer
+    python train_mjx.py --no-watch       # headless
     python train_mjx.py --envs 2048      # more envs (needs more VRAM)
     python train_mjx.py --resume         # continue from latest mjx checkpoint
 """
 
 import argparse
 import pathlib
+import subprocess
+import sys
 import time
 
 import jax
@@ -201,8 +204,10 @@ def load_latest(train_state):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--envs",   type=int, default=1024)
-    parser.add_argument("--resume", action="store_true", help="continue from latest mjx checkpoint")
+    parser.add_argument("--envs",     type=int, default=1024)
+    parser.add_argument("--resume",   action="store_true", help="continue from latest mjx checkpoint")
+    parser.add_argument("--no-watch", dest="watch", action="store_false")
+    parser.set_defaults(watch=True)
     args = parser.parse_args()
 
     RUNS.mkdir(parents=True, exist_ok=True)
@@ -243,6 +248,10 @@ def main():
     last_save = start_steps
     t0 = time.time()
 
+    watcher = None
+    if args.watch:
+        watcher = subprocess.Popen([sys.executable, "utils/watch_mjx.py"])
+
     print(f"Training with {N_ENVS} parallel envs — {TOTAL_STEPS:,} steps total.")
     print(f"{'updates':>8}  {'steps':>12}  {'sps':>8}  {'mean_rew':>10}")
     print("-" * 48)
@@ -250,9 +259,8 @@ def main():
     while total_steps < TOTAL_STEPS:
         # re-read params each rollout (hot-reload support)
         new_rparams = read_rparams()
-        if new_rparams != rparams:
+        if any(float(a) != float(b) for a, b in zip(new_rparams, rparams)):
             rparams = new_rparams
-            # rparams are captured in the closure — need to rebuild v_step
             v_step = jax.jit(jax.vmap(
                 lambda dx, a, pa: step(mx, jnt_lo, jnt_hi, dx, a, pa, rparams)
             ))
@@ -283,7 +291,7 @@ def main():
                 reset_rngs = jax.random.split(reset_rng, N_ENVS)
                 new_dx, new_obs, new_pa = v_reset(reset_rngs)
                 dx_batch = jax.tree.map(
-                    lambda n, o: jnp.where(done_mask[:, None] if n.ndim > 1 else done_mask, n, o),
+                    lambda n, o: jnp.where(done_mask.reshape(done_mask.shape + (1,) * (n.ndim - 1)), n, o) if n.ndim > 0 else n,
                     new_dx, dx_batch,
                 )
                 obs_batch = jnp.where(done_mask[:, None], new_obs, obs_batch)
@@ -306,7 +314,10 @@ def main():
             lambda o, r: sample_action(train_state.params, train_state.apply_fn, o, r)
         )(obs_batch, jax.random.split(rng, N_ENVS))
 
-        adv_t, ret_t = jax.vmap(gae, in_axes=1, out_axes=1)(rew_t, val_t, done_t, last_val)
+        adv_t, ret_t = jax.vmap(
+            lambda r, v, d, lv: gae(r, v, d, lv),
+            in_axes=(1, 1, 1, 0), out_axes=1,
+        )(rew_t, val_t, done_t, last_val)
 
         def flat(x):
             return x.reshape(-1, *x.shape[2:]) if x.ndim > 2 else x.reshape(-1)
@@ -325,6 +336,8 @@ def main():
             last_save = total_steps
 
     save(train_state, total_steps)
+    if watcher is not None:
+        watcher.terminate()
     print("Done.")
 
 
