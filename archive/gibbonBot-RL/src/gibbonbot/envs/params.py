@@ -2,8 +2,8 @@
 # Edit this file or use the watch.py UI — changes take effect within 1 episode.
 
 # --- motor ---
-MOTOR_MAX_SPEED = 0.071  # max normalized joint movement per step
-MAX_ACTIVE_JOINTS = 10  # no joint limit penalty
+MOTOR_MAX_SPEED = 0.1  # max normalized joint movement per step
+MAX_ACTIVE_JOINTS = 17  # no joint limit penalty
 
 # --- timing ---
 PHYSICS_STEPS_PER_ACTION = 220  # steps per policy action (250 × 0.002s = 0.5s)
@@ -31,5 +31,5 @@ W_PROXIMITY = 50.0  # penalty: arms too close to each other (soft, continuous)
 W_JOINTS    = 0.0   # no joint count penalty
 ARM_SAFETY_MARGIN = 0.1  # soft margin — penalty ramps up inside this distance (6 cm)
 ARM_TOUCH_DIST       = 0.01   # hard limit — episode ends if any cross-arm pair < 1 cm
-ARM_COLLISION_PENALTY = 50.0  # one-time penalty on arm collision termination
+ARM_COLLISION_PENALTY = 200  # one-time penalty on arm collision termination
 FLIP_PENALTY = 50  # one-time penalty for flipping upside-down
