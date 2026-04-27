@@ -43,9 +43,13 @@ SPAWN_Z = 0.35     # drop from here, arms clear the floor
 SETTLE_VEL = 0.05  # max joint velocity considered "still"
 SETTLE_STEPS = 2000  # max physics steps to wait for settle
 MAX_STEPS = 2000
-PHYSICS_STEPS_PER_ACTION = 30   # 30 × 0.002s = 0.06s per action
-MOTOR_MAX_SPEED = 0.03          # max normalized position change per step (~2° for a 120° joint)
-                                # full sweep [-1→+1] takes 67 steps ≈ 4s real-time
+PHYSICS_STEPS_PER_ACTION = 50   # 50 × 0.002s = 0.1s per action — slow, deliberate
+MOTOR_MAX_SPEED = 0.015         # max change per step — full sweep takes ~8s real-time
+MAX_ACTIVE_JOINTS = 3           # penalize moving more than this many joints at once
+
+FLOOR_Z = 0.04          # body below this = in contact with floor
+# body IDs that should plant on floor, not drag: gripper tips (7,13,19,25) + link3s (4,10,16,22)
+_CONTACT_BODIES = [4, 7, 10, 13, 16, 19, 22, 25]
 
 # Arms splayed down — a reasonable starting pose for learning to stand.
 # Each leg: base(link1) rotated outward, link2 angled down, rest relaxed.
@@ -193,21 +197,33 @@ class StandEnv(gym.Env):
         motor_delta = float(np.sum(delta ** 2))  # actual motor movement this step
         self._prev_action = action.copy()
 
-        # Penalize moving too many joints at once - encourage coordinated movement
-        significant_movement = np.abs(action - self._prev_action) > 0.1
-        joints_moving = np.sum(significant_movement)
-        too_many_joints_penalty = -0.1 * max(
-            0, joints_moving - 6
-        )  # Penalize if >6 joints moving
+        # drag penalty: bodies near floor moving horizontally = dragging
+        drag_penalty = 0.0
+        grippers_planted = 0
+        for bid in _CONTACT_BODIES:
+            bz = float(self.data.xpos[bid][2])
+            if bz < FLOOR_Z:
+                horiz_vel = float(np.sqrt(self.data.cvel[bid, 3]**2 + self.data.cvel[bid, 4]**2))
+                drag_penalty += horiz_vel
+                grippers_planted += 1
+        # plant-and-lift: grippers on floor while torso is rising = good push-off
+        torso_vz = float(self.data.cvel[1, 5])  # body 1 = torso, z velocity
+        plant_and_lift = float(grippers_planted) * max(0.0, torso_vz)
+
+        # allow only a few joints to move at once — encourages sequential animal-like motion
+        joints_moving = int(np.sum(np.abs(delta) > 1e-4))
+        too_many_joints_penalty = -0.3 * max(0, joints_moving - MAX_ACTIVE_JOINTS)
 
         reward = (
             height_reward
             + upright_reward
-            + (0.5 if got_up else 0.0)  # bonus for lifting torso above LIFTED_Z
-            + 0.05  # alive bonus
-            - 5e-4 * float(np.sum(ctrl**2))  # energy
-            - 1e-3 * float(np.sum(jvel**2))  # joint velocity / flailing
-            - 5e-2 * motor_delta   # penalize actual motor movement (shaking)
+            + (0.5 if got_up else 0.0)   # bonus for lifting torso above LIFTED_Z
+            + 0.3 * plant_and_lift        # grippers planted + torso rising = good
+            + 0.05                        # alive bonus
+            - 5e-4 * float(np.sum(ctrl**2))   # energy
+            - 1e-3 * float(np.sum(jvel**2))   # joint velocity / flailing
+            - 5e-2 * motor_delta               # penalize actual motor movement (shaking)
+            - 0.5 * drag_penalty               # dragging bodies along floor = bad
             + too_many_joints_penalty
         )
 

@@ -89,7 +89,7 @@ def main():
                 total_reward += reward
                 step += 1
                 done = terminated or truncated
-                time.sleep(0.06)  # real-time: 30 physics steps × 0.002s per step
+                time.sleep(0.1)   # real-time: 50 physics steps × 0.002s per step
 
             if not viewer_alive():
                 break
