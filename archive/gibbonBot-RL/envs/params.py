@@ -3,11 +3,11 @@
 # Changes take effect within 1 episode.
 
 # --- motor ---
-MOTOR_MAX_SPEED = 0.170000  # max normalized joint movement per step
+MOTOR_MAX_SPEED = 0.200000  # max normalized joint movement per step
 
 # --- timing ---
-PHYSICS_STEPS_PER_ACTION = 160  # steps per policy action (240 × 0.002s = 0.48s)
-REALTIME_FACTOR = 100.000000  # viewer speed multiplier: 1=real-time, 10=10× faster
+PHYSICS_STEPS_PER_ACTION = 170  # steps per policy action (240 × 0.002s = 0.48s)
+REALTIME_FACTOR = 1.000000  # viewer speed multiplier: 1=real-time, 10=10× faster
 
 # --- goals ---
 TARGET_Z = 0.200000  # torso height target (metres)
@@ -15,11 +15,11 @@ TARGET_TOL = 0.100000  # Gaussian sigma for height reward
 
 # --- reward weights ---
 W_HEIGHT = 5.000000  # Gaussian height reward scale
-W_UPRIGHT = 1.000000  # upright orientation reward (torso level)
+W_UPRIGHT = 2.000000  # upright orientation reward (torso level)
 
 # --- arm spacing ---
-ARM_SAFETY_MARGIN = 0.200000  # soft penalty ramps up inside this distance (metres)
-W_PROXIMITY = 10.000000  # scale of the soft proximity penalty
+ARM_SAFETY_MARGIN = 0.390000  # soft penalty ramps up inside this distance (metres)
+W_PROXIMITY = 3.000000  # scale of the soft proximity penalty
 
 # --- termination penalties ---
 FLIP_PENALTY = 100.000000  # one-time penalty for flipping upside-down

@@ -1,6 +1,6 @@
 # gibbonBot-RL
 
-Reinforcement learning for a 4-limbed robotic ape. PPO (Stable Baselines 3) + MuJoCo. Goal: lift the torso to a target height and keep it level.
+Reinforcement learning for a 4-limbed robotic ape. PPO + MuJoCo MJX (GPU-accelerated, JAX). Goal: lift the torso to a target height and stay upright.
 
 ## Setup
 
@@ -16,42 +16,41 @@ See [QUICKSTART.md](QUICKSTART.md) for the recommended workflow.
 
 | Script | What it does |
 |--------|-------------|
-| `test.py` | CPU training with embedded viewer — watch the actual training robot |
-| `train.py` | CPU training (default), headless + separate replay viewer |
-| `envs/params.py` | Run directly to open the slider UI for live parameter tuning |
-| `utils/watch.py` | Standalone replay viewer — hot-swaps to latest checkpoint |
-| `utils/sim.py` | Open the MuJoCo scene without any training |
+| `train_mjx.py` | MJX/JAX GPU training loop with vmapped parallel envs |
+| `utils/watch_mjx.py` | Live MuJoCo viewer — hot-swaps to the latest checkpoint |
+| `envs/params_mjx.py` | Run directly to open the categorised slider UI for live tuning |
+| `envs/stand_env.py` | CPU Gymnasium reference env (kept for reference, not the main path) |
+| `envs/params.py` | Params for the CPU reference env |
 
-## Parameters
+`train_mjx.py --test` auto-launches both the watcher and the params UI.
 
-All params live in `envs/params.py` and hot-reload within one episode. Run `python envs/params.py` to open the slider UI.
+## Parameters (MJX)
 
-| Param | Effect |
-|-------|--------|
-| `REALTIME_FACTOR` | Viewer speed (1 = real-time, 100 = as fast as possible) |
-| `TARGET_Z` | Target torso height in metres |
-| `TARGET_TOL` | Gaussian sigma — how precisely height is rewarded |
-| `W_HEIGHT` | Weight on height reward |
-| `W_UPRIGHT` | Weight on staying level |
-| `MOTOR_MAX_SPEED` | Max joint movement per action step |
-| `PHYSICS_STEPS_PER_ACTION` | Simulation steps per policy decision |
-| `ARM_SAFETY_MARGIN` | Soft exclusion zone radius around each arm |
-| `W_PROXIMITY` | Strength of the arm-spacing penalty (0 = off) |
-| `FLIP_PENALTY` | One-time penalty for flipping upside-down |
+All MJX params live in `envs/params_mjx.py`. Reward, motor and learning params hot-reload between rollouts; `PHYSICS_STEPS_PER_ACTION` is baked into the JIT and needs a restart.
+
+Categories in the slider UI:
+
+- **Viewer** — `VIEWER_SPEED` (display only, doesn't affect physics)
+- **Motor** — `MOTOR_MAX_SPEED`
+- **Height Goal** — `TARGET_Z`, `TARGET_TOL`, `W_HEIGHT`, `W_UPRIGHT`
+- **Arm Spacing** — `ARM_SAFETY_MARGIN`, `W_PROXIMITY`
+- **Survival** — `FLIP_PENALTY`, `W_ALIVE`
+- **Smoothness** — `W_SMOOTH`, `W_JVEL`, `W_ENERGY`
+- **Learning** — `LEARNING_RATE`, `ENT_COEF`, `CLIP_EPS`
 
 ## Files
 
 ```
 envs/
-  stand_env.py   — Gymnasium environment (reward, observations, termination)
-  params.py      — Hot-reloadable parameters + slider UI
+  stand_env_mjx.py — MJX environment (stateless, vmappable)
+  params_mjx.py    — MJX params + categorised slider UI
+  stand_env.py     — CPU reference env
+  params.py        — CPU params + slider UI
 data/
-  scene.xml      — Robot MJCF definition
+  scene.xml        — Robot MJCF
 utils/
-  watch.py       — Live checkpoint replay viewer
-  sim.py         — Scene viewer (no policy)
-  lineage.py     — Run metadata logger
+  watch_mjx.py     — Live checkpoint viewer (filters by --since timestamp)
+  lineage.py       — Run metadata logger
 runs/
-  ape_stand/     — Checkpoints from train.py
-  ape_stand_test/ — Checkpoints from test.py
+  ape_stand_mjx/   — MJX checkpoints (mjx_<steps>.npz) + lineage.json
 ```

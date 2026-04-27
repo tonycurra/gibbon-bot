@@ -1,105 +1,76 @@
 # Quickstart
 
-The recommended workflow is: tune with `test.py`, then scale up with `train.py`.
+Two workflows: **`--test`** for tuning (32 envs, frequent saves, viewer + params UI auto-launch), then scale up to a full run.
 
 ---
 
-## Step 1 — Test and tune (CPU, live viewer)
+## Step 1 — Test mode (tune live)
 
 ```bash
-python test.py
+python train_mjx.py --test
 ```
 
-This trains on CPU in a single environment with the MuJoCo viewer embedded — you're watching the actual robot being trained, not a replay. Episodes print to the terminal:
+This starts:
 
-```
-Ep    1 | FLIPPED    | steps=  23 | height=0.312m | h_rew=4.87 | prox=0.14 | reward=  -89.4
-Ep    2 | TIMEOUT    | steps=2000 | height=0.418m | h_rew=3.21 | prox=0.02 | reward= 6203.1
-```
+1. MJX training with **32 parallel envs**, saving every 25k steps
+2. A MuJoCo viewer (`utils/watch_mjx.py`) that hot-swaps to each new checkpoint
+3. The categorised slider UI (`envs/params_mjx.py`) for live param tuning
 
-**Options:**
+Reward, motor, smoothness and learning params (`LEARNING_RATE`, `ENT_COEF`, `CLIP_EPS`, etc.) hot-reload between rollouts — no restart needed.
 
-```bash
-python test.py               # fresh run
-python test.py --resume      # continue from last test checkpoint
-python test.py --inherit     # warm-start weights from runs/ape_stand/ (production run)
-python test.py --no-watch    # headless (no viewer)
-```
-
-Checkpoints save to `runs/ape_stand_test/` every 10k steps.
+The watcher only loads checkpoints saved *after* training started (via `--since <timestamp>`), so old runs don't pollute your view.
 
 ---
 
-## Step 2 — Tune parameters live
+## Step 2 — Tune in the slider UI
 
-In a second terminal, open the slider UI:
+The UI groups params by category:
 
-```bash
-python envs/params.py
+| Category | What to watch for |
+|----------|------------------|
+| **Viewer** | `VIEWER_SPEED` — display only, doesn't affect physics. Lower to study motion, raise to see more episodes. |
+| **Motor** | `MOTOR_MAX_SPEED` — too low: frozen. Too high: jerky. |
+| **Height Goal** | Start `TARGET_Z` low (~0.2m), wide `TARGET_TOL` (~0.1). Tighten as it learns. |
+| **Arm Spacing** | Increase `W_PROXIMITY` if arms tangle. |
+| **Survival** | `W_ALIVE` discourages early give-up; `FLIP_PENALTY` discourages flipping. |
+| **Smoothness** | `W_SMOOTH` reduces twitching, `W_JVEL` reduces flailing, `W_ENERGY` rewards efficiency. |
+| **Learning** | Lower `LEARNING_RATE` if reward oscillates; raise `ENT_COEF` if policy gets stuck. |
+
+You can either drag the slider or type an exact value in the entry box (Enter to commit).
+
+Terminal output during training:
+
 ```
-
-Drag the sliders — changes take effect within one episode, no restart needed.
-
-**Key things to tune:**
-
-| Slider | What to watch for |
-|--------|------------------|
-| `REALTIME_FACTOR` | Speed up the viewer so you can see more episodes faster |
-| `TARGET_Z` | Start low (0.2m) and increase once the robot can hold a height |
-| `TARGET_TOL` | Wider sigma = easier early on; tighten once it's consistent |
-| `W_HEIGHT` / `W_UPRIGHT` | Balance height vs staying level |
-| `W_PROXIMITY` | Increase if arms keep tangling; 0 to disable |
-| `ARM_SAFETY_MARGIN` | How far apart arms need to stay before penalty kicks in |
-
-**Terminal output guide:**
-- `FLIPPED` — robot went upside-down (flip penalty applied)
-- `COLLISION` — arms touched (info only, no termination)
-- `TIMEOUT` — episode ran the full 2000 steps (good)
+   iter   total_steps   ep_len   mean_reward
+      1         4,096       76         0.398
+      2         8,192       84         0.868
+[save] mjx_000000008192.npz
+```
 
 ---
 
-## Step 3 — Scale up with GPU training
+## Step 3 — Scale up
 
-Once the reward is trending up and behaviour looks reasonable in the viewer:
-
-```bash
-python train.py
-```
-
-This auto-detects your GPU, trains headless, and opens a separate replay window showing the best checkpoint so far.
-
-**Options:**
+Once behaviour looks reasonable:
 
 ```bash
-python train.py                # CPU training + replay viewer
-python train.py --no-watch     # fully headless, no window
-python train.py --envs 4       # parallel environments
-python train.py --inherit      # warm-start from best checkpoint in runs/ape_stand/
-python train.py --resume       # continue exact run from last checkpoint
-python train.py --gpu          # use GPU (MLP policies are faster on CPU — rarely needed)
+python train_mjx.py                  # 1024 envs, save every 1M steps
+python train_mjx.py --envs 2048      # more envs (needs more VRAM)
+python train_mjx.py --resume         # continue from latest checkpoint
+python train_mjx.py --no-watch       # headless, no viewer/UI
 ```
 
-Checkpoints save to `runs/ape_stand/` every 50k steps. The best checkpoint is always at `runs/ape_stand/best/best_model.zip`.
+Checkpoints save to `runs/ape_stand_mjx/mjx_<steps>.npz`. Run metadata is appended to `runs/ape_stand_mjx/lineage.json`.
 
 ---
 
-## Typical flow
+## Standalone viewer
 
-```
-python test.py                   # terminal 1: training + viewer
-python envs/params.py            # terminal 2: slider UI
-
-# ... tune until reward climbs and behaviour looks good ...
-
-python train.py --envs 4         # terminal 1: full GPU run
-```
-
-To carry test weights into the full run:
+To watch any saved checkpoint without training:
 
 ```bash
-# test.py saves to runs/ape_stand_test/
-# train.py reads from runs/ape_stand/
-# so copy the best test checkpoint first:
-cp runs/ape_stand_test/best/best_model.zip runs/ape_stand/best/best_model.zip
-python train.py --inherit
+python utils/watch_mjx.py            # loads latest mjx_*.npz
+python utils/watch_mjx.py --since 0  # explicitly load any checkpoint
 ```
+
+The viewer hot-reloads `envs/params_mjx.py` — adjust `VIEWER_SPEED` and `MOTOR_MAX_SPEED` live.

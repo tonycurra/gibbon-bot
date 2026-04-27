@@ -52,3 +52,7 @@ docs/*.toc
 !/data/*.xml
 output/
 results/
+
+# MJX checkpoints + local archives
+runs/ape_stand_mjx/mjx_*.npz
+mjx_history/

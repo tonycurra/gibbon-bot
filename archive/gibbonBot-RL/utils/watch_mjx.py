@@ -8,9 +8,13 @@ Usage:
     python utils/watch_mjx.py
 """
 
+import argparse
+import os
 import sys
 import pathlib
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
+
+os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
 
 import time
 import numpy as np
@@ -20,13 +24,18 @@ import flax.linen as nn
 import mujoco
 import mujoco.viewer
 
-from envs.common import SCENE, MAX_STEPS, ACT_DIM
-from envs.stand_env_mjx import OBS_DIM, PHYSICS_STEPS_PER_ACTION
-import envs.params as params_mod
+from envs.stand_env_mjx import OBS_DIM, ACT_DIM, MAX_STEPS, PHYSICS_STEPS_PER_ACTION, SCENE
+import envs.params_mjx as params_mod
 import importlib
 
 RUNS = pathlib.Path("runs/ape_stand_mjx")
-PARAMS_FILE = pathlib.Path(__file__).parent.parent / "envs" / "params.py"
+PARAMS_FILE = pathlib.Path(__file__).parent.parent / "envs" / "params_mjx.py"
+
+_parser = argparse.ArgumentParser()
+_parser.add_argument("--since", type=float, default=0.0,
+                     help="ignore checkpoints saved before this unix timestamp")
+_args = _parser.parse_args()
+SINCE = _args.since
 
 
 class ActorCritic(nn.Module):
@@ -48,7 +57,17 @@ def load_policy(path):
     data = np.load(str(path))
     flat = [jnp.asarray(data[k]) for k in data.files]
     _, treedef = jax.tree_util.tree_flatten(params)
-    return net, jax.tree_util.tree_unflatten(treedef, flat)
+    loaded = jax.tree_util.tree_unflatten(treedef, flat)
+    # Verify input layer shape matches current OBS_DIM
+    # flat is alphabetical (bias before kernel), so find first 2-D tensor
+    first_kernel = next((x for x in flat if x.ndim == 2), None)
+    if first_kernel is None or first_kernel.shape[0] != OBS_DIM:
+        got = first_kernel.shape[0] if first_kernel is not None else "?"
+        raise ValueError(
+            f"Checkpoint obs_dim={got} != current OBS_DIM={OBS_DIM}. "
+            f"Delete old checkpoints and restart training."
+        )
+    return net, loaded
 
 
 def predict(net, params, obs):
@@ -58,7 +77,7 @@ def predict(net, params, obs):
 
 
 def latest_checkpoint():
-    ckpts = sorted(RUNS.glob("mjx_*.npz"))
+    ckpts = [c for c in sorted(RUNS.glob("mjx_*.npz")) if c.stat().st_mtime >= SINCE]
     return ckpts[-1] if ckpts else None
 
 
@@ -90,6 +109,11 @@ def reset(model, data, rng):
 
 
 def main():
+    print(f"[watch_mjx] runs dir : {RUNS}")
+    print(f"[watch_mjx] since    : {SINCE:.0f} (0 = load any checkpoint)")
+    print(f"[watch_mjx] physics steps/action: {PHYSICS_STEPS_PER_ACTION}")
+    print(f"[watch_mjx] params   : envs/params_mjx.py  (run it directly for slider UI)")
+
     model = mujoco.MjModel.from_xml_path(str(SCENE))
     data = mujoco.MjData(model)
     jnt_lo = np.array([model.jnt_range[i][0] for i in range(1, model.njnt)])
@@ -100,7 +124,7 @@ def main():
 
     ckpt = latest_checkpoint()
     if ckpt is None:
-        print(f"[watch_mjx] no checkpoint yet in {RUNS} — random policy, waiting...")
+        print(f"[watch_mjx] no checkpoint yet — random policy, waiting for training to save one...")
         net, params = None, None
         last_mtime = 0.0
     else:
@@ -117,13 +141,25 @@ def main():
             if new_ckpt is not None:
                 mtime = new_ckpt.stat().st_mtime
                 if mtime != last_mtime:
-                    print(f"[watch_mjx] {'first' if net is None else 'new'} checkpoint: {new_ckpt.name}")
-                    net, params = load_policy(new_ckpt)
-                    last_mtime = mtime
+                    try:
+                        net, params = load_policy(new_ckpt)
+                        print(f"[watch_mjx] {'first' if net is None else 'new'} checkpoint: {new_ckpt.name}")
+                        last_mtime = mtime
+                    except ValueError as e:
+                        print(f"[watch_mjx] skipping {new_ckpt.name}: {e}")
+                        last_mtime = mtime  # don't retry this checkpoint
 
             reset(model, data, rng)
+            motor_pos = np.zeros(ACT_DIM, dtype=np.float32)
             step = 0
             flipped = False
+
+            cur_speed = max(getattr(params_mod, "VIEWER_SPEED", 1.0), 0.01)
+            ep_real_s = MAX_STEPS * PHYSICS_STEPS_PER_ACTION * float(model.opt.timestep) / cur_speed
+            policy_label = "random" if net is None else (new_ckpt.name if new_ckpt else "?")
+            print(f"[watch_mjx] ep {ep+1} start | policy={policy_label} | "
+                  f"speed={cur_speed:.0f}x | ep≈{ep_real_s:.1f}s real-time"
+                  + (" ← slow down in params.py to see motion" if cur_speed > 10 else ""))
 
             while step < MAX_STEPS and viewer.is_running():
                 # hot-reload params
@@ -134,7 +170,7 @@ def main():
                         params_mtime = pm
                 except Exception:
                     pass
-                speed = max(getattr(params_mod, "REALTIME_FACTOR", 1.0), 0.01)
+                speed = max(getattr(params_mod, "VIEWER_SPEED", 1.0), 0.01)
                 sleep_dt = float(model.opt.timestep) / speed
 
                 obs = get_obs(data)
@@ -143,10 +179,13 @@ def main():
                 else:
                     action = predict(net, params, obs)
 
-                ctrl = 0.5 * (action + 1.0) * (jnt_hi - jnt_lo) + jnt_lo
-                data.ctrl[:] = ctrl
-
+                motor_max_speed = float(getattr(params_mod, "MOTOR_MAX_SPEED", 0.2))
+                substep_speed = motor_max_speed / PHYSICS_STEPS_PER_ACTION
                 for _ in range(PHYSICS_STEPS_PER_ACTION):
+                    delta = np.clip(action - motor_pos, -substep_speed, substep_speed)
+                    motor_pos += delta
+                    ctrl = 0.5 * (motor_pos + 1.0) * (jnt_hi - jnt_lo) + jnt_lo
+                    data.ctrl[:] = ctrl
                     mujoco.mj_step(model, data)
                     viewer.sync()
                     if sleep_dt > 0:

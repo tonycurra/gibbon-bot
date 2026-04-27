@@ -2,21 +2,24 @@
 """
 GPU-accelerated PPO training using MuJoCo MJX + JAX.
 
-Runs 1024 parallel environments entirely on the GPU.
-Expected speedup: ~50x over train.py on an RTX 4070.
-
 Usage:
-    python train_mjx.py                  # 1024 envs + live viewer
-    python train_mjx.py --no-watch       # headless
+    python train_mjx.py --test           # 32 envs, saves every 25k steps, viewer on
+                                         # → tune params_mjx.py in real time, watch policy evolve
+    python train_mjx.py                  # 1024 envs, saves every 1M steps, viewer on
     python train_mjx.py --envs 2048      # more envs (needs more VRAM)
-    python train_mjx.py --resume         # continue from latest mjx checkpoint
+    python train_mjx.py --no-watch       # headless (no viewer subprocess)
+    python train_mjx.py --resume         # continue from latest checkpoint
 """
 
 import argparse
+import functools
+import os
 import pathlib
 import subprocess
 import sys
 import time
+
+os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
 
 import jax
 import jax.numpy as jnp
@@ -27,29 +30,34 @@ import mujoco
 
 from flax.training.train_state import TrainState
 
-from envs.common import read_reward_params
 from envs.stand_env_mjx import (
-    load_model, reset, step,
+    load_model, reset, step, read_params,
     OBS_DIM, ACT_DIM, MAX_STEPS,
 )
 import utils.lineage as lineage_mod
 
 RUNS = pathlib.Path("runs/ape_stand_mjx")
 
-# PPO hyperparameters
+# PPO hyperparameters (static — change requires restart)
 N_STEPS     = 128
 EPOCHS      = 4
 MINIBATCHES = 8
 GAMMA       = 0.99
 GAE_LAMBDA  = 0.95
 CLIP_EPS    = 0.2
-ENT_COEF    = 0.005
 VF_COEF     = 0.5
 MAX_GRAD    = 0.5
-LR          = 3e-4
+# ENT_COEF and LR are hot-reloaded from params_mjx.py each rollout
+
+# Defaults — overridden by --test flag
 TOTAL_STEPS = 100_000_000
 SAVE_EVERY  = 1_000_000
 LOG_EVERY   = 10
+
+# --test mode overrides
+TEST_N_ENVS    = 32
+TEST_SAVE      = 5_000    # save often so viewer catches up quickly
+TEST_LOG       = 1        # print every update
 
 
 # ── network ──────────────────────────────────────────────────────────────────
@@ -66,11 +74,11 @@ class ActorCritic(nn.Module):
         return mean, log_std, value
 
 
-def make_train_state(rng):
+def make_train_state(rng, lr):
     net = ActorCritic()
     dummy = jnp.zeros((1, OBS_DIM))
     params = net.init(rng, dummy)
-    tx = optax.chain(optax.clip_by_global_norm(MAX_GRAD), optax.adam(LR))
+    tx = optax.chain(optax.clip_by_global_norm(MAX_GRAD), optax.adam(lr))
     return TrainState.create(apply_fn=net.apply, params=params, tx=tx)
 
 
@@ -109,7 +117,7 @@ def gae(rewards, values, dones, last_value):
     return advantages, advantages + values
 
 
-def ppo_loss(params, apply_fn, obs, actions, old_log_probs, advantages, returns):
+def ppo_loss(params, apply_fn, obs, actions, old_log_probs, advantages, returns, ent_coef, clip_eps):
     mean, log_std, values = jax.vmap(lambda o: apply_fn(params, o))(obs)
     actions_pre = jnp.arctanh(jnp.clip(actions, -0.999, 0.999))
     log_probs = _gaussian_log_prob(actions_pre, mean, log_std)
@@ -119,16 +127,16 @@ def ppo_loss(params, apply_fn, obs, actions, old_log_probs, advantages, returns)
     adv_norm = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
     pg_loss = -jnp.minimum(
         ratio * adv_norm,
-        jnp.clip(ratio, 1 - CLIP_EPS, 1 + CLIP_EPS) * adv_norm,
+        jnp.clip(ratio, 1 - clip_eps, 1 + clip_eps) * adv_norm,
     ).mean()
     vf_loss = 0.5 * ((values - returns) ** 2).mean()
     entropy = (0.5 * (1 + jnp.log(2 * jnp.pi)) + log_std).sum(-1).mean()
-    loss = pg_loss + VF_COEF * vf_loss - ENT_COEF * entropy
+    loss = pg_loss + VF_COEF * vf_loss - ent_coef * entropy
     return loss, (pg_loss, vf_loss, entropy)
 
 
-@jax.jit
-def update_step(train_state, rollout):
+@functools.partial(jax.jit, static_argnums=())
+def update_step(train_state, rollout, ent_coef, clip_eps):
     obs, actions, old_log_probs, advantages, returns = rollout
     mb_size = obs.shape[0] // MINIBATCHES
     grad_fn = jax.value_and_grad(ppo_loss, has_aux=True)
@@ -140,7 +148,7 @@ def update_step(train_state, rollout):
             sp  = jax.lax.dynamic_slice_in_dim(old_log_probs, idx * mb_size, mb_size)
             sv  = jax.lax.dynamic_slice_in_dim(advantages,    idx * mb_size, mb_size)
             sr  = jax.lax.dynamic_slice_in_dim(returns,       idx * mb_size, mb_size)
-            (loss, aux), grads = grad_fn(ts.params, ts.apply_fn, sl, sa, sp, sv, sr)
+            (loss, aux), grads = grad_fn(ts.params, ts.apply_fn, sl, sa, sp, sv, sr, ent_coef, clip_eps)
             return ts.apply_gradients(grads=grads), (loss, *aux)
         return jax.lax.scan(mb_fn, ts, jnp.arange(MINIBATCHES))
 
@@ -177,14 +185,30 @@ def load_latest(train_state):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--envs",     type=int, default=1024)
+    parser.add_argument("--test",     action="store_true",
+                        help="test mode: 32 envs, saves every 25k steps, always shows viewer")
+    parser.add_argument("--envs",     type=int, default=None,
+                        help="number of parallel environments (default: 32 in test, 1024 otherwise)")
     parser.add_argument("--resume",   action="store_true", help="continue from latest mjx checkpoint")
     parser.add_argument("--no-watch", dest="watch", action="store_false")
     parser.set_defaults(watch=True)
     args = parser.parse_args()
 
     RUNS.mkdir(parents=True, exist_ok=True)
-    N_ENVS = args.envs
+
+    if args.test:
+        N_ENVS     = args.envs or TEST_N_ENVS
+        save_every = TEST_SAVE
+        log_every  = TEST_LOG
+        print("=" * 48)
+        print("  TEST MODE — tune params_mjx.py in real time")
+        print(f"  {N_ENVS} envs  |  save every {save_every:,} steps")
+        print("  Run: python envs/params_mjx.py  for slider UI")
+        print("=" * 48)
+    else:
+        N_ENVS     = args.envs or 1024
+        save_every = SAVE_EVERY
+        log_every  = LOG_EVERY
 
     print(f"JAX devices: {jax.devices()}")
     print(f"Loading model and compiling...")
@@ -193,12 +217,17 @@ def main():
     rng = jax.random.PRNGKey(42)
     rng, init_rng, env_rng = jax.random.split(rng, 3)
 
-    train_state = make_train_state(init_rng)
+    import envs.params_mjx as _pmjx
+    cur_lr      = float(_pmjx.LEARNING_RATE)
+    cur_ent     = float(_pmjx.ENT_COEF)
+    cur_clip    = float(_pmjx.CLIP_EPS)
+
+    train_state = make_train_state(init_rng, cur_lr)
     start_steps = 0
     if args.resume:
         train_state, start_steps = load_latest(train_state)
 
-    rparams = tuple(jnp.float32(v) for v in read_reward_params())
+    rparams = tuple(jnp.float32(v) for v in read_params())
 
     v_reset = jax.jit(jax.vmap(lambda rng: reset(mx, jnt_lo, jnt_hi, rng)))
     v_step  = jax.jit(jax.vmap(
@@ -222,8 +251,14 @@ def main():
     t0 = time.time()
 
     watcher = None
+    params_ui = None
     if args.watch:
-        watcher = subprocess.Popen([sys.executable, "utils/watch_mjx.py"])
+        watch_cmd = [sys.executable, "utils/watch_mjx.py", "--since", str(time.time())]
+        print(f"[watch] spawning viewer:    {' '.join(watch_cmd)}")
+        watcher = subprocess.Popen(watch_cmd)
+        params_cmd = [sys.executable, "envs/params_mjx.py"]
+        print(f"[watch] spawning params UI: {' '.join(params_cmd)}")
+        params_ui = subprocess.Popen(params_cmd)
 
     print(f"Training with {N_ENVS} parallel envs — {TOTAL_STEPS:,} steps total.")
     print(f"{'updates':>8}  {'steps':>12}  {'sps':>8}  {'mean_rew':>10}")
@@ -231,12 +266,27 @@ def main():
 
     while total_steps < TOTAL_STEPS:
         # re-read params each rollout (hot-reload support)
-        new_rparams = tuple(jnp.float32(v) for v in read_reward_params())
+        new_rparams = tuple(jnp.float32(v) for v in read_params())
         if any(float(a) != float(b) for a, b in zip(new_rparams, rparams)):
             rparams = new_rparams
             v_step = jax.jit(jax.vmap(
                 lambda dx, a, pa: step(mx, jnt_lo, jnt_hi, dx, a, pa, rparams)
             ))
+
+        new_lr  = float(_pmjx.LEARNING_RATE)
+        new_ent = float(_pmjx.ENT_COEF)
+        if new_lr != cur_lr:
+            cur_lr = new_lr
+            tx = optax.chain(optax.clip_by_global_norm(MAX_GRAD), optax.adam(cur_lr))
+            train_state = train_state.replace(tx=tx, opt_state=tx.init(train_state.params))
+            print(f"[params] LR → {cur_lr:.2e}")
+        if new_ent != cur_ent:
+            cur_ent = new_ent
+            print(f"[params] ENT_COEF → {cur_ent:.4f}")
+        new_clip = float(_pmjx.CLIP_EPS)
+        if new_clip != cur_clip:
+            cur_clip = new_clip
+            print(f"[params] CLIP_EPS → {cur_clip:.3f}")
 
         buf_obs, buf_act, buf_logp, buf_rew, buf_done, buf_val = [], [], [], [], [], []
 
@@ -296,21 +346,23 @@ def main():
             return x.reshape(-1, *x.shape[2:]) if x.ndim > 2 else x.reshape(-1)
 
         rollout = (flat(obs_t), flat(act_t), flat(logp_t), flat(adv_t), flat(ret_t))
-        train_state, metrics = update_step(train_state, rollout)
+        train_state, metrics = update_step(train_state, rollout, jnp.float32(cur_ent), jnp.float32(cur_clip))
         update_count += 1
 
-        if update_count % LOG_EVERY == 0:
+        if update_count % log_every == 0:
             sps = (total_steps - start_steps) / (time.time() - t0)
             mean_rew = float(jnp.mean(jnp.stack(buf_rew)))
             print(f"{update_count:>8}  {total_steps:>12,}  {sps:>8,.0f}  {mean_rew:>10.3f}")
 
-        if total_steps - last_save >= SAVE_EVERY:
+        if total_steps - last_save >= save_every:
             save(train_state, total_steps)
             last_save = total_steps
 
     save(train_state, total_steps)
     if watcher is not None:
         watcher.terminate()
+    if params_ui is not None:
+        params_ui.terminate()
     print("Done.")
 
 

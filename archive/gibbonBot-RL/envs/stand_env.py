@@ -21,6 +21,7 @@ Reward per step:
   - W_PROXIMITY * quadratic penalty when arms enter ARM_SAFETY_MARGIN zone
 """
 
+import importlib
 import pathlib
 import time
 
@@ -30,10 +31,22 @@ import mujoco.viewer
 import numpy as np
 from gymnasium import spaces
 
-from envs.common import (
-    SCENE, PARAMS_FILE, MAX_STEPS, ACT_DIM,
-    ARM_CONTACT_DIST, ARM_GROUPS as _ARM_GROUPS, load_params,
-)
+import envs.params as _params_mod
+
+_ROOT       = pathlib.Path(__file__).parent.parent
+SCENE       = _ROOT / "data" / "scene.xml"
+_PARAMS_FILE = pathlib.Path(__file__).parent / "params.py"
+
+MAX_STEPS        = 2000
+ACT_DIM          = 24
+ARM_CONTACT_DIST = 0.02
+
+_ARM_GROUPS = [
+    [2, 3, 4, 5, 6, 7],
+    [8, 9, 10, 11, 12, 13],
+    [14, 15, 16, 17, 18, 19],
+    [20, 21, 22, 23, 24, 25],
+]
 
 SETTLE_VEL   = 0.05
 SETTLE_STEPS = 3000
@@ -57,9 +70,8 @@ class StandEnv(gym.Env):
             [self.model.jnt_range[i][1] for i in range(1, self.model.njnt)]
         )
 
-        n_obs = 83  # 59 + 24 joint torques
         self.observation_space = spaces.Box(
-            low=-np.inf, high=np.inf, shape=(n_obs,), dtype=np.float32
+            low=-np.inf, high=np.inf, shape=(83,), dtype=np.float32
         )
         self.action_space = spaces.Box(
             low=-1.0, high=1.0, shape=(24,), dtype=np.float32
@@ -72,10 +84,7 @@ class StandEnv(gym.Env):
         self._p = self._load_params()
 
         if render_mode == "human":
-            self._viewer = mujoco.viewer.launch_passive(
-                self.model,
-                self.data,
-            )
+            self._viewer = mujoco.viewer.launch_passive(self.model, self.data)
         else:
             self._viewer = None
 
@@ -94,14 +103,13 @@ class StandEnv(gym.Env):
 
         no_settle = (options or {}).get("no_settle", False)
 
-        # retry spawn until robot settles right-side up
         for _attempt in range(5):
-            self.data.qpos[0] = rng.uniform(-0.1, 0.1)  # x
-            self.data.qpos[1] = rng.uniform(-0.1, 0.1)  # y
-            self.data.qpos[2] = 0.45  # high enough for horizontal arms to clear floor
+            self.data.qpos[0] = rng.uniform(-0.1, 0.1)
+            self.data.qpos[1] = rng.uniform(-0.1, 0.1)
+            self.data.qpos[2] = 0.45
 
             yaw = rng.uniform(-np.pi, np.pi)
-            self.data.qpos[3] = np.cos(yaw / 2)  # w — upright at spawn
+            self.data.qpos[3] = np.cos(yaw / 2)
             self.data.qpos[4] = 0.0
             self.data.qpos[5] = 0.0
             self.data.qpos[6] = np.sin(yaw / 2)
@@ -125,7 +133,6 @@ class StandEnv(gym.Env):
                     else:
                         still_steps = 0
 
-            # accept only if torso is right-side up
             if float(self.data.qpos[3]) > 0:
                 break
 
@@ -134,8 +141,7 @@ class StandEnv(gym.Env):
         settled_pos = self.data.qpos[7:].astype(np.float32)
         self._motor_pos = np.clip(
             2.0 * (settled_pos - self._jnt_lo) / (self._jnt_hi - self._jnt_lo) - 1.0,
-            -1.0,
-            1.0,
+            -1.0, 1.0,
         )
         self._prev_action = self._motor_pos.copy()
         self._p = self._load_params()
@@ -146,11 +152,9 @@ class StandEnv(gym.Env):
         p = self._load_params()
         action = np.asarray(action, dtype=np.float32)
 
-        # Per-substep motor speed: total travel spread evenly across physics steps
         substep_speed = p.MOTOR_MAX_SPEED / p.PHYSICS_STEPS_PER_ACTION
 
-        # Real-time sleep per physics step (0 during headless training)
-        dt = float(self.model.opt.timestep)  # 0.002 s
+        dt = float(self.model.opt.timestep)
         speed = max(getattr(p, "REALTIME_FACTOR", 1.0), 0.01)
         sleep_dt = (dt / speed) if self._viewer is not None else 0.0
 
@@ -183,7 +187,7 @@ class StandEnv(gym.Env):
         proximity_penalty = 0.0
         for i, grp_a in enumerate(_ARM_GROUPS):
             pos_a = self.data.xpos[grp_a]
-            for grp_b in _ARM_GROUPS[i + 1 :]:
+            for grp_b in _ARM_GROUPS[i + 1:]:
                 pos_b = self.data.xpos[grp_b]
                 dists = np.linalg.norm(pos_a[:, None] - pos_b[None, :], axis=-1)
                 if float(dists.min()) < ARM_CONTACT_DIST:
@@ -194,7 +198,6 @@ class StandEnv(gym.Env):
         self._prev_action = action.copy()
 
         reward = height_reward + upright_reward - p.W_PROXIMITY * proximity_penalty
-
         if upside_down:
             reward -= p.FLIP_PENALTY
 
@@ -218,22 +221,24 @@ class StandEnv(gym.Env):
     # ── helpers ───────────────────────────────────────────────────────────────
 
     def _load_params(self):
-        p, self._params_mtime = load_params(self._params_mtime)
-        return p
+        try:
+            mtime = _PARAMS_FILE.stat().st_mtime
+            if mtime != self._params_mtime:
+                importlib.reload(_params_mod)
+                self._params_mtime = mtime
+        except Exception as e:
+            print(f"[params] reload error: {e}")
+        return _params_mod
 
     def _get_obs(self):
         qpos = self.data.qpos
         qvel = self.data.qvel
-
-        obs = np.concatenate(
-            [
-                qpos[2:3],  # torso z
-                qpos[3:7],  # torso quat (w x y z)
-                qvel[0:3],  # linear vel
-                qvel[3:6],  # angular vel
-                qpos[7:],  # 24 joint positions
-                qvel[6:],  # 24 joint velocities
-                self.data.qfrc_actuator[6:30],  # 24 joint torques (load proxy)
-            ]
-        ).astype(np.float32)
-        return obs
+        return np.concatenate([
+            qpos[2:3],                       # torso z
+            qpos[3:7],                       # torso quat (w x y z)
+            qvel[0:3],                       # linear vel
+            qvel[3:6],                       # angular vel
+            qpos[7:],                        # 24 joint positions
+            qvel[6:],                        # 24 joint velocities
+            self.data.qfrc_actuator[6:30],   # 24 joint torques (load proxy)
+        ]).astype(np.float32)
