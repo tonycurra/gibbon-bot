@@ -17,7 +17,7 @@
   <worldbody>
     <geom name="floor" type="plane" pos="0 0 0" size="10 10 0.1" rgba="0.2 0.2 0.2 0.5" condim="3" friction="1.0 0.01 0.001" contype="1" conaffinity="31" />
     <body name="torso" pos="0 0 0.2">
-      <inertial pos="-0.0192447 0 -0.0101645" quat="0.439032 0.439032 -0.554303 0.554303" mass="3.02487" diaginertia="0.0402837 0.0351039 0.0308832" />
+      <inertial pos="-0.0192447 0 -0.0101645" quat="0.439032 0.439032 -0.554303 0.554303" mass="1.02487" diaginertia="0.0402837 0.0351039 0.0308832" />
       <joint name="world_to_torso" type="free" />
       <geom size="0.15 0.1 0.05" type="box" rgba="0.3 0.3 0.3 1" class="robot" />
       <geom pos="0.12 0.1 -0.05" quat="0.707105 0 0.707108 0" type="mesh" rgba="0.75 0.75 0.75 1" mesh="base_link" class="robot" />

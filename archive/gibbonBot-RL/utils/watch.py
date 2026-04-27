@@ -5,13 +5,12 @@ One MuJoCo window stays open. Episodes run back-to-back.
 When a newer checkpoint is saved, the policy is hot-swapped automatically.
 
 Usage:
-    python watch.py                  # watch reach task
-    python watch.py --task stand     # watch stand task
-    python watch.py --no-ui          # skip params panel
+    python utils/watch.py --task stand
+    python utils/watch.py --task stand --no-ui
 """
 
 import sys, pathlib
-sys.path.insert(0, str(pathlib.Path(__file__).parent.parent.parent.parent / "src"))
+sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
 
 import argparse
 import subprocess
@@ -24,8 +23,8 @@ _paused = False
 
 PARAMS_FILE = pathlib.Path(__file__).parent.parent / "envs" / "params.py"
 
+
 def _set_realtime(factor):
-    """Write REALTIME_FACTOR into params.py so the env picks it up."""
     try:
         lines = PARAMS_FILE.read_text().splitlines()
         found = False
@@ -41,6 +40,7 @@ def _set_realtime(factor):
     except Exception as e:
         print(f"\r[speed] error: {e}", flush=True)
 
+
 def _get_realtime():
     try:
         for line in PARAMS_FILE.read_text().splitlines():
@@ -50,45 +50,45 @@ def _get_realtime():
         pass
     return 1.0
 
+
 def _print_controls():
     print("\n[watch] keyboard controls (type in this terminal):")
     print("  +  speed up    -  slow down    p  pause/unpause    q  quit\n")
 
+
 TASKS = {
-    "reach": ("runs/ape_reach", "ape_reach"),
     "stand": ("runs/ape_stand", "ape_stand"),
 }
 
 
-def latest_checkpoint(runs_dir: pathlib.Path, prefix: str):
+def latest_checkpoint(runs_dir: pathlib.Path, prefix: str, best_only: bool = False):
     best = runs_dir / "best" / "best_model.zip"
     if best.exists():
         return best
+    if best_only:
+        return None
     checkpoints = sorted(runs_dir.glob(f"{prefix}_*.zip"))
     return checkpoints[-1] if checkpoints else None
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--task", default="reach", choices=list(TASKS))
+    parser.add_argument("--task", default="stand", choices=list(TASKS))
     parser.add_argument("--no-ui", action="store_true", help="disable params slider UI")
+    parser.add_argument("--best-only", action="store_true", help="only show best/best_model.zip, skip numbered checkpoints")
     args = parser.parse_args()
 
     if not args.no_ui:
-        ui_script = pathlib.Path(__file__).parent / "params_ui.py"
-        subprocess.Popen([sys.executable, str(ui_script)])
+        params_script = pathlib.Path(__file__).parent.parent / "envs" / "params.py"
+        subprocess.Popen([sys.executable, str(params_script)])
 
     runs_path, prefix = TASKS[args.task]
     runs_dir = pathlib.Path(runs_path)
 
-    if args.task == "reach":
-        from gibbonbot.envs.ape_env import ApeEnv as EnvClass
-    else:
-        from gibbonbot.envs.stand_env import StandEnv as EnvClass
+    from envs.stand_env import StandEnv
+    env = StandEnv(render_mode="human")
 
-    env = EnvClass(render_mode="human")
-
-    ckpt = latest_checkpoint(runs_dir, prefix)
+    ckpt = latest_checkpoint(runs_dir, prefix, args.best_only)
     if ckpt is None:
         print(f"[watch] no checkpoint yet — showing random policy, waiting for {runs_dir} ...")
         policy = None
@@ -103,7 +103,7 @@ def main():
     import select, tty, termios, os
 
     def _key_listener():
-        global _speed, _paused
+        global _paused
         if not os.isatty(0):
             return
         old = termios.tcgetattr(0)
@@ -113,9 +113,9 @@ def main():
                 if select.select([sys.stdin], [], [], 0.1)[0]:
                     ch = sys.stdin.read(1)
                     if ch == '+':
-                        _set_realtime(max(0.1, _get_realtime() * 0.7))
+                        _set_realtime(min(100.0, _get_realtime() * 1.5))
                     elif ch == '-':
-                        _set_realtime(min(5.0, _get_realtime() * 1.4))
+                        _set_realtime(max(1.0, _get_realtime() / 1.5))
                     elif ch == 'p':
                         _paused = not _paused
                         print(f"\r[{'PAUSED' if _paused else 'RUNNING'}]", flush=True)
@@ -124,8 +124,10 @@ def main():
         except Exception:
             pass
         finally:
-            try: termios.tcsetattr(0, termios.TCSADRAIN, old)
-            except Exception: pass
+            try:
+                termios.tcsetattr(0, termios.TCSADRAIN, old)
+            except Exception:
+                pass
 
     threading.Thread(target=_key_listener, daemon=True).start()
 
@@ -135,18 +137,18 @@ def main():
 
     try:
         while viewer_alive():
-            new_ckpt = latest_checkpoint(runs_dir, prefix)
+            new_ckpt = latest_checkpoint(runs_dir, prefix, args.best_only)
             if new_ckpt is not None:
                 mtime = new_ckpt.stat().st_mtime
                 if mtime != last_mtime:
                     print(f"\n[watch] {'first' if policy is None else 'new'} checkpoint: {new_ckpt.name} — loading policy")
-                    policy     = PPO.load(str(new_ckpt))
+                    policy = PPO.load(str(new_ckpt))
                     last_mtime = mtime
 
             obs, _ = env.reset(seed=ep)
-            done   = False
+            done = False
             total_reward = 0.0
-            step   = 0
+            step = 0
 
             while not done and viewer_alive():
                 if policy is None:
@@ -165,24 +167,11 @@ def main():
 
             ep += 1
             ckpt_name = new_ckpt.name if new_ckpt else "?"
-            if args.task == "reach":
-                status = "SUCCESS" if info["success"] else ("FALLEN" if info["fallen"] else "TIMEOUT")
-                print(f"Ep {ep:3d}: {status:<8}  "
-                      f"closest={info.get('dist_to_tree', 0):.2f}m  "
-                      f"reward={total_reward:.1f}  steps={step}  [{ckpt_name}]")
-            else:
-                if info.get("upside_down"):
-                    status = "FLIPPED"
-                elif info["fallen"]:
-                    status = "FALLEN"
-                else:
-                    status = "ALIVE"
-                sh = info.get("shoulder_z", info.get("above_ground", info["torso_z"]))
-                stable_mark = " STABLE" if info.get("stable") else ""
-                print(f"Ep {ep:3d}: {status:<7}{stable_mark:<8}  "
-                      f"shoulder={sh:.3f}m  torso={info['torso_z']:.3f}m  "
-                      f"h_rew={info['height_reward']:.3f}  "
-                      f"reward={total_reward:.1f}  steps={step}  [{ckpt_name}]")
+            status = "FLIPPED" if info.get("upside_down") else ("COLLISION" if info.get("arms_colliding") else "ALIVE")
+            print(f"Ep {ep:3d}: {status:<10}  "
+                  f"torso={info['torso_z']:.3f}m  "
+                  f"h_rew={info['height_reward']:.3f}  "
+                  f"reward={total_reward:.1f}  steps={step}  [{ckpt_name}]")
 
     except KeyboardInterrupt:
         pass

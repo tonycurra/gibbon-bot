@@ -1,6 +1,6 @@
 # gibbonBot-RL
 
-Reinforcement learning for a 4-limb robotic ape. SB3 PPO on CPU with MuJoCo.
+Reinforcement learning for a 4-limbed robotic ape. PPO (Stable Baselines 3) + MuJoCo. Goal: lift the torso to a target height and keep it level.
 
 ## Setup
 
@@ -10,141 +10,48 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Workflow
+See [QUICKSTART.md](QUICKSTART.md) for the recommended workflow.
 
-```bash
-# Train with live viewer + params UI (default)
-python train.py
+## Scripts
 
-# Train without viewer
-python train.py --no-watch
+| Script | What it does |
+|--------|-------------|
+| `test.py` | CPU training with embedded viewer — watch the actual training robot |
+| `train.py` | GPU training (auto-detect), headless + separate replay viewer |
+| `envs/params.py` | Run directly to open the slider UI for live parameter tuning |
+| `utils/watch.py` | Standalone replay viewer — hot-swaps to latest checkpoint |
+| `utils/sim.py` | Open the MuJoCo scene without any training |
 
-# Continue from latest checkpoint (fresh step counter, same weights)
-python train.py --inherit
+## Parameters
 
-# Continue exact run
-python train.py --resume
-
-# Replay a checkpoint
-python analyze.py
-python analyze.py ape_stand_50000.zip
-
-# Open viewer only (no training)
-PYTHONPATH=src python src/gibbonbot/utils/watch.py --task stand
-
-
-```
-
-## Parameter control
-
-Parameters are defined in `src/gibbonbot/envs/params.py` and can be edited directly.
-The environment picks up changes automatically within one step.
-
-Key params to tune while watching:
+All params live in `envs/params.py` and hot-reload within one episode. Run `python envs/params.py` to open the slider UI.
 
 | Param | Effect |
 |-------|--------|
-| `MOTOR_MAX_SPEED` | How fast joints move (too low = frozen, too high = shaking) |
-| `PHYSICS_STEPS_PER_ACTION` | Simulation time per policy step (higher = slower training) |
-| `TARGET_Z` | Target shoulder height in metres |
-| `W_HEIGHT` | How much the height goal dominates |
-| `W_STABLE` | Bonus for holding the target height while still |
-| `W_PROXIMITY` | Penalty for arms crossing each other |
+| `REALTIME_FACTOR` | Viewer speed (1 = real-time, 100 = as fast as possible) |
+| `TARGET_Z` | Target torso height in metres |
+| `TARGET_TOL` | Gaussian sigma — how precisely height is rewarded |
+| `W_HEIGHT` | Weight on height reward |
+| `W_UPRIGHT` | Weight on staying level |
+| `MOTOR_MAX_SPEED` | Max joint movement per action step |
+| `PHYSICS_STEPS_PER_ACTION` | Simulation steps per policy decision |
+| `ARM_SAFETY_MARGIN` | Soft exclusion zone radius around each arm |
+| `W_PROXIMITY` | Strength of the arm-spacing penalty (0 = off) |
+| `FLIP_PENALTY` | One-time penalty for flipping upside-down |
 
-## Files to edit
+## Files
 
-| File | What to change |
-|------|----------------|
-| `src/gibbonbot/envs/params.py` | All reward weights and motor constants (hot-reloaded each step) |
-| `src/gibbonbot/envs/hints.py` | Extra shaped rewards (hot-reloaded each episode) |
-| `src/gibbonbot/envs/stand_env.py` | Reward logic, observations, episode termination |
-| `data/scene.xml` | Robot physics, joint limits, masses |
-
-Checkpoints saved to `runs/ape_stand/`. Viewer auto hot-swaps to latest checkpoint.
-
-## Goal
-
-Lift the 4 arm-shoulder attachment points to **10 cm off the ground** and hold
-them stable. The height reward is a tight Gaussian (σ = `TARGET_TOL`) centred on
-`TARGET_Z`. A `W_STABLE` bonus fires every step the robot is at height and has
-low joint velocity (`STABLE_VEL`).
-
-## Floor Collision Fix
-
-If robot parts pass through the floor during simulation, use the fixed scene file:
-
-```bash
-# Generate fixed scene with proper collision detection
-python src/gibbonbot/utils/fix_collisions.py
-
-# The fixed scene enables:
-# - Proper floor-robot collision detection
-# - Realistic friction parameters
-# - Self-collision prevention between robot parts
 ```
-
-The training script automatically uses `data/scene_fixed.xml` which has these fixes applied.
-
-## Floor Contact Fixes
-
-Fixed floor penetration issues by:
-- Aligning visual and physics floor positions (both now at z=0)
-- Fixing STL mesh contact affinity (changed from 1 to 31 for proper floor collisions)
-- Reducing floor friction for stable contacts
-- Updating constraint dimensions for proper plane contacts
-
-
-## Technical Details: Floor Contact System
-
-The floor contact system has been completely overhauled to prevent penetration issues:
-
-### Key Fixes
-
-1. **Visual-Physics Alignment**
-   - Floor visual position: 
-   - Floor physics position: 
-   - Floor physics position: FLOOR_Z = 0.0
-   - Result: Perfect alignment between visual and physics floors
-
-2. **STL Mesh Contact Affinity**
-   - Changed all robot mesh geoms from  to 
-   - Floor can now properly contact all robot mesh surfaces
-   - Fixes the "parts going below floor" issue
-
-3. **Physics Parameters**
-   - Reduced friction:  (was 5.0 0.5 0.1)
-   - Fixed constraint dimensions:  (was 4)
-   - Result: Stable contacts without jittering
-
-### Scene History
-
-Historical scene files from different development stages are preserved in the  folder. This allows:
-Historical scene files from different development stages are preserved in the scenes_history/ folder. This allows:
-
-- Comparing evolution of robot configuration
-- Debugging regressions by reverting to known-working configurations
-- Researching the development history of simulation parameters
-
-## GPU Training
-
-For GPU-accelerated training, use the train_gpu.py script:
-
-Usage examples:
-  python train_gpu.py               # GPU training + live viewer
-  python train_gpu.py --no-watch    # GPU training only
-  python train_gpu.py --envs 4      # More parallel environments
-
-### GPU Requirements
-
-- PyTorch with CUDA support
-- NVIDIA GPU with updated drivers
-- CUDA toolkit compatible with your PyTorch version
-
-### GPU vs CPU Comparison
-
-| Aspect | train.py (CPU) | train_gpu.py (GPU) |
-|--------|---------------|------------------|
-| Speed | Slower | Faster (when GPU available) |
-| Device | CPU only | GPU + CPU |
-| Parallelism | Limited | Better parallelization |
-| Fallback | Always works | Falls back to CPU if GPU unavailable |
+envs/
+  stand_env.py   — Gymnasium environment (reward, observations, termination)
+  params.py      — Hot-reloadable parameters + slider UI
+data/
+  scene.xml      — Robot MJCF definition
+utils/
+  watch.py       — Live checkpoint replay viewer
+  sim.py         — Scene viewer (no policy)
+  lineage.py     — Run metadata logger
+runs/
+  ape_stand/     — Checkpoints from train.py
+  ape_stand_test/ — Checkpoints from test.py
+```

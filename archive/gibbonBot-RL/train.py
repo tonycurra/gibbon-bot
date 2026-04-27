@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """
-Train the ape robot to stand. CPU, SB3 PPO, live viewer.
+Train the ape robot to stand.
 
 Usage:
-    python train.py               # train + live viewer
-    python train.py --no-watch    # train only
-    python train.py --inherit     # warm-start from best checkpoint
+    python train.py               # train + live viewer (auto-detects GPU)
+    python train.py --cpu         # force CPU
+    python train.py --no-watch    # headless training
+    python train.py --inherit     # warm-start weights from best checkpoint
     python train.py --resume      # continue exact run from last checkpoint
     python train.py --envs 4      # more parallel envs
 """
@@ -15,14 +16,13 @@ import pathlib
 import subprocess
 import sys
 
-sys.path.insert(0, str(pathlib.Path(__file__).parent / "src"))
-
+import torch
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback
 from stable_baselines3.common.env_util import make_vec_env
 
-from gibbonbot.envs.stand_env import StandEnv
-from gibbonbot.utils import lineage as lineage_mod
+from envs.stand_env import StandEnv
+import utils.lineage as lineage_mod
 
 RUNS = pathlib.Path("runs/ape_stand")
 TOTAL_STEPS = 10_000_000
@@ -40,15 +40,17 @@ def best_checkpoint():
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--envs", type=int, default=1)
-    parser.add_argument(
-        "--inherit", action="store_true", help="warm-start weights from best checkpoint"
-    )
-    parser.add_argument(
-        "--resume", action="store_true", help="continue exact run from last checkpoint"
-    )
+    parser.add_argument("--cpu", action="store_true", help="force CPU even if GPU is available")
+    parser.add_argument("--inherit", action="store_true", help="warm-start weights from best checkpoint")
+    parser.add_argument("--resume", action="store_true", help="continue exact run from last checkpoint")
     parser.add_argument("--no-watch", dest="watch", action="store_false")
     parser.set_defaults(watch=True)
     args = parser.parse_args()
+
+    device = torch.device("cpu" if args.cpu else ("cuda" if torch.cuda.is_available() else "cpu"))
+    print(f"Using device: {device}")
+    if device.type == "cuda":
+        print(f"GPU: {torch.cuda.get_device_name(0)}")
 
     RUNS.mkdir(parents=True, exist_ok=True)
     env = make_vec_env(StandEnv, n_envs=args.envs)
@@ -74,19 +76,17 @@ def main():
             print("No checkpoint found, starting fresh.")
         else:
             print(f"Resuming from {ckpt.name}")
-            model = PPO.load(str(ckpt), env=env)
+            model = PPO.load(str(ckpt), env=env, device=device)
             lineage_mod.record(
-                RUNS,
-                "stand",
-                args.envs,
-                str(ckpt),
-                pathlib.Path("data/scene_fixed.xml"),
-                pathlib.Path("src/gibbonbot/envs/stand_env.py"),
+                RUNS, "stand", args.envs, str(ckpt),
+                pathlib.Path("data/scene.xml"),
+                pathlib.Path("envs/stand_env.py"),
             )
             _run(model, checkpoint_cb, eval_cb, resume=True, watch=args.watch)
             return
 
     ppo_kwargs = dict(
+        device=device,
         policy="MlpPolicy",
         env=env,
         n_steps=N_STEPS,
@@ -106,28 +106,22 @@ def main():
             print("No checkpoint found, starting fresh.")
         else:
             print(f"Inheriting weights from {ckpt.name}")
-            old = PPO.load(str(ckpt), env=env)
+            old = PPO.load(str(ckpt), env=env, device=device)
             model = PPO(**ppo_kwargs)
             model.policy.load_state_dict(old.policy.state_dict())
             lineage_mod.record(
-                RUNS,
-                "stand",
-                args.envs,
-                str(ckpt),
-                pathlib.Path("data/scene_fixed.xml"),
-                pathlib.Path("src/gibbonbot/envs/stand_env.py"),
+                RUNS, "stand", args.envs, str(ckpt),
+                pathlib.Path("data/scene.xml"),
+                pathlib.Path("envs/stand_env.py"),
             )
             _run(model, checkpoint_cb, eval_cb, resume=False, watch=args.watch)
             return
 
     model = PPO(**ppo_kwargs)
     lineage_mod.record(
-        RUNS,
-        "stand",
-        args.envs,
-        None,
-        pathlib.Path("data/scene_fixed.xml"),
-        pathlib.Path("src/gibbonbot/envs/stand_env.py"),
+        RUNS, "stand", args.envs, None,
+        pathlib.Path("data/scene.xml"),
+        pathlib.Path("envs/stand_env.py"),
     )
     _run(model, checkpoint_cb, eval_cb, resume=False, watch=args.watch)
 
@@ -136,13 +130,7 @@ def _run(model, checkpoint_cb, eval_cb, *, resume, watch):
     watcher = None
     if watch:
         watcher = subprocess.Popen(
-            [
-                sys.executable,
-                "src/gibbonbot/utils/watch.py",
-                "--task",
-                "stand",
-                
-            ]
+            [sys.executable, "utils/watch.py", "--task", "stand", "--best-only"]
         )
 
     print(f"Training for {TOTAL_STEPS:,} steps...")
