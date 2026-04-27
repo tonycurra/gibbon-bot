@@ -71,7 +71,7 @@ def main():
         else:
             print(f"Resuming from {ckpt.name}")
             model = PPO.load(str(ckpt), env=env)
-            lineage_mod.record(RUNS, "stand", args.envs, str(ckpt), pathlib.Path("data/scene.xml"), pathlib.Path("src/gibbonbot/envs/stand_env.py"))
+            lineage_mod.record(RUNS, "stand", args.envs, str(ckpt), pathlib.Path("data/scene_fixed.xml"), pathlib.Path("src/gibbonbot/envs/stand_env.py"))
             _run(model, checkpoint_cb, eval_cb, resume=True, watch=args.watch)
             return
 
@@ -98,12 +98,12 @@ def main():
             old = PPO.load(str(ckpt), env=env)
             model = PPO(**ppo_kwargs)
             model.policy.load_state_dict(old.policy.state_dict())
-            lineage_mod.record(RUNS, "stand", args.envs, str(ckpt), pathlib.Path("data/scene.xml"), pathlib.Path("src/gibbonbot/envs/stand_env.py"))
+            lineage_mod.record(RUNS, "stand", args.envs, str(ckpt), pathlib.Path("data/scene_fixed.xml"), pathlib.Path("src/gibbonbot/envs/stand_env.py"))
             _run(model, checkpoint_cb, eval_cb, resume=False, watch=args.watch)
             return
 
     model = PPO(**ppo_kwargs)
-    lineage_mod.record(RUNS, "stand", args.envs, None, pathlib.Path("data/scene.xml"), pathlib.Path("src/gibbonbot/envs/stand_env.py"))
+    lineage_mod.record(RUNS, "stand", args.envs, None, pathlib.Path("data/scene_fixed.xml"), pathlib.Path("src/gibbonbot/envs/stand_env.py"))
     _run(model, checkpoint_cb, eval_cb, resume=False, watch=args.watch)
 
 

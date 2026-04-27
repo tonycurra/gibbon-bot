@@ -70,3 +70,19 @@ Lift the 4 arm-shoulder attachment points to **10 cm off the ground** and hold
 them stable. The height reward is a tight Gaussian (σ = `TARGET_TOL`) centred on
 `TARGET_Z`. A `W_STABLE` bonus fires every step the robot is at height and has
 low joint velocity (`STABLE_VEL`).
+
+## Floor Collision Fix
+
+If robot parts pass through the floor during simulation, use the fixed scene file:
+
+```bash
+# Generate fixed scene with proper collision detection
+python src/gibbonbot/utils/fix_collisions.py
+
+# The fixed scene enables:
+# - Proper floor-robot collision detection
+# - Realistic friction parameters
+# - Self-collision prevention between robot parts
+```
+
+The training script automatically uses `data/scene_fixed.xml` which has these fixes applied.

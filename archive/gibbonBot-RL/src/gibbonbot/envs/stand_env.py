@@ -36,7 +36,7 @@ from . import hints as hints_mod
 from . import params as params_mod
 
 ROOT = pathlib.Path(__file__).parent.parent.parent.parent  # Project root
-SCENE = ROOT / "data" / "scene.xml"
+SCENE = ROOT / "data" / "scene_fixed.xml"
 HINTS_FILE = pathlib.Path(__file__).parent / "hints.py"
 PARAMS_FILE = pathlib.Path(__file__).parent / "params.py"
 
