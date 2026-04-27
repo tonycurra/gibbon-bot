@@ -32,25 +32,32 @@ import numpy as np
 from gymnasium import spaces
 
 from . import hints as hints_mod
+from . import params as params_mod
 
 ROOT = pathlib.Path(__file__).parent.parent.parent.parent  # Project root
 SCENE = ROOT / "data" / "scene.xml"
 HINTS_FILE = pathlib.Path(__file__).parent / "hints.py"
-TARGET_Z = 0.30   # reward peak: torso this high = full stand
-LIFTED_Z = 0.18   # "got up": torso clearly off ground (resting flat = ~0.05m)
-MIN_HEIGHT = 0.03  # below this → fallen
-SPAWN_Z = 0.35     # drop from here, arms clear the floor
-SETTLE_VEL = 0.05  # max joint velocity considered "still"
-SETTLE_STEPS = 2000  # max physics steps to wait for settle
-MAX_STEPS = 2000
-PHYSICS_STEPS_PER_ACTION = 250  # 250 × 0.002s = 0.5s per action — one slow deliberate move
-MOTOR_MAX_SPEED = 0.015         # max change per step — full sweep takes ~8s real-time
-MAX_ACTIVE_JOINTS = 3           # penalize moving more than this many joints at once
+PARAMS_FILE = pathlib.Path(__file__).parent / "params.py"
 
-FLOOR_Z = 0.04          # body below this = in contact with floor
-ARM_SAFETY_MARGIN = 0.06        # min distance between bodies of different arms (m)
+# Static constants (not hot-reloaded)
+SPAWN_Z = 0.35
+SETTLE_VEL = 0.05
+SETTLE_STEPS = 500
+MAX_STEPS = 2000
+FLOOR_Z = 0.04
+
+# Defaults (overridden each step from params_mod)
+TARGET_Z = 0.30
+LIFTED_Z = 0.18
+MIN_HEIGHT = 0.03
+PHYSICS_STEPS_PER_ACTION = 250
+MOTOR_MAX_SPEED = 0.015
+MAX_ACTIVE_JOINTS = 3
+ARM_SAFETY_MARGIN = 0.06
 # body IDs: FL=2..7, FR=8..13, BL=14..19, BR=20..25
 _ARM_GROUPS = [[2,3,4,5,6,7], [8,9,10,11,12,13], [14,15,16,17,18,19], [20,21,22,23,24,25]]
+# shoulder attachment bodies — base of each arm on the torso (one per arm)
+_SHOULDER_BODIES = [2, 8, 14, 20]
 # body IDs that should plant on floor, not drag: gripper tips (7,13,19,25) + link3s (4,10,16,22)
 _CONTACT_BODIES = [4, 7, 10, 13, 16, 19, 22, 25]
 
@@ -122,6 +129,8 @@ class StandEnv(gym.Env):
         self._motor_pos = np.zeros(24, dtype=np.float32)  # current motor position in [-1,1]
         self._hints_mtime = 0.0
         self._hints = dict(hints_mod.HINTS)
+        self._params_mtime = 0.0
+        self._p = self._load_params()
 
         if render_mode == "human":
             self._viewer = mujoco.viewer.launch_passive(self.model, self.data)
@@ -162,18 +171,20 @@ class StandEnv(gym.Env):
         )
         self._prev_action = self._motor_pos.copy()
         self._reload_hints()
+        self._p = self._load_params()
 
         return self._get_obs(), {}
 
     def step(self, action):
+        p = self._load_params()
         action = np.asarray(action, dtype=np.float32)
         # motor model: each joint moves at most MOTOR_MAX_SPEED per step toward target
-        delta = np.clip(action - self._motor_pos, -MOTOR_MAX_SPEED, MOTOR_MAX_SPEED)
+        delta = np.clip(action - self._motor_pos, -p.MOTOR_MAX_SPEED, p.MOTOR_MAX_SPEED)
         self._motor_pos = self._motor_pos + delta
         ctrl = 0.5 * (self._motor_pos + 1.0) * (self._jnt_hi - self._jnt_lo) + self._jnt_lo
         self.data.ctrl[:] = ctrl
 
-        for _ in range(PHYSICS_STEPS_PER_ACTION):
+        for _ in range(p.PHYSICS_STEPS_PER_ACTION):
             mujoco.mj_step(self.model, self.data)
 
         if self._viewer is not None:
@@ -183,34 +194,35 @@ class StandEnv(gym.Env):
         obs = self._get_obs()
 
         torso_z = float(self.data.qpos[2])
-        above_ground = torso_z  # ground is z=0
-        fallen = above_ground < MIN_HEIGHT
-        got_up = above_ground > LIFTED_Z
+        # use average shoulder height as the lift metric — 4 arm-base attachment points
+        shoulder_z = float(np.mean([self.data.xpos[b][2] for b in _SHOULDER_BODIES]))
+        above_ground = shoulder_z
+        fallen = torso_z < p.MIN_HEIGHT
+        got_up = above_ground > p.LIFTED_Z
 
-        # height reward: Gaussian around TARGET_Z above terrain, max 1.0
-        height_err = (above_ground - TARGET_Z) / 0.08
+        tol = getattr(p, "TARGET_TOL", 0.02)
+        height_err = (above_ground - p.TARGET_Z) / tol
         height_reward = float(np.exp(-0.5 * height_err**2))
 
-        # upright reward: penalise tilt — quat[0] is w
         w = float(self.data.qpos[3])
-        upright_reward = 0.3 * w * w if w > 0 else 0.0
-        upside_down = w < 0  # w < 0 means torso rotated more than 90° — on its back
+        upright_reward = p.W_UPRIGHT * w * w if w > 0 else 0.0
+        upside_down = w < 0
 
         jvel = self.data.qvel[6:]
-        motor_delta = float(np.sum(delta ** 2))  # actual motor movement this step
+        motor_delta = float(np.sum(delta ** 2))
         self._prev_action = action.copy()
 
-        # proximity penalty: arms too close to each other
         proximity_penalty = 0.0
+        margin = p.ARM_SAFETY_MARGIN
         for i, grp_a in enumerate(_ARM_GROUPS):
+            pos_a = self.data.xpos[grp_a]  # (6,3)
             for grp_b in _ARM_GROUPS[i+1:]:
-                for a in grp_a:
-                    for b in grp_b:
-                        dist = float(np.linalg.norm(self.data.xpos[a] - self.data.xpos[b]))
-                        if dist < ARM_SAFETY_MARGIN:
-                            proximity_penalty += (ARM_SAFETY_MARGIN - dist) ** 2
+                pos_b = self.data.xpos[grp_b]  # (6,3)
+                # all pairwise distances in one shot: (6,1,3) - (1,6,3) → (6,6)
+                dists = np.linalg.norm(pos_a[:, None] - pos_b[None, :], axis=-1)
+                violations = margin - dists
+                proximity_penalty += float(np.sum(np.square(np.maximum(violations, 0))))
 
-        # drag penalty: bodies near floor moving horizontally = dragging
         drag_penalty = 0.0
         grippers_planted = 0
         for bid in _CONTACT_BODIES:
@@ -219,32 +231,38 @@ class StandEnv(gym.Env):
                 horiz_vel = float(np.sqrt(self.data.cvel[bid, 3]**2 + self.data.cvel[bid, 4]**2))
                 drag_penalty += horiz_vel
                 grippers_planted += 1
-        # plant-and-lift: grippers on floor while torso is rising = good push-off
-        torso_vz = float(self.data.cvel[1, 5])  # body 1 = torso, z velocity
+        torso_vz = float(self.data.cvel[1, 5])
         plant_and_lift = float(grippers_planted) * max(0.0, torso_vz)
 
-        # allow only a few joints to move at once — encourages sequential animal-like motion
         joints_moving = int(np.sum(np.abs(delta) > 1e-4))
-        too_many_joints_penalty = -0.3 * max(0, joints_moving - MAX_ACTIVE_JOINTS)
+        too_many_joints_penalty = -p.W_JOINTS * max(0, joints_moving - p.MAX_ACTIVE_JOINTS)
+
+        # stability bonus: at target height AND low joint velocity
+        stable_vel = getattr(p, "STABLE_VEL", 0.05)
+        w_stable = getattr(p, "W_STABLE", 0.0)
+        at_target = abs(above_ground - p.TARGET_Z) < tol
+        is_stable = float(np.max(np.abs(self.data.qvel[6:]))) < stable_vel
+        stability_bonus = w_stable if (at_target and is_stable) else 0.0
 
         reward = (
-            height_reward
+            p.W_HEIGHT * height_reward
             + upright_reward
-            + (0.5 if got_up else 0.0)   # bonus for lifting torso above LIFTED_Z
-            + 0.3 * plant_and_lift        # grippers planted + torso rising = good
-            + 0.05                        # alive bonus
-            - 5e-4 * float(np.sum(ctrl**2))   # energy
-            - 1e-3 * float(np.sum(jvel**2))   # joint velocity / flailing
-            - 5e-2 * motor_delta               # penalize actual motor movement (shaking)
-            - 0.5 * drag_penalty               # dragging bodies along floor = bad
-            - 2.0 * proximity_penalty          # arms too close = bad
+            + (p.W_GOT_UP if got_up else 0.0)
+            + stability_bonus
+            + p.W_PLANT_LIFT * plant_and_lift
+            + p.W_ALIVE
+            - p.W_ENERGY * float(np.sum(ctrl**2))
+            - p.W_JVEL * float(np.sum(jvel**2))
+            - p.W_SMOOTH * motor_delta
+            - p.W_DRAG * drag_penalty
+            - p.W_PROXIMITY * proximity_penalty
             + too_many_joints_penalty
         )
 
         reward += self._hints_reward()
 
         if upside_down:
-            reward -= 10.0  # big penalty for flipping onto back
+            reward -= p.FLIP_PENALTY
 
         terminated = upside_down
         truncated = self._step_count >= MAX_STEPS
@@ -252,9 +270,11 @@ class StandEnv(gym.Env):
         info = {
             "torso_z": torso_z,
             "above_ground": above_ground,
+            "shoulder_z": shoulder_z,
             "fallen": fallen,
             "upside_down": upside_down,
             "got_up": got_up,
+            "stable": bool(at_target and is_stable),
             "height_reward": height_reward,
             "upright_reward": upright_reward,
             "active_hints": [k for k, v in self._hints.items() if v != 0.0],
@@ -266,6 +286,16 @@ class StandEnv(gym.Env):
             self._viewer.close()
 
     # ── helpers ───────────────────────────────────────────────────────────────
+
+    def _load_params(self):
+        try:
+            mtime = PARAMS_FILE.stat().st_mtime
+            if mtime != self._params_mtime:
+                importlib.reload(params_mod)
+                self._params_mtime = mtime
+        except Exception as e:
+            print(f"[params] reload error: {e}")
+        return params_mod
 
     def _reload_hints(self):
         try:

@@ -7,16 +7,18 @@ When a newer checkpoint is saved, the policy is hot-swapped automatically.
 Usage:
     python watch.py                  # watch reach task
     python watch.py --task stand     # watch stand task
+    python watch.py --no-ui          # skip params panel
 """
 
 import sys, pathlib
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent.parent.parent / "src"))
 
 import argparse
+import subprocess
+import threading
 import time
 import numpy as np
 from stable_baselines3 import PPO
-from gibbonbot.envs.stand_env import StandEnv as _StandEnv
 
 # Live controls — adjust with keyboard in terminal while viewer runs:
 #   +/-  speed up / slow down playback
@@ -32,7 +34,6 @@ TASKS = {
     "reach": ("runs/ape_reach", "ape_reach"),
     "stand": ("runs/ape_stand", "ape_stand"),
 }
-POLL_INTERVAL = 5   # seconds between checkpoint checks
 
 
 def latest_checkpoint(runs_dir: pathlib.Path, prefix: str):
@@ -46,7 +47,12 @@ def latest_checkpoint(runs_dir: pathlib.Path, prefix: str):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--task", default="reach", choices=list(TASKS))
+    parser.add_argument("--no-ui", action="store_true", help="disable params slider UI")
     args = parser.parse_args()
+
+    if not args.no_ui:
+        ui_script = pathlib.Path(__file__).parent / "params_ui.py"
+        subprocess.Popen([sys.executable, str(ui_script)])
 
     runs_path, prefix = TASKS[args.task]
     runs_dir = pathlib.Path(runs_path)
@@ -58,7 +64,6 @@ def main():
 
     env = EnvClass(render_mode="human")
 
-    # Start immediately with random actions; swap in policy once first checkpoint appears
     ckpt = latest_checkpoint(runs_dir, prefix)
     if ckpt is None:
         print(f"[watch] no checkpoint yet — showing random policy, waiting for {runs_dir} ...")
@@ -68,10 +73,10 @@ def main():
         print(f"[watch] loading {ckpt.name} ...")
         policy = PPO.load(str(ckpt))
         last_mtime = ckpt.stat().st_mtime
-    ep  = 0
+    ep = 0
     _print_controls()
 
-    import threading, select, tty, termios, os
+    import select, tty, termios, os
 
     def _key_listener():
         global _speed, _paused
@@ -108,7 +113,6 @@ def main():
 
     try:
         while viewer_alive():
-            # hot-swap policy if a newer checkpoint exists
             new_ckpt = latest_checkpoint(runs_dir, prefix)
             if new_ckpt is not None:
                 mtime = new_ckpt.stat().st_mtime
@@ -152,9 +156,10 @@ def main():
                     status = "FALLEN"
                 else:
                     status = "ALIVE"
-                above  = info.get("above_ground", info["torso_z"])
-                print(f"Ep {ep:3d}: {status:<7}  "
-                      f"height={above:.3f}m  "
+                sh = info.get("shoulder_z", info.get("above_ground", info["torso_z"]))
+                stable_mark = " STABLE" if info.get("stable") else ""
+                print(f"Ep {ep:3d}: {status:<7}{stable_mark:<8}  "
+                      f"shoulder={sh:.3f}m  torso={info['torso_z']:.3f}m  "
                       f"h_rew={info['height_reward']:.3f}  "
                       f"reward={total_reward:.1f}  steps={step}  [{ckpt_name}]")
 
