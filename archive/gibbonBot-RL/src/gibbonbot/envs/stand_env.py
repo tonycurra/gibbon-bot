@@ -36,11 +36,12 @@ from . import hints as hints_mod
 ROOT = pathlib.Path(__file__).parent.parent.parent.parent  # Project root
 SCENE = ROOT / "data" / "scene.xml"
 HINTS_FILE = pathlib.Path(__file__).parent / "hints.py"
-TARGET_Z = 0.30  # tall-stance target — torso high, grippers on floor
-MIN_HEIGHT = (
-    0.08  # torso this far below terrain surface → fallen (increased for stability)
-)
-SPAWN_CLEARANCE = 0.07  # start this far above terrain
+TARGET_Z = 0.30   # reward peak: torso this high = full stand
+LIFTED_Z = 0.18   # "got up": torso clearly off ground (resting flat = ~0.05m)
+MIN_HEIGHT = 0.03  # below this → fallen
+SPAWN_Z = 0.35     # drop from here, arms clear the floor
+SETTLE_VEL = 0.05  # max joint velocity considered "still"
+SETTLE_STEPS = 2000  # max physics steps to wait for settle
 MAX_STEPS = 2000
 PHYSICS_STEPS_PER_ACTION = (
     12  # longer per-action window → slower, more deliberate motion
@@ -129,12 +130,19 @@ class StandEnv(gym.Env):
 
         self.data.qpos[0] = 0.0
         self.data.qpos[1] = 0.0
-        self.data.qpos[2] = SPAWN_CLEARANCE  # ground is always z=0
+        self.data.qpos[2] = SPAWN_Z
         self.data.qpos[3] = 1.0  # quat w (upright)
         self.data.qpos[4:7] = 0.0
 
         # arms in splayed-down pose + small noise
-        self.data.qpos[7:] = _STAND_INIT + rng.uniform(-0.1, 0.1, size=24)
+        self.data.qpos[7:] = _STAND_INIT + rng.uniform(-0.05, 0.05, size=24)
+
+        # let robot fall and settle before the episode starts
+        self.data.ctrl[:] = 0
+        for _ in range(SETTLE_STEPS):
+            mujoco.mj_step(self.model, self.data)
+            if np.max(np.abs(self.data.qvel)) < SETTLE_VEL:
+                break
 
         mujoco.mj_forward(self.model, self.data)
         self._step_count = 0
@@ -160,6 +168,7 @@ class StandEnv(gym.Env):
         torso_z = float(self.data.qpos[2])
         above_ground = torso_z  # ground is z=0
         fallen = above_ground < MIN_HEIGHT
+        got_up = above_ground > LIFTED_Z
 
         # height reward: Gaussian around TARGET_Z above terrain, max 1.0
         height_err = (above_ground - TARGET_Z) / 0.08
@@ -185,6 +194,7 @@ class StandEnv(gym.Env):
         reward = (
             height_reward
             + upright_reward
+            + (0.5 if got_up else 0.0)  # bonus for lifting torso above LIFTED_Z
             + 0.05  # alive bonus
             - 5e-4 * float(np.sum(ctrl**2))  # energy
             - 1e-3 * float(np.sum(jvel**2))  # joint velocity / flailing
@@ -202,6 +212,7 @@ class StandEnv(gym.Env):
             "torso_z": torso_z,
             "above_ground": above_ground,
             "fallen": fallen,
+            "got_up": got_up,
             "height_reward": height_reward,
             "upright_reward": upright_reward,
             "active_hints": [k for k, v in self._hints.items() if v != 0.0],
