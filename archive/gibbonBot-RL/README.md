@@ -10,7 +10,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-See [QUICKSTART.md](QUICKSTART.md) for the recommended workflow.
+See [QUICKSTART.md](QUICKSTART.md) for the recommended local workflow, or [REMOTE_GPU.md](REMOTE_GPU.md) for renting + training on a remote H100.
 
 ## Scripts
 

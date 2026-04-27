@@ -1,0 +1,211 @@
+# Remote GPU training (Scaleway H100)
+
+Step-by-step for renting a remote H100, training fast, and not wasting money. Tested on Scaleway H100 PCIe 80GB (€2.73/hour, billed per minute) but works on any rented Linux box with an NVIDIA GPU.
+
+---
+
+## TL;DR
+
+You'll be training within 10 minutes. Two terminals: one ssh'd into the remote, one local for the viewer.
+
+```bash
+# === Local: push your latest code ===
+git push origin mjx-gpu
+
+# === SSH in (replace IP with yours) ===
+ssh root@51.159.187.87
+
+# === On remote, one-time setup (~5 min) ===
+apt update && apt install -y python3-pip python3-venv git tmux rsync
+git clone ssh://git@codeberg.org/tony_olivabot/gibbonBot-RL.git ape && cd ape
+git checkout mjx-gpu
+python3 -m venv .venv && source .venv/bin/activate
+pip install --upgrade pip "jax[cuda12]" mujoco mujoco-mjx flax optax numpy
+
+# === Start training in tmux ===
+export JAX_COMPILATION_CACHE_DIR=~/.jax_cache
+tmux new -s train
+python train_mjx.py --no-watch --envs 8192
+# Ctrl+B then D to detach. Reattach later: tmux a -t train
+```
+
+```bash
+# === Locally: stream checkpoints down + watch ===
+# Terminal 1 (sync loop, leave running):
+watch -n 30 'rsync -avz root@51.159.187.87:ape/runs/ape_stand_mjx/ runs/ape_stand_mjx/'
+
+# Terminal 2 (viewer):
+python utils/watch_mjx.py
+```
+
+That's it. The viewer hot-swaps to each new checkpoint as it arrives.
+
+---
+
+## One-time setup on the remote
+
+After SSH'ing in:
+
+```bash
+apt update && apt install -y python3-pip python3-venv git tmux rsync
+git clone ssh://git@codeberg.org/tony_olivabot/gibbonBot-RL.git ape
+cd ape
+git checkout mjx-gpu
+python3 -m venv .venv
+source .venv/bin/activate
+pip install --upgrade pip
+pip install --upgrade "jax[cuda12]"          # CRITICAL: cuda12 wheel for H100
+pip install mujoco mujoco-mjx flax optax numpy
+```
+
+> **The `jax[cuda12]` part is non-negotiable on H100.** The default `pip install jax` gives you a CPU-only wheel and your H100 will sit idle while training crawls.
+
+Set the JIT cache once per session so re-runs skip the ~3-5 min compile:
+
+```bash
+export JAX_COMPILATION_CACHE_DIR=~/.jax_cache
+# (Add this to ~/.bashrc on the remote so it persists across SSH sessions.)
+```
+
+---
+
+## Training in tmux
+
+`tmux` keeps the training alive when SSH disconnects (which it will).
+
+```bash
+tmux new -s train             # create a new session called "train"
+python train_mjx.py --no-watch --envs 8192
+# Detach: Ctrl+B then D
+# Reattach later: tmux a -t train
+# List sessions: tmux ls
+# Kill session: tmux kill-session -t train
+```
+
+Recommended starting flags for H100 80GB:
+
+```bash
+python train_mjx.py --no-watch --envs 8192
+```
+
+Push to `--envs 16384` if you want to use more VRAM (~50-60GB usage at that level). Above 16384 the gains diminish.
+
+`--no-watch` is required — the remote box has no display.
+
+---
+
+## Watching from your laptop
+
+The viewer needs a screen, so it runs locally. Pull checkpoints down on a loop:
+
+```bash
+# Terminal 1 — checkpoint sync, leave running:
+watch -n 30 'rsync -avz root@51.159.187.87:ape/runs/ape_stand_mjx/ runs/ape_stand_mjx/'
+```
+
+```bash
+# Terminal 2 — viewer:
+python utils/watch_mjx.py
+```
+
+Every 30 seconds new checkpoints arrive locally; the viewer notices and hot-swaps. The reward-trend output in the viewer terminal (`reward≈X ↑/↓`) tells you whether training is improving without having to check anything else.
+
+---
+
+## Cost-saving rules
+
+You're paying €2.73/hour = €0.045/minute. Every minute counts.
+
+- **Don't touch `params_mjx.py` mid-run.** Each change triggers a JIT recompile (~30s at 8192 envs ≈ €0.025 wasted per recompile). Set params before starting; if you must tweak, batch all your changes and accept one recompile.
+- **First JIT compile takes 3-5 minutes.** That's normal. The terminal will look hung. Wait. Once the first `[save]` line appears you're flying.
+- **Use `--resume`** if you stop and restart on the same instance. Picks up from latest checkpoint.
+- **`JAX_COMPILATION_CACHE_DIR=~/.jax_cache`** survives across runs on the same instance (but NOT across new instances — the cache lives on remote disk).
+
+Approximate throughput on H100 at 8192 envs: ~1-2M training steps/sec.
+
+| Steps | Time | Cost |
+|-------|------|------|
+| 100M  | ~1-2 min | €0.05-0.10 |
+| 1B    | ~10-15 min | €0.50-0.70 |
+| 10B   | ~2-3 hours | €5-8 |
+
+For a real "train it from scratch to standing" run, plan for ~5-10B steps.
+
+---
+
+## Recommended H100 settings
+
+| Setting | Value | Why |
+|---------|-------|-----|
+| `--envs` | **8192** | Sweet spot for H100. Try 16384 to push it. |
+| `--no-watch` | required | No display on remote |
+| `LEARNING_RATE` | **3e-4** | Lower than local default — bigger batch is more stable, can use smaller LR |
+| `PHYSICS_STEPS_PER_ACTION` | your choice | Doesn't affect VRAM. Use 200 for smooth motion, 16 for raw throughput. |
+| Other params | "Smooth" preset values | Tune locally first in `--tune` mode, commit, then deploy |
+
+> **Don't run `--tune` mode on a paid GPU.** The tuning UI is for local iteration. Find your params locally with 32 envs, commit them to `params_mjx.py`, then deploy to the H100 for the long run.
+
+---
+
+## Stopping cleanly
+
+In the tmux session running training:
+
+```bash
+# Ctrl+C — fires the graceful shutdown handler
+^C
+[stop] Ctrl+C received — finishing current rollout, then saving...
+[stop] Ctrl+C — flushing final checkpoint at 8,716,288 steps
+[save] mjx_000008716288.npz  (+ mjx_000008716288.params.json)
+```
+
+The checkpoint is now safe. Exit tmux:
+
+```bash
+exit            # closes the tmux pane
+exit            # closes the SSH session
+```
+
+Then **shut the instance down from the Scaleway web console**. The meter does not stop until the instance is destroyed (or you specifically stop+detach storage).
+
+---
+
+## Teardown checklist
+
+1. Ctrl+C in the tmux training session, wait for the final save line.
+2. One last sync from your laptop:
+   ```bash
+   rsync -avz root@51.159.187.87:ape/runs/ape_stand_mjx/ runs/ape_stand_mjx/
+   ```
+3. Sanity check the count matches:
+   ```bash
+   # On remote:
+   ls ~/ape/runs/ape_stand_mjx/mjx_*.npz | wc -l
+   # Locally:
+   ls runs/ape_stand_mjx/mjx_*.npz | wc -l
+   ```
+4. **Shut down the instance** in the Scaleway console. Verify billing has stopped.
+
+---
+
+## Resuming a future session
+
+A new instance = new disk = no JIT cache, no clone. So one-time setup repeats. But the workflow is faster because you've done it once:
+
+```bash
+# On a fresh remote box:
+apt update && apt install -y python3-pip python3-venv git tmux rsync
+git clone ssh://git@codeberg.org/tony_olivabot/gibbonBot-RL.git ape && cd ape
+git checkout mjx-gpu
+python3 -m venv .venv && source .venv/bin/activate
+pip install --upgrade pip "jax[cuda12]" mujoco mujoco-mjx flax optax numpy
+
+# If you want to continue from a previous run, push the latest checkpoint up first:
+# (locally)
+rsync -avz runs/ape_stand_mjx/mjx_*.npz* root@<IP>:ape/runs/ape_stand_mjx/
+
+# Then on remote:
+export JAX_COMPILATION_CACHE_DIR=~/.jax_cache
+tmux new -s train
+python train_mjx.py --no-watch --envs 8192 --resume
+```
