@@ -52,7 +52,7 @@ MAX_GRAD    = 0.5
 
 # Defaults — overridden by --test flag
 TOTAL_STEPS = 100_000_000
-SAVE_EVERY  = 1_000_000
+SAVE_EVERY  = 250_000   # save often — Ctrl+C will also flush a final ckpt
 LOG_EVERY   = 10
 
 # --test mode overrides
@@ -299,7 +299,18 @@ def main():
     print(f"{'updates':>8}  {'steps':>12}  {'sps':>8}  {'mean_rew':>10}")
     print("-" * 48)
 
-    while total_steps < TOTAL_STEPS:
+    # Graceful shutdown: Ctrl+C finishes the current rollout, saves, and exits.
+    import signal
+    _stop_requested = [False]
+    def _on_sigint(signum, frame):
+        if _stop_requested[0]:
+            print("\n[stop] second Ctrl+C — exiting NOW without final save")
+            sys.exit(130)
+        _stop_requested[0] = True
+        print("\n[stop] Ctrl+C received — finishing current rollout, then saving...")
+    signal.signal(signal.SIGINT, _on_sigint)
+
+    while total_steps < TOTAL_STEPS and not _stop_requested[0]:
         # re-read params each rollout (hot-reload support)
         new_rparams = tuple(jnp.float32(v) for v in read_params())
         if any(float(a) != float(b) for a, b in zip(new_rparams, rparams)):
@@ -325,7 +336,17 @@ def main():
 
         buf_obs, buf_act, buf_logp, buf_rew, buf_done, buf_val = [], [], [], [], [], []
 
-        for _ in range(N_STEPS):
+        for t in range(N_STEPS):
+            # mid-rollout save: weights are from last completed update (still valid)
+            steps_here = total_steps + t * N_ENVS
+            if steps_here - last_save >= save_every and steps_here > start_steps:
+                save(train_state, steps_here)
+                last_save = steps_here
+            if _stop_requested[0]:
+                save(train_state, steps_here)
+                print("Done.")
+                sys.exit(0)
+
             rng, act_rng = jax.random.split(rng)
             act_rngs = jax.random.split(act_rng, N_ENVS)
 
@@ -394,6 +415,8 @@ def main():
             save(train_state, total_steps)
             last_save = total_steps
 
+    reason = "Ctrl+C" if _stop_requested[0] else "completed"
+    print(f"[stop] {reason} — flushing final checkpoint at {total_steps:,} steps")
     save(train_state, total_steps)
     if watcher is not None:
         watcher.terminate()
