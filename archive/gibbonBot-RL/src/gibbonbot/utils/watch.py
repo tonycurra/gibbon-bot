@@ -89,6 +89,7 @@ def main():
                 total_reward += reward
                 step += 1
                 done = terminated or truncated
+                time.sleep(0.01)  # real-time: ~100 Hz sim
 
             if not viewer_alive():
                 break
