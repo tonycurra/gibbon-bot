@@ -16,6 +16,7 @@ import argparse
 import time
 import numpy as np
 from stable_baselines3 import PPO
+from gibbonbot.envs.stand_env import StandEnv as _StandEnv
 
 TASKS = {
     "reach": ("runs/ape_reach", "ape_reach"),
@@ -45,18 +46,18 @@ def main():
     else:
         from gibbonbot.envs.stand_env import StandEnv as EnvClass
 
-    print(f"[watch] task={args.task}  waiting for first checkpoint in {runs_dir} ...")
-    while True:
-        ckpt = latest_checkpoint(runs_dir, prefix)
-        if ckpt is not None:
-            break
-        time.sleep(POLL_INTERVAL)
-
-    print(f"[watch] loading {ckpt.name} ...")
-    policy     = PPO.load(str(ckpt))
-    last_mtime = ckpt.stat().st_mtime
-
     env = EnvClass(render_mode="human")
+
+    # Start immediately with random actions; swap in policy once first checkpoint appears
+    ckpt = latest_checkpoint(runs_dir, prefix)
+    if ckpt is None:
+        print(f"[watch] no checkpoint yet — showing random policy, waiting for {runs_dir} ...")
+        policy = None
+        last_mtime = 0.0
+    else:
+        print(f"[watch] loading {ckpt.name} ...")
+        policy = PPO.load(str(ckpt))
+        last_mtime = ckpt.stat().st_mtime
     ep  = 0
 
     def viewer_alive():
@@ -70,7 +71,7 @@ def main():
             if new_ckpt is not None:
                 mtime = new_ckpt.stat().st_mtime
                 if mtime != last_mtime:
-                    print(f"\n[watch] new checkpoint: {new_ckpt.name} — swapping policy")
+                    print(f"\n[watch] {'first' if policy is None else 'new'} checkpoint: {new_ckpt.name} — loading policy")
                     policy     = PPO.load(str(new_ckpt))
                     last_mtime = mtime
 
@@ -80,7 +81,10 @@ def main():
             step   = 0
 
             while not done and viewer_alive():
-                action, _ = policy.predict(obs, deterministic=False)
+                if policy is None:
+                    action = env.action_space.sample()
+                else:
+                    action, _ = policy.predict(obs, deterministic=False)
                 obs, reward, terminated, truncated, info = env.step(action)
                 total_reward += reward
                 step += 1
