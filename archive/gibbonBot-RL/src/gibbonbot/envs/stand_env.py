@@ -41,7 +41,7 @@ HINTS_FILE = pathlib.Path(__file__).parent / "hints.py"
 PARAMS_FILE = pathlib.Path(__file__).parent / "params.py"
 
 # Static constants (not hot-reloaded)
-SPAWN_Z = 0.35
+SPAWN_Z = 0.15  # Reduced from 0.35 to make robot fall from smaller distance
 SETTLE_VEL = 0.05
 SETTLE_STEPS = 3000  # enough for a full fall + 150-step stillness confirmation
 MAX_STEPS = 2000
@@ -56,7 +56,12 @@ MOTOR_MAX_SPEED = 0.015
 MAX_ACTIVE_JOINTS = 3
 ARM_SAFETY_MARGIN = 0.06
 # body IDs: FL=2..7, FR=8..13, BL=14..19, BR=20..25
-_ARM_GROUPS = [[2,3,4,5,6,7], [8,9,10,11,12,13], [14,15,16,17,18,19], [20,21,22,23,24,25]]
+_ARM_GROUPS = [
+    [2, 3, 4, 5, 6, 7],
+    [8, 9, 10, 11, 12, 13],
+    [14, 15, 16, 17, 18, 19],
+    [20, 21, 22, 23, 24, 25],
+]
 # shoulder attachment bodies — base of each arm on the torso (one per arm)
 _SHOULDER_BODIES = [2, 8, 14, 20]
 # body IDs that should plant on floor, not drag: gripper tips (7,13,19,25) + link3s (4,10,16,22)
@@ -127,14 +132,19 @@ class StandEnv(gym.Env):
 
         self._step_count = 0
         self._prev_action = np.zeros(24, dtype=np.float32)
-        self._motor_pos = np.zeros(24, dtype=np.float32)  # current motor position in [-1,1]
+        self._motor_pos = np.zeros(
+            24, dtype=np.float32
+        )  # current motor position in [-1,1]
         self._hints_mtime = 0.0
         self._hints = dict(hints_mod.HINTS)
         self._params_mtime = 0.0
         self._p = self._load_params()
 
         if render_mode == "human":
-            self._viewer = mujoco.viewer.launch_passive(self.model, self.data, )
+            self._viewer = mujoco.viewer.launch_passive(
+                self.model,
+                self.data,
+            )
         else:
             self._viewer = None
 
@@ -147,15 +157,17 @@ class StandEnv(gym.Env):
         mujoco.mj_resetData(self.model, self.data)
 
         # randomize spawn position — upright, random yaw only, high enough to clear the floor
-        self.data.qpos[0] = rng.uniform(-0.1, 0.1)   # x
-        self.data.qpos[1] = rng.uniform(-0.1, 0.1)   # y
-        self.data.qpos[2] = rng.uniform(0.50, 0.70)  # z — high enough arms never clip floor
+        self.data.qpos[0] = rng.uniform(-0.1, 0.1)  # x
+        self.data.qpos[1] = rng.uniform(-0.1, 0.1)  # y
+        self.data.qpos[2] = rng.uniform(
+            0.50, 0.70
+        )  # z — high enough arms never clip floor
 
         # random yaw only so torso is always upright at spawn
         yaw = rng.uniform(-np.pi, np.pi)
         self.data.qpos[3] = np.cos(yaw / 2)  # w
-        self.data.qpos[4] = 0.0              # x
-        self.data.qpos[5] = 0.0              # y
+        self.data.qpos[4] = 0.0  # x
+        self.data.qpos[5] = 0.0  # y
         self.data.qpos[6] = np.sin(yaw / 2)  # z
 
         # arms in splayed-down pose + noise for variety
@@ -169,7 +181,9 @@ class StandEnv(gym.Env):
         sleep_dt = dt * realtime if self._viewer is not None else 0.0
 
         still_steps = 0
-        required_still = 150   # must stay below SETTLE_VEL for this many consecutive steps
+        required_still = (
+            150  # must stay below SETTLE_VEL for this many consecutive steps
+        )
         for _ in range(SETTLE_STEPS):
             mujoco.mj_step(self.model, self.data)
             if self._viewer is not None:
@@ -188,7 +202,8 @@ class StandEnv(gym.Env):
         settled_pos = self.data.qpos[7:].astype(np.float32)
         self._motor_pos = np.clip(
             2.0 * (settled_pos - self._jnt_lo) / (self._jnt_hi - self._jnt_lo) - 1.0,
-            -1.0, 1.0,
+            -1.0,
+            1.0,
         )
         self._prev_action = self._motor_pos.copy()
         self._reload_hints()
@@ -214,7 +229,10 @@ class StandEnv(gym.Env):
             sub_delta = np.clip(action - self._motor_pos, -substep_speed, substep_speed)
             self._motor_pos += sub_delta
             total_delta += sub_delta
-            ctrl = 0.5 * (self._motor_pos + 1.0) * (self._jnt_hi - self._jnt_lo) + self._jnt_lo
+            ctrl = (
+                0.5 * (self._motor_pos + 1.0) * (self._jnt_hi - self._jnt_lo)
+                + self._jnt_lo
+            )
             self.data.ctrl[:] = ctrl
             mujoco.mj_step(self.model, self.data)
             if self._viewer is not None:
@@ -243,16 +261,18 @@ class StandEnv(gym.Env):
         upside_down = w < 0
 
         jvel = self.data.qvel[6:]
-        motor_delta = float(np.sum(delta ** 2))
+        motor_delta = float(np.sum(delta**2))
         self._prev_action = action.copy()
 
         proximity_penalty = 0.0
         arms_colliding = False
         margin = p.ARM_SAFETY_MARGIN
-        touch_dist = getattr(p, "ARM_TOUCH_DIST", 0.01)  # below this = collision → terminate
+        touch_dist = getattr(
+            p, "ARM_TOUCH_DIST", 0.01
+        )  # below this = collision → terminate
         for i, grp_a in enumerate(_ARM_GROUPS):
             pos_a = self.data.xpos[grp_a]  # (6,3)
-            for grp_b in _ARM_GROUPS[i+1:]:
+            for grp_b in _ARM_GROUPS[i + 1 :]:
                 pos_b = self.data.xpos[grp_b]  # (6,3)
                 dists = np.linalg.norm(pos_a[:, None] - pos_b[None, :], axis=-1)
                 if float(dists.min()) < touch_dist:
@@ -265,14 +285,18 @@ class StandEnv(gym.Env):
         for bid in _CONTACT_BODIES:
             bz = float(self.data.xpos[bid][2])
             if bz < FLOOR_Z:
-                horiz_vel = float(np.sqrt(self.data.cvel[bid, 3]**2 + self.data.cvel[bid, 4]**2))
+                horiz_vel = float(
+                    np.sqrt(self.data.cvel[bid, 3] ** 2 + self.data.cvel[bid, 4] ** 2)
+                )
                 drag_penalty += horiz_vel
                 grippers_planted += 1
         torso_vz = float(self.data.cvel[1, 5])
         plant_and_lift = float(grippers_planted) * max(0.0, torso_vz)
 
         joints_moving = int(np.sum(np.abs(delta) > 1e-4))
-        too_many_joints_penalty = -p.W_JOINTS * max(0, joints_moving - p.MAX_ACTIVE_JOINTS)
+        too_many_joints_penalty = -p.W_JOINTS * max(
+            0, joints_moving - p.MAX_ACTIVE_JOINTS
+        )
 
         # stability bonus: at target height AND low joint velocity
         stable_vel = getattr(p, "STABLE_VEL", 0.05)

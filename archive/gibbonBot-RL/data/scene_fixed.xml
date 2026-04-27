@@ -2,20 +2,20 @@
 <mujoco model="ape_robot">
   <compiler angle="radian" />
   <asset>
-    <mesh name="base_link" content_type="model/stl" file="../roarm_ws/roarm_description/meshes/roarm_m3/base_link.stl" scale="0.001 0.001 0.001" />
-    <mesh name="link1" content_type="model/stl" file="../roarm_ws/roarm_description/meshes/roarm_m3/link1.stl" scale="0.001 0.001 0.001" />
-    <mesh name="link2" content_type="model/stl" file="../roarm_ws/roarm_description/meshes/roarm_m3/link2.stl" scale="0.001 0.001 0.001" />
-    <mesh name="link3" content_type="model/stl" file="../roarm_ws/roarm_description/meshes/roarm_m3/link3.stl" scale="0.001 0.001 0.001" />
-    <mesh name="link4" content_type="model/stl" file="../roarm_ws/roarm_description/meshes/roarm_m3/link4.stl" scale="0.001 0.001 0.001" />
-    <mesh name="link5" content_type="model/stl" file="../roarm_ws/roarm_description/meshes/roarm_m3/link5.stl" scale="0.001 0.001 0.001" />
-    <mesh name="gripper_link" content_type="model/stl" file="../roarm_ws/roarm_description/meshes/roarm_m3/gripper_link.stl" scale="0.001 0.001 0.001" />
+    <mesh name="base_link" content_type="model/stl" file="meshes/base_link.stl" scale="0.001 0.001 0.001" />
+    <mesh name="link1" content_type="model/stl" file="meshes/link1.stl" scale="0.001 0.001 0.001" />
+    <mesh name="link2" content_type="model/stl" file="meshes/link2.stl" scale="0.001 0.001 0.001" />
+    <mesh name="link3" content_type="model/stl" file="meshes/link3.stl" scale="0.001 0.001 0.001" />
+    <mesh name="link4" content_type="model/stl" file="meshes/link4.stl" scale="0.001 0.001 0.001" />
+    <mesh name="link5" content_type="model/stl" file="meshes/link5.stl" scale="0.001 0.001 0.001" />
+    <mesh name="gripper_link" content_type="model/stl" file="meshes/gripper_link.stl" scale="0.001 0.001 0.001" />
   </asset>
   <visual>
     <headlight ambient="0.4 0.4 0.4" diffuse="0.6 0.6 0.6" specular="0 0 0" />
     <global offwidth="800" offheight="600" />
   </visual>
   <worldbody>
-    <geom name="floor" type="plane" pos="0 0 0" size="10 10 0.1" rgba="0.3 0.6 0.3 1" condim="3" friction="1.0 0.01 0.001" contype="1" conaffinity="31" />
+    <geom name="floor" type="plane" pos="0 0 0" size="10 10 0.1" rgba="0.2 0.2 0.2 0.5" condim="3" friction="1.0 0.01 0.001" contype="1" conaffinity="31" />
     <body name="torso" pos="0 0 0.2">
       <inertial pos="-0.0192447 0 -0.0101645" quat="0.439032 0.439032 -0.554303 0.554303" mass="3.02487" diaginertia="0.0402837 0.0351039 0.0308832" />
       <joint name="world_to_torso" type="free" />

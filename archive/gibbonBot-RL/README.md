@@ -8,7 +8,6 @@ Reinforcement learning for a 4-limb robotic ape. SB3 PPO on CPU with MuJoCo.
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-sudo apt install python3-tk   # for the params UI (WSL/Ubuntu)
 ```
 
 ## Workflow
@@ -33,14 +32,13 @@ python analyze.py ape_stand_50000.zip
 # Open viewer only (no training)
 PYTHONPATH=src python src/gibbonbot/utils/watch.py --task stand
 
-# Open params UI standalone
-PYTHONPATH=src python src/gibbonbot/utils/params_ui.py
+
 ```
 
-## Real-time parameter control
+## Parameter control
 
-A floating slider panel opens automatically with `train.py` or `watch.py`.
-Move a slider → `params.py` is updated → the env picks it up within one step.
+Parameters are defined in `src/gibbonbot/envs/params.py` and can be edited directly.
+The environment picks up changes automatically within one step.
 
 Key params to tune while watching:
 
@@ -129,7 +127,6 @@ Historical scene files from different development stages are preserved in the sc
 
 ## GPU Training
 
-For GPU-accelerated training, use the  script:
 For GPU-accelerated training, use the train_gpu.py script:
 
 Usage examples:

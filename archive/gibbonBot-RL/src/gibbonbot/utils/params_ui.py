@@ -10,10 +10,10 @@ import tkinter as tk
 PARAMS_FILE = pathlib.Path(__file__).parent.parent / "envs" / "params.py"
 
 _PARAM_DEFS = [
-    ("MOTOR_MAX_SPEED",          0.001, 0.10,   0.001,  True),
+    ("MOTOR_MAX_SPEED",          0.01, 0.20,   0.01,   True),
     ("MAX_ACTIVE_JOINTS",        1,     24,     1,      False),
-    ("PHYSICS_STEPS_PER_ACTION", 10,    500,    10,     False),
-    ("REALTIME_FACTOR",          0.1,   3.0,    0.05,   True),
+    ("PHYSICS_STEPS_PER_ACTION", 50,    300,    10,     False),
+    ("REALTIME_FACTOR",          0.1, 2.0,    0.1,   True),
     ("TARGET_Z",                 0.05,  0.60,   0.01,   True),
     ("TARGET_TOL",               0.005, 0.10,   0.005,  True),
     ("LIFTED_Z",                 0.02,  0.40,   0.01,   True),
@@ -64,7 +64,7 @@ def _write_param(name, value, is_float):
             if s.startswith(name) and "=" in s:
                 indent = line[: len(line) - len(line.lstrip())]
                 comment = ("  " + s[s.index("#"):]) if "#" in s else ""
-                val_str = f"{value:.6g}" if is_float else str(int(round(value)))
+                val_str = f"{value:.6f}" if is_float else str(int(round(value)))
                 lines[i] = f"{indent}{name} = {val_str}{comment}"
                 break
         PARAMS_FILE.write_text("\n".join(lines) + "\n")
@@ -99,7 +99,7 @@ def main():
 
         tk.Label(row, text=name, width=26, anchor="w", font=("Courier", 9)).pack(side="left")
 
-        val_var = tk.StringVar(value=f"{val:.4g}" if is_float else str(int(val)))
+        val_var = tk.StringVar(value=f"{val:.6f}" if is_float else str(int(val)))
         tk.Label(row, textvariable=val_var, width=8, anchor="e", font=("Courier", 9)).pack(side="right")
 
         slider = tk.Scale(row, from_=lo, to=hi, resolution=step,
