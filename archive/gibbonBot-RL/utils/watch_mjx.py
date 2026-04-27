@@ -1,11 +1,11 @@
 """
-Live viewer for MJX training — mirrors utils/watch.py but loads .npz Flax checkpoints.
+Live viewer for MJX training — loads .npz Flax checkpoints and runs them
+on CPU MuJoCo with the same step semantics as MJX (direct ctrl, 16 physics steps).
 
-Runs the best checkpoint so far on CPU MuJoCo with the viewer open.
 Hot-swaps policy when a newer checkpoint appears.
 
 Usage:
-    python utils/watch_mjx.py              # watches runs/ape_stand_mjx/
+    python utils/watch_mjx.py
 """
 
 import sys
@@ -18,11 +18,15 @@ import jax
 import jax.numpy as jnp
 import flax.linen as nn
 import mujoco
+import mujoco.viewer
 
-from envs.stand_env import StandEnv
-from envs.stand_env_mjx import OBS_DIM, ACT_DIM
+from envs.common import SCENE, MAX_STEPS, ACT_DIM
+from envs.stand_env_mjx import OBS_DIM, PHYSICS_STEPS_PER_ACTION
+import envs.params as params_mod
+import importlib
 
 RUNS = pathlib.Path("runs/ape_stand_mjx")
+PARAMS_FILE = pathlib.Path(__file__).parent.parent / "envs" / "params.py"
 
 
 class ActorCritic(nn.Module):
@@ -49,7 +53,7 @@ def load_policy(path):
 
 def predict(net, params, obs):
     obs_j = jnp.array(obs, dtype=jnp.float32)
-    mean, log_std, _ = net.apply(params, obs_j)
+    mean, _, _ = net.apply(params, obs_j)
     return np.array(jnp.tanh(mean))
 
 
@@ -58,12 +62,45 @@ def latest_checkpoint():
     return ckpts[-1] if ckpts else None
 
 
+def get_obs(data):
+    return np.concatenate([
+        data.qpos[2:3],
+        data.qpos[3:7],
+        data.qvel[0:3],
+        data.qvel[3:6],
+        data.qpos[7:],
+        data.qvel[6:],
+    ]).astype(np.float32)
+
+
+def reset(model, data, rng):
+    mujoco.mj_resetData(model, data)
+    yaw = rng.uniform(-np.pi, np.pi)
+    data.qpos[0] = rng.uniform(-0.1, 0.1)
+    data.qpos[1] = rng.uniform(-0.1, 0.1)
+    data.qpos[2] = 0.45
+    data.qpos[3] = np.cos(yaw / 2)
+    data.qpos[4] = 0.0
+    data.qpos[5] = 0.0
+    data.qpos[6] = np.sin(yaw / 2)
+    data.qpos[7:] = rng.uniform(-0.15, 0.15, size=24)
+    data.qvel[:] = 0.0
+    data.ctrl[:] = 0
+    mujoco.mj_forward(model, data)
+
+
 def main():
-    env = StandEnv(render_mode="human")
+    model = mujoco.MjModel.from_xml_path(str(SCENE))
+    data = mujoco.MjData(model)
+    jnt_lo = np.array([model.jnt_range[i][0] for i in range(1, model.njnt)])
+    jnt_hi = np.array([model.jnt_range[i][1] for i in range(1, model.njnt)])
+
+    viewer = mujoco.viewer.launch_passive(model, data)
+    rng = np.random.default_rng(0)
 
     ckpt = latest_checkpoint()
     if ckpt is None:
-        print(f"[watch_mjx] no checkpoint yet in {RUNS} — showing random policy, waiting...")
+        print(f"[watch_mjx] no checkpoint yet in {RUNS} — random policy, waiting...")
         net, params = None, None
         last_mtime = 0.0
     else:
@@ -71,14 +108,11 @@ def main():
         net, params = load_policy(ckpt)
         last_mtime = ckpt.stat().st_mtime
 
+    params_mtime = 0.0
+
     ep = 0
-
-    def viewer_alive():
-        v = getattr(env, "_viewer", None)
-        return v is None or v.is_running()
-
     try:
-        while viewer_alive():
+        while viewer.is_running():
             new_ckpt = latest_checkpoint()
             if new_ckpt is not None:
                 mtime = new_ckpt.stat().st_mtime
@@ -87,34 +121,55 @@ def main():
                     net, params = load_policy(new_ckpt)
                     last_mtime = mtime
 
-            obs, _ = env.reset(seed=ep, options={"no_settle": True})
-            done = False
-            total_reward = 0.0
+            reset(model, data, rng)
             step = 0
+            flipped = False
 
-            while not done and viewer_alive():
+            while step < MAX_STEPS and viewer.is_running():
+                # hot-reload params
+                try:
+                    pm = PARAMS_FILE.stat().st_mtime
+                    if pm != params_mtime:
+                        importlib.reload(params_mod)
+                        params_mtime = pm
+                except Exception:
+                    pass
+                speed = max(getattr(params_mod, "REALTIME_FACTOR", 1.0), 0.01)
+                sleep_dt = float(model.opt.timestep) / speed
+
+                obs = get_obs(data)
                 if net is None:
-                    action = env.action_space.sample()
+                    action = rng.uniform(-1, 1, size=ACT_DIM).astype(np.float32)
                 else:
-                    action = predict(net, params, obs[:OBS_DIM])
-                obs, reward, terminated, truncated, info = env.step(action)
-                total_reward += reward
-                step += 1
-                done = terminated or truncated
+                    action = predict(net, params, obs)
 
-            if not viewer_alive():
+                ctrl = 0.5 * (action + 1.0) * (jnt_hi - jnt_lo) + jnt_lo
+                data.ctrl[:] = ctrl
+
+                for _ in range(PHYSICS_STEPS_PER_ACTION):
+                    mujoco.mj_step(model, data)
+                    viewer.sync()
+                    if sleep_dt > 0:
+                        time.sleep(sleep_dt)
+
+                if data.qpos[3] < 0:
+                    flipped = True
+                    break
+                step += 1
+
+            if not viewer.is_running():
                 break
 
             ep += 1
             ckpt_name = new_ckpt.name if new_ckpt else "?"
-            status = "FLIPPED" if info.get("upside_down") else ("TIMEOUT" if step >= 2000 else "DONE")
-            print(f"Ep {ep:3d}: {status:<8}  torso={info['torso_z']:.3f}m  "
-                  f"reward={total_reward:.1f}  steps={step}  [{ckpt_name}]")
+            status = "FLIPPED" if flipped else ("TIMEOUT" if step >= MAX_STEPS else "DONE")
+            torso_z = float(data.qpos[2])
+            print(f"Ep {ep:3d}: {status:<8}  torso={torso_z:.3f}m  steps={step}  [{ckpt_name}]")
 
     except KeyboardInterrupt:
         pass
     finally:
-        env.close()
+        viewer.close()
         print("\n[watch_mjx] closed.")
 
 
