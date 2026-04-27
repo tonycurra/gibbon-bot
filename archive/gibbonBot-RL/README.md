@@ -126,3 +126,28 @@ Historical scene files from different development stages are preserved in the sc
 - Comparing evolution of robot configuration
 - Debugging regressions by reverting to known-working configurations
 - Researching the development history of simulation parameters
+
+## GPU Training
+
+For GPU-accelerated training, use the  script:
+For GPU-accelerated training, use the train_gpu.py script:
+
+Usage examples:
+  python train_gpu.py               # GPU training + live viewer
+  python train_gpu.py --no-watch    # GPU training only
+  python train_gpu.py --envs 4      # More parallel environments
+
+### GPU Requirements
+
+- PyTorch with CUDA support
+- NVIDIA GPU with updated drivers
+- CUDA toolkit compatible with your PyTorch version
+
+### GPU vs CPU Comparison
+
+| Aspect | train.py (CPU) | train_gpu.py (GPU) |
+|--------|---------------|------------------|
+| Speed | Slower | Faster (when GPU available) |
+| Device | CPU only | GPU + CPU |
+| Parallelism | Limited | Better parallelization |
+| Fallback | Always works | Falls back to CPU if GPU unavailable |
