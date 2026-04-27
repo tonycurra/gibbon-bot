@@ -45,7 +45,7 @@ SPAWN_Z = 0.35
 SETTLE_VEL = 0.05
 SETTLE_STEPS = 3000  # enough for a full fall + 150-step stillness confirmation
 MAX_STEPS = 2000
-FLOOR_Z = 0.04
+FLOOR_Z = 0.0
 
 # Defaults (overridden each step from params_mod)
 TARGET_Z = 0.30
@@ -134,7 +134,7 @@ class StandEnv(gym.Env):
         self._p = self._load_params()
 
         if render_mode == "human":
-            self._viewer = mujoco.viewer.launch_passive(self.model, self.data)
+            self._viewer = mujoco.viewer.launch_passive(self.model, self.data, )
         else:
             self._viewer = None
 

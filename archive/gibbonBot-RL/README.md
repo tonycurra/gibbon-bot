@@ -86,3 +86,16 @@ python src/gibbonbot/utils/fix_collisions.py
 ```
 
 The training script automatically uses `data/scene_fixed.xml` which has these fixes applied.
+
+## Floor Contact Fixes
+
+Fixed floor penetration issues by:
+- Aligning visual and physics floor positions (both now at z=0)
+- Fixing STL mesh contact affinity (changed from 1 to 31 for proper floor collisions)
+- Reducing floor friction for stable contacts
+- Updating constraint dimensions for proper plane contacts
+
+## Scene History
+
+Historical scene files are preserved in  folder for reference and debugging.
+Historical scene files are preserved in scenes_history/ folder for reference and debugging.
