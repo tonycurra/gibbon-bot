@@ -9,10 +9,13 @@
     <mesh name="link4" content_type="model/stl" file="../roarm_ws/roarm_description/meshes/roarm_m3/link4.stl" scale="0.001 0.001 0.001" />
     <mesh name="link5" content_type="model/stl" file="../roarm_ws/roarm_description/meshes/roarm_m3/link5.stl" scale="0.001 0.001 0.001" />
     <mesh name="gripper_link" content_type="model/stl" file="../roarm_ws/roarm_description/meshes/roarm_m3/gripper_link.stl" scale="0.001 0.001 0.001" />
-    <material name="floor_mat" rgba="0.7 0.7 0.7 1" reflectance="0.05" />
   </asset>
+  <visual>
+    <headlight ambient="0.4 0.4 0.4" diffuse="0.6 0.6 0.6" specular="0 0 0" />
+    <global offwidth="800" offheight="600" />
+  </visual>
   <worldbody>
-    <geom name="floor" type="plane" size="10 10 0.1" material="floor_mat" condim="4" friction="1.0 0.01 0.001" contype="1" conaffinity="31" />
+    <geom name="floor" type="plane" size="5 5 0.1" rgba="0.5 0.5 0.5 1" condim="4" friction="5.0 0.5 0.1" contype="1" conaffinity="31" />
     <body name="torso" pos="0 0 0.2">
       <inertial pos="-0.0192447 0 -0.0101645" quat="0.439032 0.439032 -0.554303 0.554303" mass="3.02487" diaginertia="0.0402837 0.0351039 0.0308832" />
       <joint name="world_to_torso" type="free" />
@@ -33,6 +36,7 @@
             <inertial pos="-0.0015 -0.0765 0.00505" quat="0.707107 0.707107 0 0" mass="0.021608" diaginertia="6.37699e-05 6.28965e-05 3.67026e-06" />
             <joint name="fl_link2_to_link3" pos="0 0 0" axis="0 0 1" range="-1 2.95" actuatorfrcrange="-2.94 2.94" damping="4" />
             <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link3" class="robot" contype="1" conaffinity="1" />
+            <geom type="capsule" size="0.010" fromto="0 -0.02 0 0 -0.14 0" rgba="0 0 0 0" contype="1" conaffinity="31" />
             <body name="fl_link4" pos="0 -0.144586 0">
               <inertial pos="-0.0015 -0.022 -0.00075" quat="0.5 0.5 -0.5 0.5" mass="0.0099933" diaginertia="5.60238e-06 4.53979e-06 3.78103e-06" />
               <joint name="fl_link3_to_link4" pos="0 0 0" axis="0 0 1" range="-1.5708 1.5708" actuatorfrcrange="-2.94 2.94" damping="4" />
@@ -45,6 +49,7 @@
                   <inertial pos="0.027 0.0027 -0.018935" quat="0.5 0.5 0.5 0.5" mass="0.0028708" diaginertia="1.82071e-06 1.60231e-06 5.23216e-07" />
                   <joint name="fl_link5_to_gripper_link" pos="0 0 0" axis="0 0 1" range="0 1.5" actuatorfrcrange="-1.47 1.47" damping="4" />
                   <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="gripper_link" class="robot" contype="1" conaffinity="1" />
+                  <geom type="sphere" size="0.012" pos="0.027 0.0027 -0.018935" rgba="0 0 0 0" contype="1" conaffinity="31" />
                 </body>
               </body>
             </body>
@@ -63,6 +68,7 @@
             <inertial pos="-0.0015 -0.0765 0.00505" quat="0.707107 0.707107 0 0" mass="0.021608" diaginertia="6.37699e-05 6.28965e-05 3.67026e-06" />
             <joint name="fr_link2_to_link3" pos="0 0 0" axis="0 0 1" range="-1 2.95" actuatorfrcrange="-2.94 2.94" damping="4" />
             <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link3" class="robot" contype="1" conaffinity="1" />
+            <geom type="capsule" size="0.010" fromto="0 -0.02 0 0 -0.14 0" rgba="0 0 0 0" contype="1" conaffinity="31" />
             <body name="fr_link4" pos="0 -0.144586 0">
               <inertial pos="-0.0015 -0.022 -0.00075" quat="0.5 0.5 -0.5 0.5" mass="0.0099933" diaginertia="5.60238e-06 4.53979e-06 3.78103e-06" />
               <joint name="fr_link3_to_link4" pos="0 0 0" axis="0 0 1" range="-1.5708 1.5708" actuatorfrcrange="-2.94 2.94" damping="4" />
@@ -75,6 +81,7 @@
                   <inertial pos="0.027 0.0027 -0.018935" quat="0.5 0.5 0.5 0.5" mass="0.0028708" diaginertia="1.82071e-06 1.60231e-06 5.23216e-07" />
                   <joint name="fr_link5_to_gripper_link" pos="0 0 0" axis="0 0 1" range="0 1.5" actuatorfrcrange="-1.47 1.47" damping="4" />
                   <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="gripper_link" class="robot" contype="1" conaffinity="1" />
+                  <geom type="sphere" size="0.012" pos="0.027 0.0027 -0.018935" rgba="0 0 0 0" contype="1" conaffinity="31" />
                 </body>
               </body>
             </body>
@@ -93,6 +100,7 @@
             <inertial pos="-0.0015 -0.0765 0.00505" quat="0.707107 0.707107 0 0" mass="0.021608" diaginertia="6.37699e-05 6.28965e-05 3.67026e-06" />
             <joint name="bl_link2_to_link3" pos="0 0 0" axis="0 0 1" range="-1 2.95" actuatorfrcrange="-2.94 2.94" damping="4" />
             <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link3" class="robot" contype="1" conaffinity="1" />
+            <geom type="capsule" size="0.010" fromto="0 -0.02 0 0 -0.14 0" rgba="0 0 0 0" contype="1" conaffinity="31" />
             <body name="bl_link4" pos="0 -0.144586 0">
               <inertial pos="-0.0015 -0.022 -0.00075" quat="0.5 0.5 -0.5 0.5" mass="0.0099933" diaginertia="5.60238e-06 4.53979e-06 3.78103e-06" />
               <joint name="bl_link3_to_link4" pos="0 0 0" axis="0 0 1" range="-1.5708 1.5708" actuatorfrcrange="-2.94 2.94" damping="4" />
@@ -105,6 +113,7 @@
                   <inertial pos="0.027 0.0027 -0.018935" quat="0.5 0.5 0.5 0.5" mass="0.0028708" diaginertia="1.82071e-06 1.60231e-06 5.23216e-07" />
                   <joint name="bl_link5_to_gripper_link" pos="0 0 0" axis="0 0 1" range="0 1.5" actuatorfrcrange="-1.47 1.47" damping="4" />
                   <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="gripper_link" class="robot" contype="1" conaffinity="1" />
+                  <geom type="sphere" size="0.012" pos="0.027 0.0027 -0.018935" rgba="0 0 0 0" contype="1" conaffinity="31" />
                 </body>
               </body>
             </body>
@@ -123,6 +132,7 @@
             <inertial pos="-0.0015 -0.0765 0.00505" quat="0.707107 0.707107 0 0" mass="0.021608" diaginertia="6.37699e-05 6.28965e-05 3.67026e-06" />
             <joint name="br_link2_to_link3" pos="0 0 0" axis="0 0 1" range="-1 2.95" actuatorfrcrange="-2.94 2.94" damping="4" />
             <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link3" class="robot" contype="1" conaffinity="1" />
+            <geom type="capsule" size="0.010" fromto="0 -0.02 0 0 -0.14 0" rgba="0 0 0 0" contype="1" conaffinity="31" />
             <body name="br_link4" pos="0 -0.144586 0">
               <inertial pos="-0.0015 -0.022 -0.00075" quat="0.5 0.5 -0.5 0.5" mass="0.0099933" diaginertia="5.60238e-06 4.53979e-06 3.78103e-06" />
               <joint name="br_link3_to_link4" pos="0 0 0" axis="0 0 1" range="-1.5708 1.5708" actuatorfrcrange="-2.94 2.94" damping="4" />
@@ -135,6 +145,7 @@
                   <inertial pos="0.027 0.0027 -0.018935" quat="0.5 0.5 0.5 0.5" mass="0.0028708" diaginertia="1.82071e-06 1.60231e-06 5.23216e-07" />
                   <joint name="br_link5_to_gripper_link" pos="0 0 0" axis="0 0 1" range="0 1.5" actuatorfrcrange="-1.47 1.47" damping="4" />
                   <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="gripper_link" class="robot" contype="1" conaffinity="1" />
+                  <geom type="sphere" size="0.012" pos="0.027 0.0027 -0.018935" rgba="0 0 0 0" contype="1" conaffinity="31" />
                 </body>
               </body>
             </body>
@@ -142,9 +153,7 @@
         </body>
       </body>
     </body>
-    <body name="tree" pos="5 0 0">
-      <geom name="canopy" type="sphere" size="1.3" pos="0 0 3.0" rgba="0.12 0.45 0.08 1" />
-    </body>
+
   </worldbody>
   <default>
     <default class="robot">

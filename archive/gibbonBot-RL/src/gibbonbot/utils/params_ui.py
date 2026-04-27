@@ -13,6 +13,7 @@ _PARAM_DEFS = [
     ("MOTOR_MAX_SPEED",          0.001, 0.10,   0.001,  True),
     ("MAX_ACTIVE_JOINTS",        1,     24,     1,      False),
     ("PHYSICS_STEPS_PER_ACTION", 10,    500,    10,     False),
+    ("REALTIME_FACTOR",          0.1,   3.0,    0.05,   True),
     ("TARGET_Z",                 0.05,  0.60,   0.01,   True),
     ("TARGET_TOL",               0.005, 0.10,   0.005,  True),
     ("LIFTED_Z",                 0.02,  0.40,   0.01,   True),
@@ -31,6 +32,8 @@ _PARAM_DEFS = [
     ("W_PROXIMITY",              0.0,   10.0,   0.1,    True),
     ("W_JOINTS",                 0.0,   2.0,    0.05,   True),
     ("ARM_SAFETY_MARGIN",        0.01,  0.20,   0.01,   True),
+    ("ARM_TOUCH_DIST",           0.005, 0.05,   0.005,  True),
+    ("ARM_COLLISION_PENALTY",    0.0,   200.0,  5.0,    True),
     ("FLIP_PENALTY",             0.0,   50.0,   1.0,    True),
 ]
 

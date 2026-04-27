@@ -24,6 +24,7 @@ Reward per step:
 
 import importlib
 import pathlib
+import time
 
 import gymnasium as gym
 import mujoco
@@ -42,7 +43,7 @@ PARAMS_FILE = pathlib.Path(__file__).parent / "params.py"
 # Static constants (not hot-reloaded)
 SPAWN_Z = 0.35
 SETTLE_VEL = 0.05
-SETTLE_STEPS = 500
+SETTLE_STEPS = 3000  # enough for a full fall + 150-step stillness confirmation
 MAX_STEPS = 2000
 FLOOR_Z = 0.04
 
@@ -145,25 +146,45 @@ class StandEnv(gym.Env):
 
         mujoco.mj_resetData(self.model, self.data)
 
-        self.data.qpos[0] = 0.0
-        self.data.qpos[1] = 0.0
-        self.data.qpos[2] = SPAWN_Z
-        self.data.qpos[3] = 1.0  # quat w (upright)
-        self.data.qpos[4:7] = 0.0
+        # randomize spawn position — upright, random yaw only, high enough to clear the floor
+        self.data.qpos[0] = rng.uniform(-0.1, 0.1)   # x
+        self.data.qpos[1] = rng.uniform(-0.1, 0.1)   # y
+        self.data.qpos[2] = rng.uniform(0.50, 0.70)  # z — high enough arms never clip floor
 
-        # arms in splayed-down pose + small noise
-        self.data.qpos[7:] = _STAND_INIT + rng.uniform(-0.05, 0.05, size=24)
+        # random yaw only so torso is always upright at spawn
+        yaw = rng.uniform(-np.pi, np.pi)
+        self.data.qpos[3] = np.cos(yaw / 2)  # w
+        self.data.qpos[4] = 0.0              # x
+        self.data.qpos[5] = 0.0              # y
+        self.data.qpos[6] = np.sin(yaw / 2)  # z
 
-        # let robot fall and settle before the episode starts
+        # arms in splayed-down pose + noise for variety
+        self.data.qpos[7:] = _STAND_INIT + rng.uniform(-0.3, 0.3, size=24)
+
+        # drop with zero control and wait for the robot to fully settle
         self.data.ctrl[:] = 0
+        p = self._load_params()
+        dt = float(self.model.opt.timestep)
+        realtime = getattr(p, "REALTIME_FACTOR", 0.0)
+        sleep_dt = dt * realtime if self._viewer is not None else 0.0
+
+        still_steps = 0
+        required_still = 150   # must stay below SETTLE_VEL for this many consecutive steps
         for _ in range(SETTLE_STEPS):
             mujoco.mj_step(self.model, self.data)
+            if self._viewer is not None:
+                self._viewer.sync()
+                if sleep_dt > 0:
+                    time.sleep(sleep_dt)
             if np.max(np.abs(self.data.qvel)) < SETTLE_VEL:
-                break
+                still_steps += 1
+                if still_steps >= required_still:
+                    break
+            else:
+                still_steps = 0
 
         mujoco.mj_forward(self.model, self.data)
         self._step_count = 0
-        # initialize motor positions from actual settled joint positions
         settled_pos = self.data.qpos[7:].astype(np.float32)
         self._motor_pos = np.clip(
             2.0 * (settled_pos - self._jnt_lo) / (self._jnt_hi - self._jnt_lo) - 1.0,
@@ -178,17 +199,30 @@ class StandEnv(gym.Env):
     def step(self, action):
         p = self._load_params()
         action = np.asarray(action, dtype=np.float32)
-        # motor model: each joint moves at most MOTOR_MAX_SPEED per step toward target
-        delta = np.clip(action - self._motor_pos, -p.MOTOR_MAX_SPEED, p.MOTOR_MAX_SPEED)
-        self._motor_pos = self._motor_pos + delta
-        ctrl = 0.5 * (self._motor_pos + 1.0) * (self._jnt_hi - self._jnt_lo) + self._jnt_lo
-        self.data.ctrl[:] = ctrl
 
+        # Per-substep motor speed: total travel spread evenly across physics steps
+        substep_speed = p.MOTOR_MAX_SPEED / p.PHYSICS_STEPS_PER_ACTION
+
+        # Real-time sleep per physics step (0 during headless training)
+        dt = float(self.model.opt.timestep)  # 0.002 s
+        realtime = getattr(p, "REALTIME_FACTOR", 0.0)
+        sleep_dt = dt * realtime if self._viewer is not None else 0.0
+
+        total_delta = np.zeros_like(self._motor_pos)
         for _ in range(p.PHYSICS_STEPS_PER_ACTION):
+            # motor moves a tiny bit each substep — continuous servo motion
+            sub_delta = np.clip(action - self._motor_pos, -substep_speed, substep_speed)
+            self._motor_pos += sub_delta
+            total_delta += sub_delta
+            ctrl = 0.5 * (self._motor_pos + 1.0) * (self._jnt_hi - self._jnt_lo) + self._jnt_lo
+            self.data.ctrl[:] = ctrl
             mujoco.mj_step(self.model, self.data)
+            if self._viewer is not None:
+                self._viewer.sync()
+                if sleep_dt > 0:
+                    time.sleep(sleep_dt)
 
-        if self._viewer is not None:
-            self._viewer.sync()
+        delta = total_delta  # used for smoothness penalty below
 
         self._step_count += 1
         obs = self._get_obs()
@@ -213,13 +247,16 @@ class StandEnv(gym.Env):
         self._prev_action = action.copy()
 
         proximity_penalty = 0.0
+        arms_colliding = False
         margin = p.ARM_SAFETY_MARGIN
+        touch_dist = getattr(p, "ARM_TOUCH_DIST", 0.01)  # below this = collision → terminate
         for i, grp_a in enumerate(_ARM_GROUPS):
             pos_a = self.data.xpos[grp_a]  # (6,3)
             for grp_b in _ARM_GROUPS[i+1:]:
                 pos_b = self.data.xpos[grp_b]  # (6,3)
-                # all pairwise distances in one shot: (6,1,3) - (1,6,3) → (6,6)
                 dists = np.linalg.norm(pos_a[:, None] - pos_b[None, :], axis=-1)
+                if float(dists.min()) < touch_dist:
+                    arms_colliding = True
                 violations = margin - dists
                 proximity_penalty += float(np.sum(np.square(np.maximum(violations, 0))))
 
@@ -264,7 +301,11 @@ class StandEnv(gym.Env):
         if upside_down:
             reward -= p.FLIP_PENALTY
 
-        terminated = upside_down
+        arm_collision_penalty = getattr(p, "ARM_COLLISION_PENALTY", 50.0)
+        if arms_colliding:
+            reward -= arm_collision_penalty
+
+        terminated = upside_down or arms_colliding
         truncated = self._step_count >= MAX_STEPS
 
         info = {
@@ -273,6 +314,7 @@ class StandEnv(gym.Env):
             "shoulder_z": shoulder_z,
             "fallen": fallen,
             "upside_down": upside_down,
+            "arms_colliding": arms_colliding,
             "got_up": got_up,
             "stable": bool(at_target and is_stable),
             "height_reward": height_reward,

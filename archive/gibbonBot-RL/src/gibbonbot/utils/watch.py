@@ -20,11 +20,35 @@ import time
 import numpy as np
 from stable_baselines3 import PPO
 
-# Live controls — adjust with keyboard in terminal while viewer runs:
-#   +/-  speed up / slow down playback
-#   p    pause / unpause
-_speed  = 0.5    # seconds per action step (matches PHYSICS_STEPS_PER_ACTION × 0.002)
 _paused = False
+
+PARAMS_FILE = pathlib.Path(__file__).parent.parent / "envs" / "params.py"
+
+def _set_realtime(factor):
+    """Write REALTIME_FACTOR into params.py so the env picks it up."""
+    try:
+        lines = PARAMS_FILE.read_text().splitlines()
+        found = False
+        for i, line in enumerate(lines):
+            if line.strip().startswith("REALTIME_FACTOR"):
+                lines[i] = f"REALTIME_FACTOR = {factor:.3f}"
+                found = True
+                break
+        if not found:
+            lines.append(f"REALTIME_FACTOR = {factor:.3f}")
+        PARAMS_FILE.write_text("\n".join(lines) + "\n")
+        print(f"\r[speed] REALTIME_FACTOR={factor:.2f}x", flush=True)
+    except Exception as e:
+        print(f"\r[speed] error: {e}", flush=True)
+
+def _get_realtime():
+    try:
+        for line in PARAMS_FILE.read_text().splitlines():
+            if line.strip().startswith("REALTIME_FACTOR"):
+                return float(line.split("=")[1].split("#")[0].strip())
+    except Exception:
+        pass
+    return 1.0
 
 def _print_controls():
     print("\n[watch] keyboard controls (type in this terminal):")
@@ -89,11 +113,9 @@ def main():
                 if select.select([sys.stdin], [], [], 0.1)[0]:
                     ch = sys.stdin.read(1)
                     if ch == '+':
-                        _speed = max(0.05, _speed * 0.7)
-                        print(f"\r[speed] {_speed:.2f}s/step", flush=True)
+                        _set_realtime(max(0.1, _get_realtime() * 0.7))
                     elif ch == '-':
-                        _speed = min(5.0, _speed * 1.4)
-                        print(f"\r[speed] {_speed:.2f}s/step", flush=True)
+                        _set_realtime(min(5.0, _get_realtime() * 1.4))
                     elif ch == 'p':
                         _paused = not _paused
                         print(f"\r[{'PAUSED' if _paused else 'RUNNING'}]", flush=True)
@@ -137,7 +159,6 @@ def main():
                 done = terminated or truncated
                 while _paused and viewer_alive():
                     time.sleep(0.1)
-                time.sleep(_speed)
 
             if not viewer_alive():
                 break
