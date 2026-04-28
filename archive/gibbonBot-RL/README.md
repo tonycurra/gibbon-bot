@@ -36,6 +36,7 @@ All MJX params live in `envs/params_mjx.py`. Reward, motor, smoothness and learn
 Categories in the slider UI (top → bottom by visible impact):
 
 - ⚡ **Motion** — `PHYSICS_STEPS_PER_ACTION` ⚙, `MOTOR_MAX_SPEED`, `ACTION_SMOOTH_ALPHA`, `VIEWER_SPEED`
+- 🔧 **Hardware** — `JOINT_DAMPING` ⚙, `MOTOR_KP` ⚙ (override scene.xml damping/kp at load time)
 - 🧊 **Smoothness Penalties** — `W_SMOOTH`, `W_JVEL`, `W_ENERGY`
 - 🎯 **Goal Shaping** — `TARGET_Z`, `TARGET_TOL`, `W_HEIGHT`, `W_UPRIGHT`
 - 💀 **Survival** — `W_ALIVE`, `FLIP_PENALTY`
@@ -44,7 +45,7 @@ Categories in the slider UI (top → bottom by visible impact):
 
 Live feedback bars next to motor / smoothness / goal params are driven by `runs/ape_stand_mjx/live_stats.json` (written by the viewer). Bottom panel shows checkpoint, torso z, upright, ep length, rolling flip rate.
 
-Three preset buttons at the top: **Smooth**, **Fast train**, **Reset defaults**.
+Four preset buttons at the top: **Smooth**, **Fast train**, **Realistic motors**, **Reset defaults**.
 
 ## Saving notes & checkpoint history
 
@@ -69,7 +70,9 @@ envs/
   stand_env.py     — CPU reference env
   params.py        — CPU params + slider UI
 data/
-  scene.xml        — Robot MJCF
+  scene.xml        — Robot MJCF (joint ranges/torques match real ST32xx motors)
+  motors.md        — Motor specs (ST3235 / ST3215 / ST3215-HS) + per-joint mapping
+  controls.md      — Real-robot web UI, safety, startup, sim-to-real notes
 utils/
   watch_mjx.py     — Live checkpoint viewer (filters by --since timestamp)
   lineage.py       — Run metadata logger

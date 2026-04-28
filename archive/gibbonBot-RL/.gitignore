@@ -50,6 +50,7 @@ docs/*.toc
 /data/*
 !/data/scene.xml
 !/data/*.xml
+!/data/*.md
 output/
 results/
 

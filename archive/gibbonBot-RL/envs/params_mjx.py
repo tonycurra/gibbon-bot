@@ -5,10 +5,14 @@
 
 # --- timing ---
 PHYSICS_STEPS_PER_ACTION = 200  # physics steps per policy action (16 × 0.002s = 0.032s)
-VIEWER_SPEED = 17.000000  # how fast the viewer plays back: 1=real-time, 10=10× faster
+VIEWER_SPEED = 100.000000  # how fast the viewer plays back: 1=real-time, 10=10× faster
 
 # --- motor ---
 MOTOR_MAX_SPEED = 0.070000  # max normalised joint travel per action
+
+# --- hardware (overrides scene.xml; restart required) ---
+JOINT_DAMPING = 4.000000  # joint friction/back-EMF (N·m·s/rad). Higher = more drag.
+MOTOR_KP = 8.000000  # position controller stiffness. Higher = stiffer, lower = compliant.
 
 # --- goals ---
 TARGET_Z = 0.300000  # torso height target (metres)
@@ -26,8 +30,8 @@ W_PROXIMITY = 20.000000  # how strongly the arm-spacing penalty is applied
 FLIP_PENALTY = 200.000000  # one-time penalty when robot flips upside-down
 
 # --- learning (hot-reloadable between rollouts) ---
-LEARNING_RATE = 0.000900  # Adam learning rate — reduce if training is unstable
-ENT_COEF = 0.027000  # entropy bonus: 0=exploit, 0.02=explore more
+LEARNING_RATE = 0.000370  # Adam learning rate — reduce if training is unstable
+ENT_COEF = 0.050000  # entropy bonus: 0=exploit, 0.02=explore more
 CLIP_EPS = 0.150000  # PPO clip range: how much policy can change per update
 
 # --- smoothness penalties (set to 0 to disable) ---
@@ -88,6 +92,28 @@ if __name__ == "__main__":
              "  1   → real time (good for studying motion details)\n"
              "  10  → 10× faster (see more episodes per minute)\n"
              "  100 → as fast as the viewer can render"),
+        ]),
+        ("🔧  Hardware  —  motor stiffness & friction (restart required)", False, [
+            ("JOINT_DAMPING", 0.0, 20.0, 0.1, True, True, None,
+             "Joint friction in N·m·s/rad. Resists motion proportional to velocity.\n"
+             "  0.0  → frictionless (limbs spin freely, oscillate)\n"
+             "  1.0  → light friction\n"
+             "  4.0  → default (moderate damping, stable)\n"
+             "  10+  → heavy, joints feel sluggish\n"
+             "Real ST3215/3235 motors have significant internal friction from the\n"
+             "1:345 reduction gearset, so 4-8 is realistic. Higher values can mask\n"
+             "controller instability but reduce useful joint speed.\n"
+             "⚙ RESTART REQUIRED — modifies the loaded model."),
+            ("MOTOR_KP", 1.0, 50.0, 0.5, True, True, None,
+             "Position-controller stiffness (P-gain). Force = kp · (target − actual).\n"
+             "  1.0  → very compliant, barely resists displacement\n"
+             "  4.0  → soft, smooth tracking\n"
+             "  8.0  → default (balanced)\n"
+             "  20.0 → stiff, fast response, can overshoot\n"
+             "  50.0 → very stiff, near rigid\n"
+             "With torque cap 2.94 N·m: at kp=8, full torque is reached at ≈21° error.\n"
+             "Higher kp = faster tracking but bigger oscillations near targets.\n"
+             "⚙ RESTART REQUIRED — modifies the loaded model."),
         ]),
         ("🧊  Smoothness Penalties  —  reward shaping for non-twitchy motion", True, [
             ("W_SMOOTH", 0.0, 2.0, 0.01, True, False, "smooth_delta",
@@ -227,6 +253,10 @@ if __name__ == "__main__":
             "W_JVEL":                   0.0,
             "W_ENERGY":                 0.0,
         }),
+        ("Realistic motors", "#3a7fbf", {
+            "JOINT_DAMPING": 1.5,
+            "MOTOR_KP":     15.0,
+        }),
         ("Reset defaults", "#666666", {
             "PHYSICS_STEPS_PER_ACTION": 16,
             "VIEWER_SPEED":             1.0,
@@ -246,6 +276,8 @@ if __name__ == "__main__":
             "W_JVEL":                   0.001,
             "W_ENERGY":                 0.0005,
             "W_ALIVE":                  0.05,
+            "JOINT_DAMPING":            4.0,
+            "MOTOR_KP":                 8.0,
         }),
     ]
 

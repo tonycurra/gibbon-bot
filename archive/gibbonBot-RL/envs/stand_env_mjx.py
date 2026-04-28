@@ -87,6 +87,13 @@ def load_model():
             mj_model.geom_contype[i] = 0
             mj_model.geom_conaffinity[i] = 0
 
+    # Apply hardware overrides from params_mjx (free-joint DoFs at 0..5 are skipped).
+    damping = float(getattr(_p, "JOINT_DAMPING", 4.0))
+    kp      = float(getattr(_p, "MOTOR_KP",      8.0))
+    mj_model.dof_damping[6:] = damping
+    mj_model.actuator_gainprm[:, 0] = kp
+    mj_model.actuator_biasprm[:, 1] = -kp  # position actuator bias must match -kp
+
     mx = mjx.put_model(mj_model)
     jnt_lo = jnp.array([mj_model.jnt_range[i][0] for i in range(1, mj_model.njnt)])
     jnt_hi = jnp.array([mj_model.jnt_range[i][1] for i in range(1, mj_model.njnt)])
