@@ -20,32 +20,23 @@ See [QUICKSTART.md](QUICKSTART.md) for the recommended local workflow, or [REMOT
 | `utils/watch_mjx.py` | Live MuJoCo viewer — hot-swaps to the latest checkpoint |
 | `utils/tag.py` | Tag checkpoints with notes ("this one was good") |
 | `utils/lineage.py` | Show run history + per-checkpoint params snapshot table |
-| `envs/params_mjx.py` | Run directly to open the categorised slider UI for live tuning |
+| `envs/params_mjx.py` | All MJX training params — edit values in this file, comments explain ranges |
 | `envs/stand_env.py` | CPU Gymnasium reference env (kept for reference, not the main path) |
 | `envs/params.py` | Params for the CPU reference env |
 
 ## Two modes
 
-- **GO** *(default)* — `python train_mjx.py` — auto-picks 2048 envs on GPU (64 on CPU), spawns the viewer only. Terminal shows per-episode `reward≈X ↑/↓ (best Y)` so you can tell if it's learning. No params UI to tempt you.
-- **TUNE** — `python train_mjx.py --tune` — 32 envs, frequent saves, params UI auto-launches alongside the viewer for live tweaking.
+- **GO** *(default)* — `python train_mjx.py` — runs **1 env** by default (debug-friendly), spawns the viewer alongside. `SAVE_EVERY` adapts to env count so 1-env mode still produces checkpoints quickly. Use `--envs 1024` (or any number) for parallel training when you want speed.
+- **TUNE** — `python train_mjx.py --tune` — 32 envs, frequent saves, edit `envs/params_mjx.py` directly while training runs (params hot-reload between rollouts).
 
 ## Parameters (MJX)
 
-All MJX params live in `envs/params_mjx.py`. Reward, motor, smoothness and learning params hot-reload between rollouts; `PHYSICS_STEPS_PER_ACTION` (marked ⚙ in the UI) is baked into the JIT and needs a restart.
+All MJX params live in `envs/params_mjx.py` — edit values directly, the file has detailed comments above each section explaining ranges and trade-offs.
 
-Categories in the slider UI (top → bottom by visible impact):
+Reload behaviour:
 
-- ⚡ **Motion** — `PHYSICS_STEPS_PER_ACTION` ⚙, `MOTOR_MAX_SPEED`, `ACTION_SMOOTH_ALPHA`, `VIEWER_SPEED`
-- 🔧 **Hardware** — `JOINT_DAMPING` ⚙, `MOTOR_KP` ⚙ (override scene.xml damping/kp at load time)
-- 🧊 **Smoothness Penalties** — `W_SMOOTH`, `W_JVEL`, `W_ENERGY`
-- 🎯 **Goal Shaping** — `TARGET_Z`, `TARGET_TOL`, `W_HEIGHT`, `W_UPRIGHT`
-- 💀 **Survival** — `W_ALIVE`, `FLIP_PENALTY`
-- 🤝 **Arm Safety** — `ARM_SAFETY_MARGIN`, `W_PROXIMITY`
-- 🧠 **Learning** — `LEARNING_RATE`, `ENT_COEF`, `CLIP_EPS`
-
-Live feedback bars next to motor / smoothness / goal params are driven by `runs/ape_stand_mjx/live_stats.json` (written by the viewer). Bottom panel shows checkpoint, torso z, upright, ep length, rolling flip rate.
-
-Four preset buttons at the top: **Smooth**, **Fast train**, **Realistic motors**, **Reset defaults**.
+- **Hot-reload** (next rollout, no restart): rewards (`W_HEIGHT`, `W_UPRIGHT`, `W_SMOOTH`, `W_JVEL`, `W_ENERGY`, `W_ALIVE`, `FLIP_PENALTY`, `W_PROXIMITY`), motor (`MOTOR_MAX_SPEED`, `ACTION_SMOOTH_ALPHA`), goal (`TARGET_Z`, `TARGET_TOL`, `ARM_SAFETY_MARGIN`), learning (`LEARNING_RATE`, `ENT_COEF`, `CLIP_EPS`).
+- **Restart required** (baked into MJX/JIT): `PHYSICS_STEPS_PER_ACTION`, `JOINT_DAMPING`, `MOTOR_KP`.
 
 ## Saving notes & checkpoint history
 
@@ -66,16 +57,18 @@ Notes go to `runs/ape_stand_mjx/notes.md` (git-tracked, survives across machines
 ```
 envs/
   stand_env_mjx.py — MJX environment (stateless, vmappable)
-  params_mjx.py    — MJX params + categorised slider UI
+  params_mjx.py    — MJX params (plain config file, no UI)
   stand_env.py     — CPU reference env
-  params.py        — CPU params + slider UI
+  params.py        — CPU params (CPU env only)
 data/
   scene.xml        — Robot MJCF (joint ranges/torques match real ST32xx motors)
   motors.md        — Motor specs (ST3235 / ST3215 / ST3215-HS) + per-joint mapping
   controls.md      — Real-robot web UI, safety, startup, sim-to-real notes
 utils/
-  watch_mjx.py     — Live checkpoint viewer (filters by --since timestamp)
+  watch_mjx.py     — Live checkpoint viewer; replays latest .npz at real time
+                     (separate process from training — closing it doesn't pause training)
   lineage.py       — Run metadata logger
+view_scene.py      — Standalone interactive viewer for scene.xml (pose the robot manually)
 runs/
   ape_stand_mjx/
     mjx_<steps>.npz             — policy weights

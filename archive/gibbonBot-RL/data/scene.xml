@@ -20,16 +20,10 @@
       <inertial pos="-0.0192447 0 -0.0101645" quat="0.439032 0.439032 -0.554303 0.554303" mass="1.02487" diaginertia="0.0402837 0.0351039 0.0308832" />
       <joint name="world_to_torso" type="free" />
       <geom size="0.15 0.15 0.05" type="box" rgba="0.3 0.3 0.3 1" class="robot" />
-      <site name="up"    pos="0.15 0 0"   size="0.005" rgba="0 0 1 1" />
-      <site name="down"  pos="-0.15 0 0"  size="0.005" rgba="0 0 1 1" />
-      <site name="left"  pos="0 0.15 0"   size="0.005" rgba="0 1 0 1" />
-      <site name="right" pos="0 -0.15 0"  size="0.005" rgba="0 1 0 1" />
-      <site name="front" pos="0 0 -0.05"  size="0.005" rgba="1 0 0 1" />
-      <site name="back"  pos="0 0 0.05"   size="0.005" rgba="1 0 0 1" />
       <geom pos="0.12 0.15 -0.05" quat="0.5 -0.5 0.5 0.5" type="mesh" rgba="0.75 0.75 0.75 1" mesh="base_link" class="robot" />
       <geom pos="0.12 -0.15 -0.05" quat="0.5 0.5 0.5 -0.5" type="mesh" rgba="0.75 0.75 0.75 1" mesh="base_link" class="robot" />
-      <geom pos="-0.12 0.1 -0.05" quat="0.5 -0.5 -0.5 0.5" type="mesh" rgba="0.75 0.75 0.75 1" mesh="base_link" class="robot" />
-      <geom pos="-0.12 -0.1 -0.05" quat="0.5 0.5 -0.5 -0.5" type="mesh" rgba="0.75 0.75 0.75 1" mesh="base_link" class="robot" />
+      <geom pos="-0.12 0.1 -0.05" quat="0.7071068 0 -0.7071068 0" type="mesh" rgba="0.75 0.75 0.75 1" mesh="base_link" class="robot" />
+      <geom pos="-0.12 -0.1 -0.05" quat="0.7071068 0 -0.7071068 0" type="mesh" rgba="0.75 0.75 0.75 1" mesh="base_link" class="robot" />
       <body name="fl_link1" pos="0.12 0.15 -0.05" quat="0.5 -0.5 0.5 0.5">
         <inertial pos="0 0 0.037" quat="0.5 0.5 0.5 -0.5" mass="0.0729177" diaginertia="5.01023e-05 4.68465e-05 3.32107e-05" />
         <joint name="fl_shoulder_yaw" pos="0 0 0" axis="0 0 1" range="-180 180" actuatorfrcrange="-2.94 2.94" damping="4" />
@@ -94,7 +88,7 @@
           </body>
         </body>
       </body>
-      <body name="bl_link1" pos="-0.12 0.1 -0.05" quat="0.5 -0.5 -0.5 0.5">
+      <body name="bl_link1" pos="-0.12 0.1 -0.05" quat="0.7071068 0 -0.7071068 0">
         <inertial pos="0 0 0.037" quat="0.5 0.5 0.5 -0.5" mass="0.0729177" diaginertia="5.01023e-05 4.68465e-05 3.32107e-05" />
         <joint name="bl_hip_yaw" pos="0 0 0" axis="0 0 1" range="-180 180" actuatorfrcrange="-2.94 2.94" damping="4" />
         <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link1" class="robot" contype="1" conaffinity="31" />
@@ -126,7 +120,7 @@
           </body>
         </body>
       </body>
-      <body name="br_link1" pos="-0.12 -0.1 -0.05" quat="0.5 0.5 -0.5 -0.5">
+      <body name="br_link1" pos="-0.12 -0.1 -0.05" quat="0.7071068 0 -0.7071068 0">
         <inertial pos="0 0 0.037" quat="0.5 0.5 0.5 -0.5" mass="0.0729177" diaginertia="5.01023e-05 4.68465e-05 3.32107e-05" />
         <joint name="br_hip_yaw" pos="0 0 0" axis="0 0 1" range="-180 180" actuatorfrcrange="-2.94 2.94" damping="4" />
         <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link1" class="robot" contype="1" conaffinity="31" />

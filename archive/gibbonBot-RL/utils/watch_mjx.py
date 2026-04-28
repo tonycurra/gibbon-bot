@@ -123,10 +123,16 @@ def reset(model, data, rng):
 
 
 def main():
+    print("=" * 72)
+    print("  WATCH_MJX — replays the LATEST saved checkpoint in CPU MuJoCo.")
+    print("  This is a SEPARATE process from training. Closing this viewer has")
+    print("  NO effect on GPU training speed. Playback runs at real time.")
+    print("  When training saves a new checkpoint, the viewer hot-swaps to it.")
+    print("=" * 72)
     print(f"[watch_mjx] runs dir : {RUNS}")
     print(f"[watch_mjx] since    : {SINCE:.0f} (0 = load any checkpoint)")
     print(f"[watch_mjx] physics steps/action: {PHYSICS_STEPS_PER_ACTION}")
-    print(f"[watch_mjx] params   : envs/params_mjx.py  (run it directly for slider UI)")
+    print(f"[watch_mjx] params   : envs/params_mjx.py")
 
     model = mujoco.MjModel.from_xml_path(str(SCENE))
     data = mujoco.MjData(model)
@@ -161,8 +167,16 @@ def main():
                 mtime = new_ckpt.stat().st_mtime
                 if mtime != last_mtime:
                     try:
+                        was_none = net is None
                         net, params = load_policy(new_ckpt)
-                        print(f"[watch_mjx] {'first' if net is None else 'new'} checkpoint: {new_ckpt.name}")
+                        # Extract step count from filename "mjx_000000250000.npz"
+                        try:
+                            steps = int(new_ckpt.stem.split("_")[1])
+                            step_str = f"{steps:,} steps"
+                        except (IndexError, ValueError):
+                            step_str = "?"
+                        prefix = "FIRST" if was_none else "NEW"
+                        print(f"[watch_mjx] >>> {prefix} POLICY LOADED: {new_ckpt.name}  ({step_str})  <<<")
                         last_mtime = mtime
                     except ValueError as e:
                         print(f"[watch_mjx] skipping {new_ckpt.name}: {e}")
@@ -176,12 +190,9 @@ def main():
             flipped = False
             ep_reward_sum = 0.0
 
-            cur_speed = max(getattr(params_mod, "VIEWER_SPEED", 1.0), 0.01)
-            ep_real_s = MAX_STEPS * PHYSICS_STEPS_PER_ACTION * float(model.opt.timestep) / cur_speed
+            ep_real_s = MAX_STEPS * PHYSICS_STEPS_PER_ACTION * float(model.opt.timestep)
             policy_label = "random" if net is None else (new_ckpt.name if new_ckpt else "?")
-            print(f"[watch_mjx] ep {ep+1} start | policy={policy_label} | "
-                  f"speed={cur_speed:.0f}x | ep≈{ep_real_s:.1f}s real-time"
-                  + (" ← slow down in params.py to see motion" if cur_speed > 10 else ""))
+            print(f"[watch_mjx] ep {ep+1} start | policy={policy_label} | ep≈{ep_real_s:.1f}s real-time")
 
             while step < MAX_STEPS and viewer.is_running():
                 # hot-reload params
@@ -192,8 +203,7 @@ def main():
                         params_mtime = pm
                 except Exception:
                     pass
-                speed = max(getattr(params_mod, "VIEWER_SPEED", 1.0), 0.01)
-                sleep_dt = float(model.opt.timestep) / speed
+                sleep_dt = float(model.opt.timestep)  # real-time playback
 
                 obs = get_obs(data)
                 if net is None:

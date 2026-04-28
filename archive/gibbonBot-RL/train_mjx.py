@@ -3,10 +3,10 @@
 GPU-accelerated PPO training using MuJoCo MJX + JAX.
 
 Usage:
-    python train_mjx.py --test           # 32 envs, saves every 25k steps, viewer on
-                                         # → tune params_mjx.py in real time, watch policy evolve
-    python train_mjx.py                  # 1024 envs, saves every 1M steps, viewer on
-    python train_mjx.py --envs 2048      # more envs (needs more VRAM)
+    python train_mjx.py                  # default: 1 env, watch policy live
+    python train_mjx.py --envs 1024      # parallel training (needs GPU + VRAM)
+    python train_mjx.py --envs 2048      # more envs
+    python train_mjx.py --tune           # 32 envs, saves often, edit params_mjx.py live
     python train_mjx.py --no-watch       # headless (no viewer subprocess)
     python train_mjx.py --resume         # continue from latest checkpoint
 """
@@ -45,7 +45,6 @@ EPOCHS      = 4
 MINIBATCHES = 8
 GAMMA       = 0.99
 GAE_LAMBDA  = 0.95
-CLIP_EPS    = 0.2
 VF_COEF     = 0.5
 MAX_GRAD    = 0.5
 # ENT_COEF and LR are hot-reloaded from params_mjx.py each rollout
@@ -203,10 +202,8 @@ def load_latest(train_state):
 # ── main ──────────────────────────────────────────────────────────────────────
 
 def _auto_envs():
-    """Pick a sensible default env count based on whether a GPU is available."""
-    devs = jax.devices()
-    has_gpu = any(d.platform != "cpu" for d in devs)
-    return 2048 if has_gpu else 64
+    """Default env count. 1 for live debugging; bump with --envs for parallel training."""
+    return 1
 
 
 def main():
@@ -231,17 +228,19 @@ def main():
         save_every = TEST_SAVE
         log_every  = TEST_LOG
         print("=" * 60)
-        print("  TUNE MODE — slider UI will auto-open. Iterate on params.")
+        print("  TUNE MODE — saves often. Edit envs/params_mjx.py to tune live.")
         print(f"  {N_ENVS} envs  |  save every {save_every:,} steps")
         print("=" * 60)
     else:
         N_ENVS     = args.envs or _auto_envs()
-        save_every = SAVE_EVERY
-        log_every  = LOG_EVERY
+        # Scale save frequency with env count so 1-env mode still produces
+        # checkpoints quickly while large parallel runs don't spam disk.
+        save_every = max(1_000, min(SAVE_EVERY, N_ENVS * 250))
+        log_every  = max(1, LOG_EVERY // max(1, N_ENVS // 64))
         print("=" * 60)
-        print("  GO MODE — no tuning UI. Train, watch, evaluate.")
+        print("  GO MODE — train, watch, evaluate.")
         print(f"  {N_ENVS} envs  |  save every {save_every:,} steps")
-        print(f"  For slider tuning instead, run: python train_mjx.py --tune")
+        print(f"  Use --envs N for parallel training (e.g. --envs 1024 with GPU).")
         print("=" * 60)
 
     print(f"JAX devices: {jax.devices()}")
@@ -285,15 +284,13 @@ def main():
     t0 = time.time()
 
     watcher = None
-    params_ui = None
+    params_ui = None  # kept for compatibility with shutdown code below
     if args.watch:
         watch_cmd = [sys.executable, "utils/watch_mjx.py", "--since", str(time.time())]
         print(f"[watch] spawning viewer:    {' '.join(watch_cmd)}")
         watcher = subprocess.Popen(watch_cmd)
         if tune_mode:
-            params_cmd = [sys.executable, "envs/params_mjx.py"]
-            print(f"[watch] spawning params UI: {' '.join(params_cmd)}")
-            params_ui = subprocess.Popen(params_cmd)
+            print(f"[tune] edit envs/params_mjx.py to tune live — params hot-reload between rollouts")
 
     print(f"Training with {N_ENVS} parallel envs — {TOTAL_STEPS:,} steps total.")
     print(f"{'updates':>8}  {'steps':>12}  {'sps':>8}  {'mean_rew':>10}")
