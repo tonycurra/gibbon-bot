@@ -23,7 +23,7 @@ import mujoco.viewer
 POLICY        = "latest"   # "zero" | "random" | "latest"
 SCENE         = pathlib.Path("data/scene.xml")
 RUNS          = pathlib.Path("runs/ape_stand_mjx")
-PHYSICS_STEPS = 200        # physics sub-steps per action (matches training)
+PHYSICS_STEPS = 32         # physics sub-steps per action (matches training)
 MOTOR_SPEED   = 0.10       # max joint travel per action (matches training)
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -121,7 +121,7 @@ def main():
         yaw = rng.uniform(-np.pi, np.pi)
         data.qpos[0]  = rng.uniform(-0.1, 0.1)
         data.qpos[1]  = rng.uniform(-0.1, 0.1)
-        data.qpos[2]  = 0.45
+        data.qpos[2]  = 0.10
         data.qpos[3]  = np.cos(yaw / 2)
         data.qpos[4]  = 0.0
         data.qpos[5]  = 0.0

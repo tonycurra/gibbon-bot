@@ -64,8 +64,9 @@ CLIP_EPS      = 0.15
 
 # ─── Physics (requires restart) ──────────────────────────────────────────────
 # Physics steps per policy decision. Each step = 0.002 s.
-#   16 → twitchy/fast   64 → balanced   200 → slow/deliberate
-PHYSICS_STEPS_PER_ACTION = 200
+#   16 → twitchy/fast   32 → fast feedback   64 → balanced   200 → slow/deliberate
+# Higher = slower JIT compile and slower rollouts. Drop to 16-32 for quick iteration.
+PHYSICS_STEPS_PER_ACTION = 32
 
 # Joint damping (N·m·s/rad).  1.5–8 is realistic for ST32xx motors.
 JOINT_DAMPING = 1.5

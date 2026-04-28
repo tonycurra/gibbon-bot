@@ -28,7 +28,7 @@ _ROOT        = pathlib.Path(__file__).parent.parent
 SCENE        = _ROOT / "data" / "scene.xml"
 _PARAMS_FILE = pathlib.Path(__file__).parent / "params_mjx.py"
 
-MAX_STEPS = 2000
+MAX_STEPS = 500   # ~32s sim time at 32 substeps × 0.002s — plenty for stand+hold
 ACT_DIM   = 24
 OBS_DIM   = 83  # z(1)+quat(4)+linvel(3)+angvel(3)+jpos(24)+jvel(24)+torques(24)
 
@@ -109,8 +109,8 @@ def reset(mx, jnt_lo, jnt_hi, rng):
 
     qpos = dx.qpos.at[0].set(xy[0])
     qpos = qpos.at[1].set(xy[1])
-    qpos = qpos.at[2].set(0.45)
-    qpos = qpos.at[3].set(jnp.cos(yaw / 2))  # w — upright
+    qpos = qpos.at[2].set(0.10)               # spawn near floor — robot must push up
+    qpos = qpos.at[3].set(jnp.cos(yaw / 2))   # w — upright orientation
     qpos = qpos.at[4].set(0.0)
     qpos = qpos.at[5].set(0.0)
     qpos = qpos.at[6].set(jnp.sin(yaw / 2))

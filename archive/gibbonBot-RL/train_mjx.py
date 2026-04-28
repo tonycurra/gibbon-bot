@@ -48,7 +48,7 @@ VF_COEF     = 0.5
 MAX_GRAD    = 0.5
 
 TOTAL_STEPS = 100_000_000
-LOG_EVERY   = 10
+LOG_EVERY   = 1
 
 
 def _auto_envs():
