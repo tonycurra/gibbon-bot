@@ -49,13 +49,14 @@ VF_COEF     = 0.5
 MAX_GRAD    = 0.5
 # ENT_COEF and LR are hot-reloaded from params_mjx.py each rollout
 
-# Defaults — overridden by --test flag
-TOTAL_STEPS = 100_000_000
-SAVE_EVERY  = 250_000   # save often — Ctrl+C will also flush a final ckpt
-LOG_EVERY   = 10
+# Defaults — change DEFAULT_ENVS to set the env count without --envs flag
+DEFAULT_ENVS = 1        # GO mode default (1 = live debug, 1024 = parallel GPU training)
+TOTAL_STEPS  = 100_000_000
+SAVE_EVERY   = 20_000   # save often — Ctrl+C will also flush a final ckpt
+LOG_EVERY    = 10
 
-# --test mode overrides
-TEST_N_ENVS    = 32
+# --tune mode overrides
+TEST_N_ENVS    = 8
 TEST_SAVE      = 5_000    # save often so viewer catches up quickly
 TEST_LOG       = 1        # print every update
 
@@ -202,8 +203,8 @@ def load_latest(train_state):
 # ── main ──────────────────────────────────────────────────────────────────────
 
 def _auto_envs():
-    """Default env count. 1 for live debugging; bump with --envs for parallel training."""
-    return 1
+    """Default env count. Edit DEFAULT_ENVS at the top of this file to change."""
+    return DEFAULT_ENVS
 
 
 def main():

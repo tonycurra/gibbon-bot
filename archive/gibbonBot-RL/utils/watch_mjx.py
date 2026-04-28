@@ -135,6 +135,14 @@ def main():
     print(f"[watch_mjx] params   : envs/params_mjx.py")
 
     model = mujoco.MjModel.from_xml_path(str(SCENE))
+    # Move mesh geoms to a separate collision group so mesh-mesh checks are
+    # skipped (the O(n²) cost that made the CPU viewer crawl at ~2 fps), but
+    # mesh-floor collisions still work so the robot stands on the ground.
+    # contype=2 (group 2), conaffinity=1 (only group 1 = the floor).
+    for i in range(model.ngeom):
+        if model.geom_type[i] == mujoco.mjtGeom.mjGEOM_MESH:
+            model.geom_contype[i] = 2
+            model.geom_conaffinity[i] = 1
     data = mujoco.MjData(model)
     jnt_lo = np.array([model.jnt_range[i][0] for i in range(1, model.njnt)])
     jnt_hi = np.array([model.jnt_range[i][1] for i in range(1, model.njnt)])
@@ -203,7 +211,10 @@ def main():
                         params_mtime = pm
                 except Exception:
                     pass
-                sleep_dt = float(model.opt.timestep)  # real-time playback
+                # Wall-clock pacing for real-time: target sim duration per action,
+                # then catch up at the end of the action (one sleep, not 200).
+                action_sim_dt   = PHYSICS_STEPS_PER_ACTION * float(model.opt.timestep)
+                action_wall_t0  = time.time()
 
                 obs = get_obs(data)
                 if net is None:
@@ -225,15 +236,24 @@ def main():
                 motor_pos_before = motor_pos.copy()
                 motor_max_speed  = float(getattr(params_mod, "MOTOR_MAX_SPEED", 0.2))
                 substep_speed    = motor_max_speed / PHYSICS_STEPS_PER_ACTION
+                # Sync at wall-clock intervals (~30 fps) instead of every N steps,
+                # so visual smoothness doesn't depend on physics speed.
+                SYNC_INTERVAL = 1.0 / 30.0   # seconds
+                last_sync_t = time.time()
                 for _ in range(PHYSICS_STEPS_PER_ACTION):
                     delta = np.clip(filt_action - motor_pos, -substep_speed, substep_speed)
                     motor_pos += delta
                     ctrl = 0.5 * (motor_pos + 1.0) * (jnt_hi - jnt_lo) + jnt_lo
                     data.ctrl[:] = ctrl
                     mujoco.mj_step(model, data)
-                    viewer.sync()
-                    if sleep_dt > 0:
-                        time.sleep(sleep_dt)
+                    if time.time() - last_sync_t >= SYNC_INTERVAL:
+                        viewer.sync()
+                        last_sync_t = time.time()
+                viewer.sync()
+                # Sleep just enough to keep wall time = sim time across the action.
+                behind = action_sim_dt - (time.time() - action_wall_t0)
+                if behind > 0:
+                    time.sleep(behind)
 
                 # Actual joint travel this action (bounded by MOTOR_MAX_SPEED)
                 max_action_delta = float(np.max(np.abs(motor_pos - motor_pos_before)))

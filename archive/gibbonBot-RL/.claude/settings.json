@@ -44,7 +44,9 @@
       "Bash(ssh root@51.159.147.155 \"tail -3 /root/gb2.1/train_mjx.log\")",
       "Bash(nvidia-smi --query-gpu=utilization.gpu,memory.used --format=csv,noheader)",
       "Bash(nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader)",
-      "Bash(git -C /home/tony/gibbonBot-RL log --oneline --diff-filter=A -- 'scripts/train*.py' 'lean-rl/train.py' 'run_train*.py')"
+      "Bash(git -C /home/tony/gibbonBot-RL log --oneline --diff-filter=A -- 'scripts/train*.py' 'lean-rl/train.py' 'run_train*.py')",
+      "Bash(python -c \"import mujoco; import os; print\\(os.path.dirname\\(mujoco.__file__\\)\\)\")",
+      "Bash(python -c \"import mujoco.viewer; print\\([x for x in dir\\(mujoco.viewer\\) if not x.startswith\\('_'\\)]\\)\")"
     ]
   }
 }

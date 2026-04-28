@@ -50,9 +50,9 @@ Buttons display the commanded angle in **radians**. Numerical feedback updates o
 The real arm's **power-on home is not all-zeros**. In `scene.xml` we have `qpos = 0` for every joint, but the physical robot starts with:
 
 - Elbow at **1.57 rad** (≈90°) — bent, not straight
-- Gripper at **3.14 rad** (closed) — and the gripper range is `1.08–3.14` rad, **not** `0–1.5` rad as in our XML
+- Gripper at **3.14 rad** (closed) — but this is a *firmware-displayed* value, not the underlying joint angle.
 
-The scene.xml `gripper`/`foot` range (`0–86°` ≈ `0–1.5 rad`) is the URDF value, which differs from the real motor's documented range (`1.08–3.14 rad`, ≈ `62°–180°`, span 135°). For accurate sim-to-real, the gripper range and home offset should be re-checked against the actual hardware.
+The scene.xml `gripper`/`foot` range is `0–1.5 rad` (`0–86°`), which matches the URDF and the actual mesh geometry. The web UI's `1.08–3.14 rad` range is a **firmware display offset** (the controller reports angles shifted by π/2-ish so the user sees the gripper as "closed at 3.14, open at 1.08") — but the underlying joint moves through `0–1.5 rad`. To map between them: `joint_rad ≈ 3.14 − web_ui_rad`.
 
 ## Torque-lock mode
 
@@ -79,5 +79,5 @@ Effectively a high-impedance hold mode. In sim this corresponds to a position co
 1. **Home pose mismatch** — if a learned policy outputs `qpos = 0` and the real robot powers on with elbow at π/2 and gripper at π, executing zero commands will sweep through a large joint motion. Either:
    - Match `scene.xml` keyframe to the real home (`elbow = 1.57`, `gripper = 3.14`), or
    - Always send an explicit "go-to-zero" trajectory before policy rollout.
-2. **Gripper range differs** — real `1.08–3.14 rad` (135° span) vs. sim `0–1.5 rad` (86° span). Until reconciled, gripper commands won't transfer cleanly.
+2. **Gripper display offset** — the web UI shows the gripper at `3.14` (closed) / `1.08` (open). In the URDF/sim that's `0` / `1.5`. Same physical motion, just shifted by ≈π/2 in firmware-reported coordinates. Subtract from π when going sim→web or vice versa.
 3. **Torque lock** is implicit in MuJoCo's position actuators (always on while `ctrl` is set). Power-cycling the real robot or sending `Torque OFF` is needed to allow manual repositioning — there's no equivalent state in the simulator.

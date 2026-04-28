@@ -28,7 +28,7 @@ MOTOR_MAX_SPEED = 0.10
 #   1.0 → no filter        |  0.3 → strong smoothing
 #   0.5 → light smoothing  |  0.1 → very heavy, slow reactions
 # Lower this FIRST if the robot twitches — forces smoothness without retraining.
-ACTION_SMOOTH_ALPHA = 0.3
+ACTION_SMOOTH_ALPHA = 1.0
 
 # ─── Goal shaping ───────────────────────────────────────────────────────────
 # Target torso height in metres. Reward peaks here.
@@ -84,7 +84,7 @@ FLIP_PENALTY = 200.0
 #   2.0  → heavy, controlled but may slow learning
 # Pairs with ACTION_SMOOTH_ALPHA: ALPHA prevents twitch in motion *now*,
 # W_SMOOTH teaches the policy to not *want* to twitch.
-W_SMOOTH = 2.0
+W_SMOOTH = 0.5
 
 # Penalty on joint velocity magnitude:  w · sum(qvel²)
 #   0      → no damping, limbs spin freely
@@ -99,7 +99,7 @@ W_JVEL = 0.5
 #   0.005  → moderate
 #   0.05   → heavy, robot barely actuates
 # Useful for sim-to-real (real motors burn out at full power).
-W_ENERGY = 0.05
+W_ENERGY = 0.005
 
 # ─── Learning (PPO algorithm) ───────────────────────────────────────────────
 # Rarely touched — only for fixing instability or stuck training.
@@ -142,7 +142,7 @@ PHYSICS_STEPS_PER_ACTION = 200
 #   1.5  → realistic for ST32xx motors |  10+ → sluggish
 # Real ST3215/3235 have significant internal friction from 1:345 reduction;
 # 1.5–8 is the realistic range. Higher masks instability but caps useful speed.
-JOINT_DAMPING = 4.0
+JOINT_DAMPING = 1.5
 
 # Position-controller stiffness (P-gain).  force = kp · (target − actual)
 #    1 → very compliant     |   8 → default (balanced)
