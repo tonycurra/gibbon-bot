@@ -3,19 +3,17 @@
 GPU-accelerated PPO training using MuJoCo MJX + JAX.
 
 Usage:
-    python train_mjx.py                  # default: 1 env, watch policy live
-    python train_mjx.py --envs 1024      # parallel training (needs GPU + VRAM)
-    python train_mjx.py --envs 2048      # more envs
-    python train_mjx.py --tune           # 32 envs, saves often, edit params_mjx.py live
-    python train_mjx.py --no-watch       # headless (no viewer subprocess)
-    python train_mjx.py --resume         # continue from latest checkpoint
+    python train_mjx.py              # auto-detect GPU env count, watch live
+    python train_mjx.py --envs 1024  # explicit env count
+    python train_mjx.py --no-watch   # headless
+    python train_mjx.py --resume     # continue from latest checkpoint
 """
 
 import argparse
 import functools
-import importlib
 import os
 import pathlib
+import signal
 import subprocess
 import sys
 import time
@@ -35,11 +33,12 @@ from envs.stand_env_mjx import (
     load_model, reset, step, read_params,
     OBS_DIM, ACT_DIM, MAX_STEPS,
 )
+import envs.params_mjx as P
 import utils.lineage as lineage_mod
 
 RUNS = pathlib.Path("runs/ape_stand_mjx")
 
-# PPO hyperparameters (static — change requires restart)
+# PPO hyperparameters
 N_STEPS     = 128
 EPOCHS      = 4
 MINIBATCHES = 8
@@ -47,21 +46,40 @@ GAMMA       = 0.99
 GAE_LAMBDA  = 0.95
 VF_COEF     = 0.5
 MAX_GRAD    = 0.5
-# ENT_COEF and LR are hot-reloaded from params_mjx.py each rollout
 
-# Defaults — change DEFAULT_ENVS to set the env count without --envs flag
-DEFAULT_ENVS = 1        # GO mode default (1 = live debug, 1024 = parallel GPU training)
-TOTAL_STEPS  = 100_000_000
-SAVE_EVERY   = 20_000   # save often — Ctrl+C will also flush a final ckpt
-LOG_EVERY    = 10
-
-# --tune mode overrides
-TEST_N_ENVS    = 8
-TEST_SAVE      = 5_000    # save often so viewer catches up quickly
-TEST_LOG       = 1        # print every update
+TOTAL_STEPS = 100_000_000
+LOG_EVERY   = 10
 
 
-# ── network ──────────────────────────────────────────────────────────────────
+def _auto_envs():
+    """Pick env count based on available GPU VRAM."""
+    try:
+        backend = jax.default_backend()
+        if backend == "cpu":
+            return 64
+        mem = jax.devices()[0].memory_stats()
+        gb = mem.get("bytes_limit", 0) / 1e9
+    except Exception:
+        try:
+            import subprocess as sp
+            out = sp.check_output(
+                ["nvidia-smi", "--query-gpu=memory.total", "--format=csv,noheader,nounits"],
+                text=True,
+            )
+            gb = float(out.strip().split("\n")[0]) / 1024
+        except Exception:
+            gb = 0
+
+    if gb >= 20:
+        return 2048
+    if gb >= 10:
+        return 1024
+    if gb >= 5:
+        return 512
+    return 256
+
+
+# ── network ───────────────────────────────────────────────────────────────────
 
 class ActorCritic(nn.Module):
     @nn.compact
@@ -160,29 +178,11 @@ def update_step(train_state, rollout, ent_coef, clip_eps):
 # ── checkpointing ─────────────────────────────────────────────────────────────
 
 def save(train_state, steps):
-    """Save policy weights + a params snapshot sidecar for full reproducibility."""
-    import json
-    import datetime
-    import envs.params_mjx as _pmjx
-    importlib.reload(_pmjx)  # capture latest hot-reloaded values
-
     RUNS.mkdir(parents=True, exist_ok=True)
     path = RUNS / f"mjx_{steps:012d}.npz"
     flat, _ = jax.tree_util.tree_flatten(jax.device_get(train_state.params))
     np.savez(str(path), *flat)
-
-    # Sidecar: every uppercase scalar in params_mjx.py + a timestamp
-    snapshot = {"_saved_at": datetime.datetime.now().isoformat(timespec="seconds"),
-                "_steps": steps}
-    for k in dir(_pmjx):
-        if k.isupper() and not k.startswith("_"):
-            v = getattr(_pmjx, k)
-            if isinstance(v, (int, float, bool, str)):
-                snapshot[k] = v
-    sidecar = RUNS / f"mjx_{steps:012d}.params.json"
-    sidecar.write_text(json.dumps(snapshot, indent=2))
-
-    print(f"[save] {path.name}  (+ {sidecar.name})")
+    print(f"[save] {path.name}")
 
 
 def load_latest(train_state):
@@ -202,61 +202,29 @@ def load_latest(train_state):
 
 # ── main ──────────────────────────────────────────────────────────────────────
 
-def _auto_envs():
-    """Default env count. Edit DEFAULT_ENVS at the top of this file to change."""
-    return DEFAULT_ENVS
-
-
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--tune",     action="store_true",
-                        help="tune mode: 32 envs, saves often, params UI auto-launches")
-    parser.add_argument("--test",     action="store_true",
-                        help="alias for --tune (back-compat)")
-    parser.add_argument("--envs",     type=int, default=None,
-                        help="number of parallel environments (default: auto-pick)")
-    parser.add_argument("--resume",   action="store_true", help="continue from latest mjx checkpoint")
+    parser.add_argument("--envs",     type=int, default=None, help="parallel envs (default: auto)")
+    parser.add_argument("--resume",   action="store_true", help="continue from latest checkpoint")
     parser.add_argument("--no-watch", dest="watch", action="store_false")
     parser.set_defaults(watch=True)
     args = parser.parse_args()
 
-    tune_mode = args.tune or args.test
+    N_ENVS = args.envs or _auto_envs()
+    save_every = max(1_000, min(250_000, N_ENVS * 250))
 
     RUNS.mkdir(parents=True, exist_ok=True)
 
-    if tune_mode:
-        N_ENVS     = args.envs or TEST_N_ENVS
-        save_every = TEST_SAVE
-        log_every  = TEST_LOG
-        print("=" * 60)
-        print("  TUNE MODE — saves often. Edit envs/params_mjx.py to tune live.")
-        print(f"  {N_ENVS} envs  |  save every {save_every:,} steps")
-        print("=" * 60)
-    else:
-        N_ENVS     = args.envs or _auto_envs()
-        # Scale save frequency with env count so 1-env mode still produces
-        # checkpoints quickly while large parallel runs don't spam disk.
-        save_every = max(1_000, min(SAVE_EVERY, N_ENVS * 250))
-        log_every  = max(1, LOG_EVERY // max(1, N_ENVS // 64))
-        print("=" * 60)
-        print("  GO MODE — train, watch, evaluate.")
-        print(f"  {N_ENVS} envs  |  save every {save_every:,} steps")
-        print(f"  Use --envs N for parallel training (e.g. --envs 1024 with GPU).")
-        print("=" * 60)
-
     print(f"JAX devices: {jax.devices()}")
-    print(f"Loading model and compiling...")
+    print(f"{N_ENVS} envs  |  save every {save_every:,} steps")
+    print(f"Loading model...")
+
     mx, jnt_lo, jnt_hi = load_model()
 
     rng = jax.random.PRNGKey(42)
     rng, init_rng, env_rng = jax.random.split(rng, 3)
 
-    import envs.params_mjx as _pmjx
-    cur_lr      = float(_pmjx.LEARNING_RATE)
-    cur_ent     = float(_pmjx.ENT_COEF)
-    cur_clip    = float(_pmjx.CLIP_EPS)
-
-    train_state = make_train_state(init_rng, cur_lr)
+    train_state = make_train_state(init_rng, float(P.LEARNING_RATE))
     start_steps = 0
     if args.resume:
         train_state, start_steps = load_latest(train_state)
@@ -279,68 +247,42 @@ def main():
         pathlib.Path("envs/stand_env_mjx.py"),
     )
 
-    total_steps = start_steps
+    total_steps  = start_steps
     update_count = 0
-    last_save = start_steps
-    t0 = time.time()
+    last_save    = start_steps
+    t0           = time.time()
 
     watcher = None
-    params_ui = None  # kept for compatibility with shutdown code below
     if args.watch:
         watch_cmd = [sys.executable, "utils/watch_mjx.py", "--since", str(time.time())]
-        print(f"[watch] spawning viewer:    {' '.join(watch_cmd)}")
+        print(f"[watch] spawning viewer: {' '.join(watch_cmd)}")
         watcher = subprocess.Popen(watch_cmd)
-        if tune_mode:
-            print(f"[tune] edit envs/params_mjx.py to tune live — params hot-reload between rollouts")
 
-    print(f"Training with {N_ENVS} parallel envs — {TOTAL_STEPS:,} steps total.")
+    print(f"Training — {TOTAL_STEPS:,} total steps.")
     print(f"{'updates':>8}  {'steps':>12}  {'sps':>8}  {'mean_rew':>10}")
     print("-" * 48)
 
-    # Graceful shutdown: Ctrl+C finishes the current rollout, saves, and exits.
-    import signal
-    _stop_requested = [False]
+    _stop = [False]
     def _on_sigint(signum, frame):
-        if _stop_requested[0]:
-            print("\n[stop] second Ctrl+C — exiting NOW without final save")
+        if _stop[0]:
+            print("\n[stop] force exit")
             sys.exit(130)
-        _stop_requested[0] = True
-        print("\n[stop] Ctrl+C received — finishing current rollout, then saving...")
+        _stop[0] = True
+        print("\n[stop] Ctrl+C — finishing rollout then saving...")
     signal.signal(signal.SIGINT, _on_sigint)
 
-    while total_steps < TOTAL_STEPS and not _stop_requested[0]:
-        # re-read params each rollout (hot-reload support)
-        new_rparams = tuple(jnp.float32(v) for v in read_params())
-        if any(float(a) != float(b) for a, b in zip(new_rparams, rparams)):
-            rparams = new_rparams
-            v_step = jax.jit(jax.vmap(
-                lambda dx, a, mp, pa: step(mx, jnt_lo, jnt_hi, dx, a, mp, pa, rparams)
-            ))
+    ent_coef = jnp.float32(P.ENT_COEF)
+    clip_eps = jnp.float32(P.CLIP_EPS)
 
-        new_lr  = float(_pmjx.LEARNING_RATE)
-        new_ent = float(_pmjx.ENT_COEF)
-        if new_lr != cur_lr:
-            cur_lr = new_lr
-            tx = optax.chain(optax.clip_by_global_norm(MAX_GRAD), optax.adam(cur_lr))
-            train_state = train_state.replace(tx=tx, opt_state=tx.init(train_state.params))
-            print(f"[params] LR → {cur_lr:.2e}")
-        if new_ent != cur_ent:
-            cur_ent = new_ent
-            print(f"[params] ENT_COEF → {cur_ent:.4f}")
-        new_clip = float(_pmjx.CLIP_EPS)
-        if new_clip != cur_clip:
-            cur_clip = new_clip
-            print(f"[params] CLIP_EPS → {cur_clip:.3f}")
-
+    while total_steps < TOTAL_STEPS and not _stop[0]:
         buf_obs, buf_act, buf_logp, buf_rew, buf_done, buf_val = [], [], [], [], [], []
 
         for t in range(N_STEPS):
-            # mid-rollout save: weights are from last completed update (still valid)
             steps_here = total_steps + t * N_ENVS
             if steps_here - last_save >= save_every and steps_here > start_steps:
                 save(train_state, steps_here)
                 last_save = steps_here
-            if _stop_requested[0]:
+            if _stop[0]:
                 save(train_state, steps_here)
                 print("Done.")
                 sys.exit(0)
@@ -374,7 +316,7 @@ def main():
                 obs_batch         = jnp.where(done_mask[:, None], new_obs, obs_batch)
                 motor_pos_batch   = jnp.where(done_mask[:, None], new_mp, motor_pos_batch)
                 prev_action_batch = jnp.where(done_mask[:, None], new_pa, prev_action_batch)
-                step_counts = jnp.where(done_mask, 0, step_counts)
+                step_counts       = jnp.where(done_mask, 0, step_counts)
 
             buf_rew.append(rewards)
             buf_done.append(done_mask.astype(jnp.float32))
@@ -401,10 +343,10 @@ def main():
             return x.reshape(-1, *x.shape[2:]) if x.ndim > 2 else x.reshape(-1)
 
         rollout = (flat(obs_t), flat(act_t), flat(logp_t), flat(adv_t), flat(ret_t))
-        train_state, metrics = update_step(train_state, rollout, jnp.float32(cur_ent), jnp.float32(cur_clip))
+        train_state, _ = update_step(train_state, rollout, ent_coef, clip_eps)
         update_count += 1
 
-        if update_count % log_every == 0:
+        if update_count % LOG_EVERY == 0:
             sps = (total_steps - start_steps) / (time.time() - t0)
             mean_rew = float(jnp.mean(jnp.stack(buf_rew)))
             print(f"{update_count:>8}  {total_steps:>12,}  {sps:>8,.0f}  {mean_rew:>10.3f}")
@@ -413,13 +355,11 @@ def main():
             save(train_state, total_steps)
             last_save = total_steps
 
-    reason = "Ctrl+C" if _stop_requested[0] else "completed"
-    print(f"[stop] {reason} — flushing final checkpoint at {total_steps:,} steps")
+    reason = "Ctrl+C" if _stop[0] else "completed"
+    print(f"[stop] {reason} — saving at {total_steps:,} steps")
     save(train_state, total_steps)
     if watcher is not None:
         watcher.terminate()
-    if params_ui is not None:
-        params_ui.terminate()
     print("Done.")
 
 
