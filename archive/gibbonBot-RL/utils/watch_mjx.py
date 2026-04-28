@@ -107,9 +107,11 @@ def env_reset(model, data, rng):
 def main():
     print("[watch_mjx] loading model...")
     model = mujoco.MjModel.from_xml_path(str(SCENE))
-    # Disable mesh-mesh collision (O(n²) JIT cost) but keep mesh-floor.
+    # Disable all robot self-collision for CPU viewer speed.
+    # Floor (plane) stays at contype=1; robot geoms → contype=2 so they
+    # collide with the floor (conaffinity=31) but never with each other.
     for i in range(model.ngeom):
-        if model.geom_type[i] == mujoco.mjtGeom.mjGEOM_MESH:
+        if model.geom_type[i] != mujoco.mjtGeom.mjGEOM_PLANE:
             model.geom_contype[i] = 2
             model.geom_conaffinity[i] = 1
     data = mujoco.MjData(model)

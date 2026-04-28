@@ -72,9 +72,12 @@ def load_policy_net():
 
 def main():
     model = mujoco.MjModel.from_xml_path(str(SCENE))
-    # Disable mesh-mesh collision (slow on CPU, not needed for visual check).
+    # Disable all robot self-collision for CPU viewer speed.
+    # Keep floor (plane geom) at contype=1 so the robot still lands on it.
+    # Robot geoms → contype=2, conaffinity=1: they collide with the floor
+    # (floor conaffinity=31 covers bit 2) but never with each other.
     for i in range(model.ngeom):
-        if model.geom_type[i] == mujoco.mjtGeom.mjGEOM_MESH:
+        if model.geom_type[i] != mujoco.mjtGeom.mjGEOM_PLANE:
             model.geom_contype[i] = 2
             model.geom_conaffinity[i] = 1
 
