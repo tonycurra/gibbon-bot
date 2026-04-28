@@ -254,7 +254,7 @@ def main():
 
     watcher = None
     if args.watch:
-        watch_cmd = [sys.executable, "utils/watch_mjx.py", "--since", str(time.time())]
+        watch_cmd = [sys.executable, "view.py", "--since", str(time.time())]
         print(f"[watch] spawning viewer: {' '.join(watch_cmd)}")
         watcher = subprocess.Popen(watch_cmd)
 

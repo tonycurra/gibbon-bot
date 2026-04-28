@@ -10,69 +10,92 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-See [QUICKSTART.md](QUICKSTART.md) for the recommended local workflow, or [REMOTE_GPU.md](REMOTE_GPU.md) for renting + training on a remote H100.
+See [QUICKSTART.md](QUICKSTART.md) for the local workflow, or [REMOTE_GPU.md](REMOTE_GPU.md) for renting + training on a remote H100.
 
-## Scripts
+## Workflow
+
+Two scripts. Run them in two terminals.
+
+```bash
+# Terminal 1 — train on GPU. Auto-detects VRAM and picks env count
+# (256/512/1024/2048). The viewer is auto-spawned alongside.
+python train_mjx.py
+
+# Terminal 2 — only needed if you launched with --no-watch.
+# Hot-swaps to the latest checkpoint each episode.
+python view.py
+```
+
+Common variants:
+
+```bash
+python train_mjx.py --envs 1024     # explicit env count
+python train_mjx.py --no-watch      # headless (no viewer subprocess)
+python train_mjx.py --resume        # continue from latest checkpoint
+```
+
+## Visual sanity check (no training)
+
+`view.py` is a standalone viewer. Edit `POLICY` at the top to choose what runs:
+
+```python
+POLICY = "zero"     # all joints at rest — see how gravity/damping/contacts behave
+POLICY = "random"   # random actions — see full range of motion
+POLICY = "latest"   # load the most recent training checkpoint
+```
+
+Then `python view.py`. Useful for verifying physics (friction, contact, motor limits) before committing to a long training run.
+
+## Files
 
 | Script | What it does |
 |--------|-------------|
 | `train_mjx.py` | MJX/JAX GPU training loop with vmapped parallel envs |
-| `utils/watch_mjx.py` | Live MuJoCo viewer — hot-swaps to the latest checkpoint |
+| `view.py` | Live MuJoCo viewer — runs latest checkpoint or `zero`/`random` policy |
+| `envs/stand_env_mjx.py` | MJX environment (stateless, vmappable) |
+| `envs/params_mjx.py` | Training parameters — edit values, restart training |
+| `envs/stand_env.py` | Old CPU Gymnasium reference env (kept for reference, not the main path) |
+| `data/scene.xml` | Robot MJCF (joint ranges/torques match real ST32xx motors) |
+| `data/motors.md` | Motor specs (ST3235 / ST3215 / ST3215-HS) + per-joint mapping |
+| `data/controls.md` | Real-robot web UI, safety, startup, sim-to-real notes |
+| `utils/lineage.py` | Per-run hardware/env metadata logger |
 | `utils/tag.py` | Tag checkpoints with notes ("this one was good") |
-| `utils/lineage.py` | Show run history + per-checkpoint params snapshot table |
-| `envs/params_mjx.py` | All MJX training params — edit values in this file, comments explain ranges |
-| `envs/stand_env.py` | CPU Gymnasium reference env (kept for reference, not the main path) |
-| `envs/params.py` | Params for the CPU reference env |
+| `view_scene.py` | Standalone interactive viewer for `scene.xml` (pose the robot manually) |
 
-## Two modes
+## Parameters
 
-- **GO** *(default)* — `python train_mjx.py` — runs **1 env** by default (debug-friendly), spawns the viewer alongside. `SAVE_EVERY` adapts to env count so 1-env mode still produces checkpoints quickly. Use `--envs 1024` (or any number) for parallel training when you want speed.
-- **TUNE** — `python train_mjx.py --tune` — 32 envs, frequent saves, edit `envs/params_mjx.py` directly while training runs (params hot-reload between rollouts).
+All MJX training params live in `envs/params_mjx.py` — plain Python config with comments above each value explaining the range. Edit and restart training.
 
-## Parameters (MJX)
-
-All MJX params live in `envs/params_mjx.py` — edit values directly, the file has detailed comments above each section explaining ranges and trade-offs.
-
-Reload behaviour:
-
-- **Hot-reload** (next rollout, no restart): rewards (`W_HEIGHT`, `W_UPRIGHT`, `W_SMOOTH`, `W_JVEL`, `W_ENERGY`, `W_ALIVE`, `FLIP_PENALTY`, `W_PROXIMITY`), motor (`MOTOR_MAX_SPEED`, `ACTION_SMOOTH_ALPHA`), goal (`TARGET_Z`, `TARGET_TOL`, `ARM_SAFETY_MARGIN`), learning (`LEARNING_RATE`, `ENT_COEF`, `CLIP_EPS`).
-- **Restart required** (baked into MJX/JIT): `PHYSICS_STEPS_PER_ACTION`, `JOINT_DAMPING`, `MOTOR_KP`.
-
-## Saving notes & checkpoint history
-
-Every saved checkpoint automatically gets a `.params.json` sidecar capturing the *exact* params active at save time — so you can always go back and see what produced a good policy.
+## Tag checkpoints
 
 ```bash
-python utils/tag.py "first stable stand, smooth motion"   # tag latest checkpoint
-python utils/tag.py 262144 "before the W_SMOOTH bump"     # tag by partial match
-python utils/tag.py --list                                # one-line per checkpoint w/ tags
-python utils/tag.py --show                                # full notes.md
-python utils/lineage.py --checkpoints                     # tabular params per checkpoint
+python utils/tag.py "first stable stand"            # tag latest checkpoint
+python utils/tag.py 262144 "before W_SMOOTH bump"   # tag by partial step match
+python utils/tag.py --list                          # show notes
 ```
 
-Notes go to `runs/ape_stand_mjx/notes.md` (git-tracked, survives across machines). The `.params.json` sidecars are gitignored but always present locally.
+Notes go to `runs/ape_stand_mjx/notes.md` (git-tracked).
 
-## Files
+## Layout
 
 ```
 envs/
-  stand_env_mjx.py — MJX environment (stateless, vmappable)
-  params_mjx.py    — MJX params (plain config file, no UI)
+  stand_env_mjx.py — MJX environment
+  params_mjx.py    — MJX params
   stand_env.py     — CPU reference env
-  params.py        — CPU params (CPU env only)
+  params.py        — CPU params
 data/
-  scene.xml        — Robot MJCF (joint ranges/torques match real ST32xx motors)
-  motors.md        — Motor specs (ST3235 / ST3215 / ST3215-HS) + per-joint mapping
-  controls.md      — Real-robot web UI, safety, startup, sim-to-real notes
+  scene.xml        — Robot MJCF
+  motors.md        — Motor specs
+  controls.md      — Real-robot notes
 utils/
-  watch_mjx.py     — Live checkpoint viewer; replays latest .npz at real time
-                     (separate process from training — closing it doesn't pause training)
   lineage.py       — Run metadata logger
-view_scene.py      — Standalone interactive viewer for scene.xml (pose the robot manually)
+  tag.py           — Checkpoint tagger
 runs/
   ape_stand_mjx/
-    mjx_<steps>.npz             — policy weights
-    mjx_<steps>.params.json     — params snapshot at save time (auto)
-    lineage.json                — per-run hardware/env metadata
-    notes.md                    — your tagged checkpoints (via utils/tag.py)
+    mjx_<steps>.npz   — policy weights
+    lineage.json      — per-run metadata
+    notes.md          — tagged checkpoints
+mjx_history/
+  ANALYSIS.md      — full history of viewer/training versions and what each did
 ```
