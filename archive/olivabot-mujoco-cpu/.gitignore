@@ -63,3 +63,4 @@ docs/*.toc
 !/data/*.xml
 output/
 results/
+tensorboard_logs/

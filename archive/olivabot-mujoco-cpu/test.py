@@ -46,10 +46,26 @@ class EpisodeLogger(BaseCallback):
             self._ep += 1
             if info.get("upside_down"):
                 status = "FLIPPED   "
+                # The robot flipped, no success
+                success = 0
             elif info.get("arms_colliding"):
                 status = "COLLISION "
+                # The arms collided, no success
+                success = 0
             else:
                 status = "TIMEOUT   "
+                # Success if it survived at least half the max episode length
+                success = 1 if self._ep_steps >= 1000 else 0
+
+            # Log to TensorBoard
+            self.logger.record("startup/episode_reward", self._ep_reward)
+            self.logger.record("startup/survival_steps", self._ep_steps)
+            self.logger.record("startup/max_height", self._max_height)
+            self.logger.record("startup/success_rate", success)
+
+            # Force the write to the event file
+            # This bypasses the N_STEPS delay for the dashboard
+            self.logger.dump(step=self.num_timesteps)
 
             h_rew = info.get("height_reward", 0.0)
             prox = info.get("proximity_penalty", 0.0)
@@ -108,7 +124,11 @@ def main():
         ent_coef=0.005,
         clip_range=0.2,
         verbose=0,  # suppress SB3 noise — EpisodeLogger handles output
+        tensorboard_log="./tensorboard_logs/",
     )
+
+    # Log name for the TensorBoard dashboard
+    TB_NAME = "gibbon_startup_proto"
 
     if args.resume:
         ckpt = best_checkpoint(RUNS)
@@ -118,7 +138,7 @@ def main():
         else:
             print(f"Resuming from {ckpt.name}")
             model = PPO.load(str(ckpt), env=env, device="cpu")
-            model.learn(total_timesteps=TOTAL_STEPS, callback=callbacks, reset_num_timesteps=False)
+            model.learn(total_timesteps=TOTAL_STEPS, callback=callbacks, reset_num_timesteps=False, tb_log_name=TB_NAME)
             return
 
     elif args.inherit:
@@ -138,7 +158,7 @@ def main():
     print(f"{'Ep':>4} | {'Status':<10} | {'steps':>5} | {'height':>8} | {'h_rew':>6} | {'prox':>6} | {'reward':>8}")
     print("-" * 70)
     print(f"Training for {TOTAL_STEPS:,} steps...")
-    model.learn(total_timesteps=TOTAL_STEPS, callback=callbacks)
+    model.learn(total_timesteps=TOTAL_STEPS, callback=callbacks, tb_log_name=TB_NAME)
     model.save(str(RUNS / "final.zip"))
     print(f"Saved: {RUNS / 'final.zip'}")
 
