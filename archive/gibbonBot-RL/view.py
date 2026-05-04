@@ -124,7 +124,10 @@ def main():
         yaw = rng.uniform(-np.pi, np.pi)
         data.qpos[0]  = rng.uniform(-0.1, 0.1)
         data.qpos[1]  = rng.uniform(-0.1, 0.1)
-        data.qpos[2]  = 0.10
+        # spawn at the patched torso height (set by gen_terrain.py based on
+        # terrain). MJX training uses a low spawn (0.10) as a curriculum
+        # — view.py is for inspection so we use the proper standing height.
+        data.qpos[2]  = float(model.body("torso").pos[2])
         data.qpos[3]  = np.cos(yaw / 2)
         data.qpos[4]  = 0.0
         data.qpos[5]  = 0.0
