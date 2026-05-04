@@ -120,18 +120,22 @@ into four shippable sub-tracks:
       first browser renders — current tuning is rough; mature/ancient
       may need wider trunks or shorter branches.
 
-#### 2c — Articulated flexible branches   `Status: TODO`
-- [ ] `trees/articulate.py` — branches as nested `<body>` chains with
-      **ball joints** (sway in all directions, not just one plane) +
-      stiffness + damping. Capsule per segment with collision so the
-      robot can both bend and climb.
-- [ ] Investigate `<composite type="cable">` as a shortcut: it auto-
-      generates the chain of cylinders + ball joints. Use if the API
-      gives us per-segment collision/material control, else hand-emit.
-- [ ] **MJX edit**: `envs/stand_env_mjx.py:197` slices `qpos[7:]` →
-      `qpos[7:7+24]` (robot joints only). Same for `qvel`.
-- [ ] `--rigid-branches` flag for training scenes (skip articulation
-      to keep DOF count down). Default articulated for play / eval.
+#### 2c — Articulated flexible branches   `Status: DONE`
+- [x] `trees/articulate.py` — primary branches as nested `<body>` chains
+      with **ball joints** + per-level stiffness + damping. Capsule per
+      segment, collision-enabled (climbable). Leaf-cluster ellipsoids
+      attach to branch tips so foliage moves with bend.
+- [x] Cap on articulated count: `--articulate-max N` (default 8). Sapling
+      emits hundreds of splines; only the longest few become flexible.
+      Twigs stay rigid (visible in mesh, no DOFs). Without cap we got
+      3324 added qpos — with cap, ~96.
+- [x] **MJX edit**: `envs/stand_env_mjx.py` — `qpos[7:]` → `qpos[7:7+24]`,
+      `qvel[6:]` → `qvel[6:6+24]`, noise assignment → `qpos.at[7:7+24]`.
+- [x] `--rigid-branches` flag falls back to static mesh path (no DOFs).
+      Default = articulated. Verified: rigid gives nq=31 (baseline);
+      articulated gives nq=127.
+- [ ] **Future**: investigate `<composite type="cable">` as a one-shot
+      replacement for hand-emitted chain bodies. Skip until we feel pain.
 
 #### 2d — Dynamic olives with breakable welds   `Status: TODO`
 - [ ] `trees/olives.py` — emits `<body><freejoint>` + sphere geom +

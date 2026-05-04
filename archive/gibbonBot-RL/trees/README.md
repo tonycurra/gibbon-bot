@@ -64,5 +64,5 @@ Install Blender once: `sudo apt install blender` (Blender 4.x recommended).
 | ✅ Phase 1 | primitives | capsule trunk + branches, ellipsoid foliage, trunk collision |
 | ✅ 2a | hot-reload | `serve_web.py` `/grove` endpoint + browser slider panel |
 | ✅ 2b | `blender_sapling.py` | Blender Sapling export → OBJ + JSON skeleton; primitive fallback intact |
-| ⏳ 2c | `articulate.py` | branches as nested `<body>` chains with ball-joint stiffness so they bend on contact |
+| ✅ 2c | `articulate.py` | longest N branches become nested `<body>` chains with ball joints (stiffness + damping). Cap via `--articulate-max` (default 8). Leaf clusters attach to branch tips so foliage moves with bend. `--rigid-branches` opts out for training. |
 | ⏳ 2d | `olives.py` | dynamic olive bodies + breakable weld constraints (force/torque sensor + `eq_active` toggle) |

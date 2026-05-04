@@ -117,7 +117,8 @@ def reset(mx, jnt_lo, jnt_hi, rng):
 
     rng, knoise = jax.random.split(rng)
     noise = jax.random.uniform(knoise, (24,), minval=-0.15, maxval=0.15)
-    qpos = qpos.at[7:].set(noise)
+    # robot joints only — slices [7:7+24]; grove DOFs (branches, olives) come after
+    qpos = qpos.at[7:7 + ACT_DIM].set(noise)
 
     dx = dx.replace(qpos=qpos, qvel=jnp.zeros_like(dx.qvel), ctrl=jnp.zeros_like(dx.ctrl))
     dx = mjx.forward(mx, dx)
@@ -160,7 +161,7 @@ def step(mx, jnt_lo, jnt_hi, dx, action, motor_pos, prev_action, rparams):
     upright_reward = jnp.where(w > 0, w_upright * w * w, 0.0)
     prox_penalty   = w_proximity * _proximity_penalty(dx.xpos, arm_safety_margin)
     smooth_penalty = w_smooth * jnp.sum((filt_action - prev_action) ** 2)
-    jvel_penalty   = w_jvel * jnp.sum(dx.qvel[6:] ** 2)
+    jvel_penalty   = w_jvel * jnp.sum(dx.qvel[6:6 + ACT_DIM] ** 2)
     energy_penalty = w_energy * jnp.sum(dx.ctrl ** 2)
 
     upside_down = w < 0
@@ -194,7 +195,7 @@ def _get_obs(dx):
         dx.qpos[3:7],            # quat (w x y z)
         dx.qvel[0:3],            # linear vel
         dx.qvel[3:6],            # angular vel
-        dx.qpos[7:],             # 24 joint positions
-        dx.qvel[6:],             # 24 joint velocities
+        dx.qpos[7:7 + ACT_DIM],  # 24 robot joint positions (skip grove DOFs)
+        dx.qvel[6:6 + ACT_DIM],  # 24 robot joint velocities
         dx.qfrc_actuator[6:30],  # 24 joint torques
     ]).astype(jnp.float32)

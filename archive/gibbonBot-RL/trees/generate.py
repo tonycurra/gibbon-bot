@@ -27,6 +27,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
+from .articulate import emit_grove_xml_articulated
 from .primitives import build_tree_primitives, emit_grove_xml
 from .varieties import VARIETIES
 
@@ -68,6 +69,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--primitives", action="store_true",
                    help="force the primitive backend (skip Blender even if present)")
+    p.add_argument("--rigid-branches", action="store_true",
+                   help="emit static branch mesh instead of articulated bodies (faster training; no flex)")
+    p.add_argument("--articulate-max", type=int, default=8,
+                   help="cap number of articulated branches per tree (default 8)")
     return p.parse_args(argv)
 
 
@@ -209,8 +214,19 @@ def main(argv: list[str] | None = None) -> None:
         )
         if sidecar is not None:
             sidecar["pos"] = [bx, by, bz]
-            emit_grove_xml_from_blender([sidecar], GROVE_XML)
-            print(f"Wrote {GROVE_XML} (Blender, {output_id})")
+            if args.rigid_branches:
+                emit_grove_xml_from_blender([sidecar], GROVE_XML)
+                mode = "static mesh"
+            else:
+                # articulated: trunk static, branches as ball-jointed body chains
+                fol_size = 0.20 * size * leaves * (1.0 - 0.5 * detach)
+                emit_grove_xml_articulated(
+                    [sidecar], GROVE_XML,
+                    bark=BARK, leaves=LEAVES, fol_size=fol_size,
+                    max_articulated=args.articulate_max,
+                )
+                mode = "articulated"
+            print(f"Wrote {GROVE_XML} (Blender + {mode}, {output_id})")
             print(f"  variety={args.variety} size={size:.2f}  branches={n_branches}")
             print(f"  leaves={leaves:.2f}  detachment={detach:.2f}  seed={args.seed}")
             print(f"  position=({bx:.2f}, {by:.2f}, {bz:.2f})")
