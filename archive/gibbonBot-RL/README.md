@@ -76,9 +76,9 @@ python serve_web.py
 What it does:
 - Renders `data/scene.xml` offscreen at 1280×1280 @ 20 fps and streams JPEG frames over `multipart/x-mixed-replace`.
 - Idles the render thread when no client is watching → 0% CPU when the tab is closed.
-- Touch-first UI: drag = orbit, pinch / scroll = zoom, two-finger / right-drag = pan, +/− buttons on mobile.
-- Top-left **terrain panel** with live sliders (slope 0–60%, roughness, softness, grip, sun) and 6 Mediterranean soil presets (loam · rocky · sandy · clay · terra rossa · limestone). Edits hot-reload `gen_terrain.py` and swap the model in place; robot pose is preserved across reload.
-- Camera elevation is auto-clamped above the live heightfield so it can never dip below ground regardless of slope.
+- Touch-first UI: drag = orbit, pinch / scroll = zoom, +/− buttons on mobile. Camera always orbits around the robot — lookat tracks the torso position continuously.
+- Camera cannot clip through terrain: server computes the camera world position and bilinear-samples the heightfield at that point, reducing distance as needed to keep 20 cm clearance. Free tilt (any elevation, including looking up from below).
+- Top-left **terrain panel** with live sliders (slope 0–60%, roughness, softness, grip, sun) and 7 soil presets: loam · rocky · sandy · clay · terra rossa · limestone · mud. Each preset sets roughness, softness, and grip — which maps to `solimp`/`solref`/`friction` in the physics. Hot-reloads gen_terrain.py and resets the robot to the home keyframe so it always spawns above the new surface.
 - Chat input bottom posts to `/chat`; messages are echoed to all connected clients.
 - Pause (Space), reset (R / ↺ button).
 

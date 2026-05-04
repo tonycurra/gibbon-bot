@@ -83,16 +83,22 @@ c = RES // 2
 win = max(1, int(0.3 / (2 * HALF_EXTENT) * RES))   # ~0.3 m radius
 patch = norm[c - win:c + win + 1, c - win:c + win + 1]
 terrain_at_spawn = float(patch.max()) * zmax
-# torso half-thickness 0.05 + arms hang ~0.20 → clearance 0.30 keeps feet above ground
-spawn_z = terrain_at_spawn + 0.30
+# torso half-thickness 0.05 + limbs extend ~0.35m; 0.50m clears even steep slopes
+spawn_z = terrain_at_spawn + 0.50
 
 # ---------- contact physics ----------
-dmin = 0.95 - 0.45 * softness
-dmax = 0.99 - 0.19 * softness
-width = 0.001 + 0.009 * softness
-solimp = f"{dmin:.3f} {dmax:.3f} {width:.4f}"
+# d0   = stiffness at zero penetration (gentle initial contact)
+# dmax = asymptotic stiffness — kept near 1.0 so the surface stays impenetrable
+#        no matter how soft the cushion is; "softness" only stretches the
+#        cushion layer (width), it does not let the wall yield indefinitely
+# width = depth of the soft cushion in metres (5mm hard → 30mm mud)
+d0    = 0.85
+dmax  = 0.999
+width = 0.005 + 0.025 * softness
+solimp = f"{d0:.3f} {dmax:.3f} {width:.4f}"
 
-timeconst = 0.005 + 0.045 * softness
+# response time: how quickly contact pushes back. Soft soil = a bit slower.
+timeconst = 0.005 + 0.020 * softness
 solref = f"{timeconst:.4f} 1"
 
 slide = 0.3 + 1.7 * grip

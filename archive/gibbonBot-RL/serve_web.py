@@ -60,7 +60,7 @@ terrain_top = 0.0        # max world-z of heightfield surface (for camera clamp)
 
 
 def _terrain_top(m: mujoco.MjModel) -> float:
-    """World-space max-z of the heightfield surface."""
+    """World-space max-z of the heightfield surface (used for camera init only)."""
     if m.nhfield == 0:
         return 0.0
     nrow = int(m.hfield_nrow[0]); ncol = int(m.hfield_ncol[0])
@@ -70,19 +70,43 @@ def _terrain_top(m: mujoco.MjModel) -> float:
     return base_z + float(hf.max()) * zmax
 
 
-def _clamp_camera_above_terrain(c: mujoco.MjvCamera) -> None:
-    """Force camera world-z >= terrain_top + clearance by tightening elevation."""
-    clearance = 0.4
-    needed = terrain_top + clearance - c.lookat[2]
-    if c.distance < 0.01:
-        return
-    # camera_z = lookat_z - dist*sin(el); want lookat_z - dist*sin(el) >= terrain_top + clearance
-    # i.e. sin(el) <= (lookat_z - terrain_top - clearance) / dist
-    s = -needed / c.distance
-    s = max(-1.0, min(1.0, s))
-    max_el = math.degrees(math.asin(s))      # most-positive (least-negative) elevation allowed
-    if c.elevation > max_el:
-        c.elevation = max_el
+def _terrain_height_at(m: mujoco.MjModel, wx: float, wy: float) -> float:
+    """Bilinear-interpolated terrain height at world position (wx, wy)."""
+    if m.nhfield == 0:
+        return 0.0
+    nrow = int(m.hfield_nrow[0]); ncol = int(m.hfield_ncol[0])
+    size = m.hfield_size[0]
+    x_half, y_half, zmax = float(size[0]), float(size[1]), float(size[2])
+    try:
+        base_z = float(m.geom_pos[m.geom("floor").id][2])
+    except Exception:
+        base_z = 0.0
+    u = max(0.0, min(1.0, (wx + x_half) / (2 * x_half)))
+    v = max(0.0, min(1.0, (wy + y_half) / (2 * y_half)))
+    col_f = u * (ncol - 1);  c0 = int(col_f);  c1 = min(c0 + 1, ncol - 1);  tc = col_f - c0
+    row_f = (1.0 - v) * (nrow - 1);  r0 = int(row_f);  r1 = min(r0 + 1, nrow - 1);  tr = row_f - r0
+    hf = np.asarray(m.hfield_data).reshape(nrow, ncol)
+    h = (hf[r0, c0]*(1-tc)*(1-tr) + hf[r0, c1]*tc*(1-tr) +
+         hf[r1, c0]*(1-tc)*tr     + hf[r1, c1]*tc*tr)
+    return base_z + h * zmax
+
+
+def _clamp_camera(c: mujoco.MjvCamera, m: mujoco.MjModel) -> None:
+    """Reduce camera distance so the camera stays above the terrain surface."""
+    clearance = 0.20
+    az  = math.radians(c.azimuth)
+    el  = math.radians(c.elevation)
+    sin_el = math.sin(el)
+    # camera world position
+    cam_x = c.lookat[0] - c.distance * math.cos(el) * math.cos(az)
+    cam_y = c.lookat[1] - c.distance * math.cos(el) * math.sin(az)
+    cam_z = c.lookat[2] - c.distance * sin_el
+    terrain_h = _terrain_height_at(m, cam_x, cam_y)
+    if cam_z < terrain_h + clearance and abs(sin_el) > 0.02:
+        # cam_z = lookat_z - dist*sin_el >= terrain_h + clearance
+        # → dist <= (lookat_z - terrain_h - clearance) / sin_el
+        max_d = (c.lookat[2] - terrain_h - clearance) / sin_el
+        c.distance = max(0.5, min(c.distance, max_d))
 
 
 # ── physics thread ─────────────────────────────────────────────────────────
@@ -117,23 +141,16 @@ def _render_loop():
                     cmd += [f"--{k.replace('_','-')}", str(v)]
                 subprocess.run(cmd, check=True, capture_output=True, timeout=15)
                 with sim_lock:
-                    # snapshot current robot pose
-                    qpos_save = data.qpos.copy()
-                    qvel_save = data.qvel.copy()
                     new_model = mujoco.MjModel.from_xml_path(MODEL_PATH)
                     new_data = mujoco.MjData(new_model)
-                    if qpos_save.shape == new_data.qpos.shape:
-                        new_data.qpos[:] = qpos_save
-                        new_data.qvel[:] = qvel_save
-                    else:
-                        mujoco.mj_resetDataKeyframe(new_model, new_data, 0)
+                    mujoco.mj_resetDataKeyframe(new_model, new_data, 0)
                     mujoco.mj_forward(new_model, new_data)
                     model = new_model
                     data = new_data
                 renderer.close()
                 renderer = mujoco.Renderer(model, H, W)
                 terrain_top = _terrain_top(model)
-                _clamp_camera_above_terrain(cam)
+                _clamp_camera(cam, model)
                 terrain_params.update(params)
                 reload_status = "idle"
             except subprocess.CalledProcessError as e:
@@ -246,6 +263,12 @@ class Handler(BaseHTTPRequestHandler):
                 _viewer_leave()
 
         elif self.path == "/state":
+            with sim_lock:
+                try:
+                    torso_id = model.body("torso").id
+                    torso_pos = list(data.xpos[torso_id])
+                except Exception:
+                    torso_pos = [0.0, 0.0, 0.5]
             body = json.dumps(
                 {
                     "azimuth":   cam.azimuth,
@@ -257,6 +280,7 @@ class Handler(BaseHTTPRequestHandler):
                     "chat":      chat_log[-20:],
                     "terrain":   terrain_params,
                     "reload":    reload_status,
+                    "torso":     torso_pos,
                 }
             ).encode()
             self._reply(200, "application/json", body)
@@ -271,11 +295,11 @@ class Handler(BaseHTTPRequestHandler):
 
         if self.path == "/camera":
             if "azimuth"   in body: cam.azimuth   = body["azimuth"]
-            if "elevation" in body: cam.elevation = max(-85, min(-15, body["elevation"]))
-            if "distance"  in body: cam.distance  = max(0.3, min(20, body["distance"]))
+            if "elevation" in body: cam.elevation = max(-89, min(89, body["elevation"]))
+            if "distance"  in body: cam.distance  = max(0.5, min(20, body["distance"]))
             if "lookat"    in body and len(body["lookat"]) == 3:
                 cam.lookat[:] = body["lookat"]
-            _clamp_camera_above_terrain(cam)
+            _clamp_camera(cam, model)
             self._reply(200, "application/json", b"{}")
 
         elif self.path == "/pause":

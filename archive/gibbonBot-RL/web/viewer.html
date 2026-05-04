@@ -198,6 +198,7 @@
         <button type="button" class="chip" data-preset="clay">clay</button>
         <button type="button" class="chip" data-preset="terra_rossa">terra rossa</button>
         <button type="button" class="chip" data-preset="limestone">limestone</button>
+        <button type="button" class="chip" data-preset="mud">mud</button>
       </div>
     </div>
     <div class="row">
@@ -273,43 +274,16 @@
       .finally(() => { camPending = false; });
   }
 
-  // pan: shift lookat in screen-aligned plane (uses camera right + up vectors)
-  function panBy(dx, dy) {
-    const a = az * Math.PI/180, e = el * Math.PI/180;
-    const s = dist * 0.0018;
-    // right vector (horizontal, ⟂ to view azimuth)
-    const rx = -Math.sin(a), ry = Math.cos(a);
-    // up vector (tilted by elevation)
-    const ux = -Math.cos(a) * Math.sin(e);
-    const uy = -Math.sin(a) * Math.sin(e);
-    const uz =  Math.cos(e);
-    lookat[0] += s * (-dx * rx + dy * ux);
-    lookat[1] += s * (-dx * ry + dy * uy);
-    lookat[2] += s * ( dy * uz);
-    // keep lookat above ground so camera doesn't dive
-    lookat[2] = Math.max(0.1, lookat[2]);
-    pushCamera();
-  }
-
-  // ── controls (orbit / zoom / pan) ────────────────────────────────────────
-  // single pointer = orbit; two pointers = pinch zoom + pan; right-drag = pan
+  // ── controls (orbit + zoom — lookat locked to robot) ────────────────────
   const pointers = new Map();
-  let pinchStart = null;   // {dist, az, el, distance, midX, midY, lookat:[x,y,z]}
-  let lastSingle = null;
-
-  stream.addEventListener('contextmenu', e => e.preventDefault()); // allow right-drag
+  let pinchStart = null;
 
   stream.addEventListener('pointerdown', e => {
     stream.setPointerCapture(e.pointerId);
-    pointers.set(e.pointerId, { x:e.clientX, y:e.clientY, button:e.button, type:e.pointerType });
+    pointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
     if (pointers.size === 2) {
       const pts = [...pointers.values()];
-      const dx = pts[0].x - pts[1].x, dy = pts[0].y - pts[1].y;
-      pinchStart = {
-        d: Math.hypot(dx, dy), distance: dist,
-        midX: (pts[0].x + pts[1].x) / 2,
-        midY: (pts[0].y + pts[1].y) / 2,
-      };
+      pinchStart = { d: Math.hypot(pts[0].x-pts[1].x, pts[0].y-pts[1].y), distance: dist };
     }
   });
 
@@ -319,25 +293,14 @@
     p.x = e.clientX; p.y = e.clientY;
 
     if (pointers.size === 1) {
-      // right-button (mouse) = pan; everything else = orbit
-      if (p.button === 2) {
-        panBy(p.x - prev.x, p.y - prev.y);
-      } else {
-        az += (p.x - prev.x) * 0.4;
-        el  = Math.max(-85, Math.min(-15, el - (p.y - prev.y) * 0.3));
-        pushCamera();
-      }
+      az += (p.x - prev.x) * 0.4;
+      el  = Math.max(-89, Math.min(89, el - (p.y - prev.y) * 0.3));
+      pushCamera();
     } else if (pointers.size === 2 && pinchStart) {
       const pts = [...pointers.values()];
-      const d  = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
-      const mx = (pts[0].x + pts[1].x) / 2;
-      const my = (pts[0].y + pts[1].y) / 2;
-      const ratio = pinchStart.d / Math.max(1, d);
-      dist = Math.max(0.3, Math.min(20, pinchStart.distance * ratio));
-      // midpoint motion → pan
-      panBy(mx - pinchStart.midX, my - pinchStart.midY);
-      pinchStart.midX = mx; pinchStart.midY = my;
-      pinchStart.d = d; pinchStart.distance = dist;
+      const d = Math.hypot(pts[0].x-pts[1].x, pts[0].y-pts[1].y);
+      dist = Math.max(0.5, Math.min(20, pinchStart.distance * pinchStart.d / Math.max(1, d)));
+      pushCamera();
     }
   });
 
@@ -352,12 +315,12 @@
   // wheel zoom (desktop)
   stream.addEventListener('wheel', e => {
     e.preventDefault();
-    dist = Math.max(0.3, Math.min(20, dist * (1 + e.deltaY * 0.0012)));
+    dist = Math.max(0.5, Math.min(20, dist * (1 + e.deltaY * 0.0012)));
     pushCamera();
   }, { passive:false });
 
   // side buttons (mobile)
-  $('zoom-in') .addEventListener('click', () => { dist = Math.max(0.3, dist * 0.85); pushCamera(); });
+  $('zoom-in') .addEventListener('click', () => { dist = Math.max(0.5, dist * 0.85); pushCamera(); });
   $('zoom-out').addEventListener('click', () => { dist = Math.min(20,  dist * 1.18); pushCamera(); });
 
   // ── pause / reset ────────────────────────────────────────────────────────
@@ -372,6 +335,25 @@
   }
   btnPause.addEventListener('click', togglePause);
   $('btn-reset').addEventListener('click', () => post('/reset'));
+
+  // ── robot tracking (always on) ───────────────────────────────────────────
+  setInterval(async () => {
+    try {
+      const s = await (await fetch('/state')).json();
+      if (s.torso) { lookat = s.torso.slice(); pushCamera(); }
+      if (s.chat && s.chat.length > renderedChat) {
+        for (let i = renderedChat; i < s.chat.length; i++) appendMsg(s.chat[i].text);
+        renderedChat = s.chat.length;
+      }
+      if (s.paused !== paused) {
+        paused = s.paused;
+        btnPause.textContent = paused ? '▶' : '⏸';
+        led.classList.toggle('paused', paused);
+        statusEl.textContent = paused ? 'paused' : 'live';
+      }
+      if (s.reload) terStatus.textContent = s.reload === 'idle' ? 'ready' : s.reload;
+    } catch (_) {}
+  }, 250);
 
   addEventListener('keydown', e => {
     if (e.target.tagName === 'INPUT') return;
@@ -428,6 +410,7 @@
     clay:        { roughness: 0.06, softness: 0.55, grip: 0.45 },   // moist clay, slippery
     terra_rossa: { roughness: 0.10, softness: 0.35, grip: 0.65 },   // Mediterranean red soil
     limestone:   { roughness: 0.18, softness: 0.02, grip: 0.90 },   // bare limestone slabs (Puglia, Crete)
+    mud:         { roughness: 0.05, softness: 0.92, grip: 0.22 },   // after rain — deep cushion, very low grip
   };
 
   document.querySelectorAll('#soil-chips .chip').forEach(chip => {
@@ -459,28 +442,11 @@
     });
   });
 
-  // ── poll state every 2s for chat from elsewhere & sync camera once ───────
-  async function poll() {
-    try {
-      const s = await (await fetch('/state')).json();
-      if (s.chat && s.chat.length > renderedChat) {
-        for (let i = renderedChat; i < s.chat.length; i++) appendMsg(s.chat[i].text);
-        renderedChat = s.chat.length;
-      }
-      if (s.paused !== paused) {
-        paused = s.paused;
-        btnPause.textContent = paused ? '▶' : '⏸';
-        led.classList.toggle('paused', paused);
-        statusEl.textContent = paused ? 'paused' : 'live';
-      }
-      if (s.reload) terStatus.textContent = s.reload === 'idle' ? 'ready' : s.reload;
-    } catch (_) {}
-  }
   fetch('/state').then(r => r.json()).then(s => {
     az = s.azimuth; el = s.elevation; dist = s.distance;
+    if (s.torso) lookat = s.torso.slice();
     renderedChat = (s.chat || []).length;
   }).catch(()=>{});
-  setInterval(poll, 2000);
   </script>
 </body>
 </html>
