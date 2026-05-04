@@ -61,6 +61,45 @@ Then `python view.py`. Useful for verifying physics (friction, contact, motor li
 | `utils/lineage.py` | Per-run hardware/env metadata logger |
 | `utils/tag.py` | Tag checkpoints with notes ("this one was good") |
 | `view_scene.py` | Standalone interactive viewer for `scene.xml` (pose the robot manually) |
+| `serve_web.py` | Browser viewer — streams the live scene as MJPEG + remote camera/chat/terrain controls |
+| `gen_terrain.py` | Procedural terrain generator (slope, roughness, soil type, sun) — patches `scene.xml` in place |
+| `web/viewer.html` | Mobile-first UI consumed by `serve_web.py` |
+
+## Browser viewer
+
+```bash
+source .venv/bin/activate
+python serve_web.py
+# open http://localhost:8080
+```
+
+What it does:
+- Renders `data/scene.xml` offscreen at 1280×1280 @ 20 fps and streams JPEG frames over `multipart/x-mixed-replace`.
+- Idles the render thread when no client is watching → 0% CPU when the tab is closed.
+- Touch-first UI: drag = orbit, pinch / scroll = zoom, two-finger / right-drag = pan, +/− buttons on mobile.
+- Top-left **terrain panel** with live sliders (slope 0–60%, roughness, softness, grip, sun) and 6 Mediterranean soil presets (loam · rocky · sandy · clay · terra rossa · limestone). Edits hot-reload `gen_terrain.py` and swap the model in place; robot pose is preserved across reload.
+- Camera elevation is auto-clamped above the live heightfield so it can never dip below ground regardless of slope.
+- Chat input bottom posts to `/chat`; messages are echoed to all connected clients.
+- Pause (Space), reset (R / ↺ button).
+
+## Terrain generation
+
+```bash
+python gen_terrain.py --slope 15 --roughness 0.08 --softness 0.3 --grip 0.7 --sun-elev 60
+```
+
+| flag | range | meaning |
+|------|-------|---------|
+| `--slope` | 0–60 (%) | linear ramp across the field |
+| `--roughness` | 0–0.30 m | bump amplitude |
+| `--bump-scale` | grid cells | bump wavelength (default 20) |
+| `--softness` | 0–1 | 0 = concrete, 1 = mud (sets `solimp` / `solref`) |
+| `--grip` | 0–1 | 0 = ice, 1 = sticky soil (sets friction) |
+| `--sun-azim` | deg | 0=+X, 90=+Y |
+| `--sun-elev` | deg | 90=zenith, <0=night |
+| `--brightness` | 0–1.5 | multiplier on top of time-of-day base |
+
+The script writes `data/terrain.png` (256×256 heightfield) and patches `data/scene.xml` (hfield zmax, floor friction/solimp/solref, skybox + sun + ambient, torso spawn z, `home` keyframe). Re-run any time; it edits in place.
 
 ## Parameters
 
