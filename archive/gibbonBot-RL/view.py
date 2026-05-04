@@ -93,10 +93,13 @@ def main():
             model.geom_conaffinity[i] = 1
 
     data    = mujoco.MjData(model)
-    jnt_lo  = np.array([model.jnt_range[i][0] for i in range(1, model.njnt)])
-    jnt_hi  = np.array([model.jnt_range[i][1] for i in range(1, model.njnt)])
     ACT_DIM = model.nu
     DT      = float(model.opt.timestep)
+    # Skip joint 0 (the torso freejoint, no range) and stop after the 24
+    # actuated robot joints — branch ball joints don't enter the action
+    # space.
+    jnt_lo  = np.array([model.jnt_range[i][0] for i in range(1, 1 + ACT_DIM)])
+    jnt_hi  = np.array([model.jnt_range[i][1] for i in range(1, 1 + ACT_DIM)])
 
     predict     = None
     last_ckpt   = None
