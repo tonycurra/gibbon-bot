@@ -66,7 +66,7 @@ Then `python view.py`. Useful for verifying physics (friction, contact, motor li
 | `view_scene.py` | Standalone interactive viewer for `scene.xml` (pose the robot manually) |
 | `serve_web.py` | Browser viewer — streams the live scene as MJPEG + remote camera/chat/terrain controls |
 | `gen_terrain.py` | Procedural terrain generator (slope, roughness, soil type, sun) — patches `terrain.xml` + `robot.xml` |
-| `gen_grove.py` | Procedural olive tree generator (variety, size, branches, leaves, detachment) → writes `grove.xml` |
+| `trees/` | Olive-tree generation pipeline — see [trees/README.md](trees/README.md). Run via `python -m trees.generate` → writes `data/grove.xml` |
 | `web/viewer.html` | Mobile-first UI consumed by `serve_web.py` |
 
 ## Browser viewer
@@ -109,8 +109,10 @@ The script writes `data/terrain.png` (256×256 heightfield), `data/terrain_surfa
 ## Olive trees
 
 ```bash
-python gen_grove.py --variety mature --leaves 0.7 --branches 5
+python -m trees.generate --variety mature --leaves 0.7 --branches 5
 ```
+
+The `trees/` package is a self-contained generation pipeline (see [trees/README.md](trees/README.md)). It currently emits MuJoCo primitives; Blender + Sapling Tree Gen integration, articulated branches, and dynamic olives are queued in [GROVE_MASTERPLAN.md](GROVE_MASTERPLAN.md) Phase 2.
 
 | flag | range | meaning |
 |------|-------|---------|
@@ -122,7 +124,7 @@ python gen_grove.py --variety mature --leaves 0.7 --branches 5
 | `--pos` | x y | base position; z is sampled from the live heightfield |
 | `--seed` | int | rng seed |
 
-Writes `data/grove.xml` (regenerated each run). Trunk capsules carry collision so the robot can push against them. Branches/foliage are visual-only. See [GROVE_MASTERPLAN.md](GROVE_MASTERPLAN.md) for the multi-phase plan (multiple trees, realism pass, climbing rewards).
+Writes `data/grove.xml` (regenerated each run). Trunk capsules carry collision so the robot can push against them. Branches/foliage are visual-only. See [GROVE_MASTERPLAN.md](GROVE_MASTERPLAN.md) for the phased plan (Blender + Sapling for visual realism, articulated branches that flex, dynamic olives that fall when knocked).
 
 ## Parameters
 

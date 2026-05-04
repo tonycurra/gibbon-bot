@@ -79,13 +79,50 @@ gen_grove.py        ← NEW: procedural olive trees → grove.xml + .obj files
   visual outcome, far less code, faster to iterate. OBJ-based detailed shapes
   deferred to Phase 4 (realism pass).
 
-### Phase 2 — Parameterized trees   `Status: TODO`
-- [ ] Variety presets (young / mature / ancient) tune: trunk diameter, height,
-      branch count, canopy spread, gnarliness.
-- [ ] CLI flags: `--variety`, `--size`, `--detachment` (canopy openness 0..1),
-      `--leaves` (density 0..1), `--branches` (extra subdivision steps).
-- [ ] Browser slider panel (in `html_viewer` branch later) for each.
-- [ ] Seed flag for reproducibility.
+### Phase 2 — Realistic, flexible, interactive trees   `Status: in progress`
+
+Reorganised: tree-gen code lives in `trees/` package. CLI is
+`python -m trees.generate`. Full plan in `.claude/plans/...` — broken
+into four shippable sub-tracks:
+
+#### 2a — Browser hot-reload pipe   `Status: TODO`
+- [ ] `/grove` POST endpoint in `serve_web.py`, mirroring `/terrain`.
+- [ ] Render-thread reload: subprocess `python -m trees.generate ...`
+      → `MjModel.from_xml_path` → `mj_resetDataKeyframe` → swap
+      globals → recreate renderer.
+- [ ] Request-serialization lock so terrain + grove POSTs don't race.
+- [ ] Tree-panel in `web/viewer.html`: variety dropdown + sliders for
+      size, branches, leaves, detachment, seed. Debounced.
+
+#### 2b — Blender + Sapling Tree Gen   `Status: TODO`
+- [ ] One-time install: `apt install blender`.
+- [ ] `trees/blender_sapling.py` — runs *inside* Blender via
+      `blender --background --python ...`. Sapling Tree Gen produces
+      olive-shaped mesh, exports `data/trees/<id>_wood.obj` +
+      `<id>_leaves.obj` + `<id>.json` (branch midlines, olive points).
+- [ ] `trees.generate` becomes orchestrator: invokes Blender, reads
+      JSON sidecar, emits `grove.xml` referencing the OBJs.
+- [ ] Graceful fallback to `trees.primitives` if Blender absent.
+- [ ] Cache: `data/trees/cache_index.json` skips re-runs for repeated
+      params.
+
+#### 2c — Articulated flexible branches   `Status: TODO`
+- [ ] `trees/articulate.py` — branches as nested `<body>` chains with
+      hinge joints (stiffness + damping). Capsule per segment with
+      collision so the robot can both bend and climb.
+- [ ] **MJX edit**: `envs/stand_env_mjx.py:197` slices `qpos[7:]` →
+      `qpos[7:7+24]` (robot joints only). Same for `qvel`.
+- [ ] `--rigid-branches` flag for training scenes (skip articulation
+      to keep DOF count down). Default articulated for play / eval.
+
+#### 2d — Dynamic olives with breakable welds   `Status: TODO`
+- [ ] `trees/olives.py` — emits `<body><freejoint>` + sphere geom +
+      `<equality><weld>` to parent branch.
+- [ ] Step hook in env: monitor `data.efc_force` for each olive weld;
+      `data.eq_active[i] = 0` when stem-strength threshold exceeded.
+- [ ] `--olives` flag, default off for training.
+- [ ] Olive collision bitmask: only matches robot hands (avoid contact
+      explosion with branches/ground while welded).
 
 ### Phase 3 — Grove   `Status: TODO`
 - [ ] `--count N --layout grid|poisson|cluster` distributes trees over the
