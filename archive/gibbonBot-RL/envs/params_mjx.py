@@ -1,10 +1,9 @@
 """MJX training parameters. Edit values and restart training."""
 
-
 # ─── Motor & action shaping ──────────────────────────────────────────────────
 # Hard cap on how far a joint can travel per action (normalised [-1, 1]).
 #   0.05 → barely moves   0.15 → slow   0.30 → moderate   0.60+ → jerky
-MOTOR_MAX_SPEED = 0.10
+MOTOR_MAX_SPEED = 0.30
 
 # Low-pass filter on policy output:  filt = α·raw + (1−α)·prev
 #   1.0 → no filter   0.5 → light   0.3 → strong   0.1 → very heavy
@@ -59,8 +58,8 @@ W_ENERGY = 0.005
 
 # ─── PPO algorithm ───────────────────────────────────────────────────────────
 LEARNING_RATE = 0.00037
-ENT_COEF      = 0.05
-CLIP_EPS      = 0.15
+ENT_COEF = 0.05
+CLIP_EPS = 0.15
 
 # ─── Physics (requires restart) ──────────────────────────────────────────────
 # Physics steps per policy decision. Each step = 0.002 s.
