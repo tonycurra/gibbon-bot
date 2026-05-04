@@ -99,8 +99,12 @@ with OBJ.open("w") as f:
             v10 = (i+1) * MESH_RES + j + 1
             v01 = i * MESH_RES + (j+1) + 1
             v11 = (i+1) * MESH_RES + (j+1) + 1
+            # top side (CCW from above → normals up)
             f.write(f"f {v00}//{v00} {v10}//{v10} {v11}//{v11}\n")
             f.write(f"f {v00}//{v00} {v11}//{v11} {v01}//{v01}\n")
+            # bottom side (reversed winding so back-face culling doesn't hide it)
+            f.write(f"f {v00}//{v00} {v11}//{v11} {v10}//{v10}\n")
+            f.write(f"f {v00}//{v00} {v01}//{v01} {v11}//{v11}\n")
 
 # ---------- spawn z so robot lands on top of terrain at (0,0) ----------
 # world-space terrain height at hfield pixel (i,j) is norm[i,j] * zmax
