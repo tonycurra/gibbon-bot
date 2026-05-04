@@ -48,7 +48,9 @@ Install Blender once: `sudo apt install blender` (Blender 4.x recommended).
 
 ## Outputs
 
-- `data/grove.xml` (always) — MJCF fragment included by `data/scene.xml`.
+- `data/scene.xml` (in-place patch between `<!-- TREE-ASSETS-BEGIN -->` /
+  `<!-- TREE-ASSETS-END -->` and `<!-- TREE-WORLDBODY-BEGIN -->` /
+  `<!-- TREE-WORLDBODY-END -->` markers) — the MJCF the simulator loads.
 - `data/trees/tree_<id>_wood.obj` (Blender path) — trunk + branches mesh.
 - `data/trees/tree_<id>_leaves.obj` (Blender path) — leaf cards.
 - `data/trees/tree_<id>.json` (Blender path) — branch midline coordinates

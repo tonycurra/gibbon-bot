@@ -43,16 +43,18 @@ should be able to climb / brachiate / push off branches.
 
 ```
 data/
-  scene.xml         ← thin manifest: <include>s of the three below + globals
-  robot.xml         ← <body name="torso">…</body>: hand-edited, stable
-  terrain.xml       ← <hfield>, floor geom, terrain_visual mesh, sun, sky
-  grove.xml         ← <mesh> assets + tree geoms; rewritten by gen_grove.py
-  terrain.png        (gitignored — heightfield)
+  scene.xml         ← single MJCF with section markers:
+                       <!-- TERRAIN-ASSETS-BEGIN/END -->
+                       <!-- TERRAIN-WORLDBODY-BEGIN/END -->
+                       <!-- TREE-ASSETS-BEGIN/END -->
+                       <!-- TREE-WORLDBODY-BEGIN/END -->
+                      gen_terrain.py and trees.generate splice into these.
+  terrain.png       (gitignored — heightfield)
   terrain_surface.obj (gitignored — top-surface mesh)
-  trees/<id>.obj     (gitignored — per-tree procedural meshes)
+  trees/<id>.obj    (gitignored — per-tree procedural meshes)
 
-gen_terrain.py      ← already exists, patches terrain.xml in place
-gen_grove.py        ← NEW: procedural olive trees → grove.xml + .obj files
+gen_terrain.py      ← patches scene.xml's TERRAIN-* sections + torso pos
+trees/generate.py   ← patches scene.xml's TREE-* sections
 ```
 
 ## Phases
