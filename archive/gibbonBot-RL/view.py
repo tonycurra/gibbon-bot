@@ -126,7 +126,9 @@ def main():
         data.qpos[4]  = 0.0
         data.qpos[5]  = 0.0
         data.qpos[6]  = np.sin(yaw / 2)
-        data.qpos[7:] = rng.uniform(-0.15, 0.15, size=model.nq - 7)
+        # Robot joints only — slice [7:7+ACT_DIM] so we don't write into
+        # grove DOFs (branch ball joints, future olive freejoints).
+        data.qpos[7:7 + ACT_DIM] = rng.uniform(-0.15, 0.15, size=ACT_DIM)
         data.qvel[:]  = 0.0
         data.ctrl[:]  = 0
         mujoco.mj_forward(model, data)
@@ -163,11 +165,13 @@ def main():
                 elif POLICY == "random":
                     action = rng.uniform(-1, 1, size=ACT_DIM).astype(np.float32)
                 elif predict is not None:
+                    # robot joints only — bound slices to ACT_DIM so grove
+                    # DOFs (branches/olives) don't poison the observation.
                     obs = np.concatenate([
                         data.qpos[2:3], data.qpos[3:7],
                         data.qvel[0:3], data.qvel[3:6],
-                        data.qpos[7:],  data.qvel[6:],
-                        data.qfrc_actuator[6:30],
+                        data.qpos[7:7 + ACT_DIM], data.qvel[6:6 + ACT_DIM],
+                        data.qfrc_actuator[6:6 + ACT_DIM],
                     ]).astype(np.float32)
                     action = predict(obs)
                 else:
