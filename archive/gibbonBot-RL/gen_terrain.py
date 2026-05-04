@@ -30,7 +30,7 @@ import re
 from pathlib import Path
 
 import numpy as np
-from scipy.ndimage import gaussian_filter
+from scipy.ndimage import gaussian_filter, zoom as sz_zoom
 from PIL import Image
 
 p = argparse.ArgumentParser()
@@ -75,6 +75,32 @@ if zmax < 1e-6:
     zmax = 1e-3
 norm = (heights - heights.min()) / zmax
 Image.fromarray((norm * 255).astype(np.uint8), mode="L").save(PNG)
+
+# ---------- top-surface-only OBJ mesh (visual geom, no sides/bottom) ----------
+OBJ = Path("data/terrain_surface.obj")
+MESH_RES = 128
+norm_mesh = sz_zoom(norm, MESH_RES / RES, order=1)
+Δ = 2 * HALF_EXTENT / (MESH_RES - 1)
+with OBJ.open("w") as f:
+    for i in range(MESH_RES):
+        for j in range(MESH_RES):
+            x = -HALF_EXTENT + j * Δ
+            y =  HALF_EXTENT - i * Δ
+            z = float(norm_mesh[i, j]) * zmax
+            # vertex normal from heightfield gradient (smooth shading)
+            dzdj = float(norm_mesh[i, min(j+1,MESH_RES-1)] - norm_mesh[i, max(j-1,0)]) * zmax / (2*Δ if 0<j<MESH_RES-1 else Δ)
+            dzdi = float(norm_mesh[max(i-1,0), j] - norm_mesh[min(i+1,MESH_RES-1), j]) * zmax / (2*Δ if 0<i<MESH_RES-1 else Δ)
+            nl = (dzdj**2 + dzdi**2 + 1) ** 0.5
+            f.write(f"v  {x:.5f} {y:.5f} {z:.5f}\n")
+            f.write(f"vn {-dzdj/nl:.5f} {-dzdi/nl:.5f} {1/nl:.5f}\n")
+    for i in range(MESH_RES - 1):
+        for j in range(MESH_RES - 1):
+            v00 = i * MESH_RES + j + 1
+            v10 = (i+1) * MESH_RES + j + 1
+            v01 = i * MESH_RES + (j+1) + 1
+            v11 = (i+1) * MESH_RES + (j+1) + 1
+            f.write(f"f {v00}//{v00} {v10}//{v10} {v11}//{v11}\n")
+            f.write(f"f {v00}//{v00} {v11}//{v11} {v01}//{v01}\n")
 
 # ---------- spawn z so robot lands on top of terrain at (0,0) ----------
 # world-space terrain height at hfield pixel (i,j) is norm[i,j] * zmax

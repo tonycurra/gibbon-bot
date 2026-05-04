@@ -78,6 +78,7 @@ What it does:
 - Idles the render thread when no client is watching → 0% CPU when the tab is closed.
 - Touch-first UI: drag = orbit, pinch / scroll = zoom, +/− buttons on mobile. Camera always orbits around the robot — lookat tracks the torso position continuously.
 - Camera cannot clip through terrain: server computes the camera world position and bilinear-samples the heightfield at that point, reducing distance as needed to keep 20 cm clearance. Free tilt (any elevation, including looking up from below).
+- Terrain renders as top-surface only (no sides or bottom): gen_terrain.py writes `data/terrain_surface.obj` (128×128 smooth-shaded mesh with vertex normals). The invisible hfield geom handles physics; the mesh geom is visual-only.
 - Top-left **terrain panel** with live sliders (slope 0–60%, roughness, softness, grip, sun) and 7 soil presets: loam · rocky · sandy · clay · terra rossa · limestone · mud. Each preset sets roughness, softness, and grip — which maps to `solimp`/`solref`/`friction` in the physics. Hot-reloads gen_terrain.py and resets the robot to the home keyframe so it always spawns above the new surface.
 - Chat input bottom posts to `/chat`; messages are echoed to all connected clients.
 - Pause (Space), reset (R / ↺ button).

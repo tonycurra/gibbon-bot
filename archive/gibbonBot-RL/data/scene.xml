@@ -10,20 +10,22 @@
     <mesh name="link5" content_type="model/stl" file="meshes/link5.stl" scale="0.001 0.001 0.001" />
     <mesh name="gripper_link" content_type="model/stl" file="meshes/gripper_link.stl" scale="0.001 0.001 0.001" />
     <!-- size: half-x, half-y, max-height, base-thickness -->
-    <hfield name="terrain" file="terrain.png" size="5.0 5.0 3.6363 0.05" />
-    <texture name="skybox" type="skybox" builtin="gradient" rgb1="0.058 0.083 0.158" rgb2="0.200 0.142 0.150" width="256" height="256" />
+    <hfield name="terrain" file="terrain.png" size="5.0 5.0 0.1000 0.05" />
+    <mesh name="terrain_surface" file="terrain_surface.obj"/>
+    <texture name="skybox" type="skybox" builtin="gradient" rgb1="0.350 0.550 0.850" rgb2="0.700 0.833 0.960" width="256" height="256" />
   </asset>
   <visual>
-    <headlight ambient="0.092 0.092 0.125" diffuse="0.6 0.6 0.6" specular="0 0 0" />
+    <headlight ambient="0.400 0.420 0.450" diffuse="0.6 0.6 0.6" specular="0 0 0" />
     <quality shadowsize="4096" offsamples="8" />
     <map fogstart="20" fogend="60" znear="0.05" zfar="200" />
     <rgba haze="0.65 0.74 0.82 1" />
     <global offwidth="1920" offheight="1920" />
   </visual>
   <worldbody>
-    <light name="sun" directional="true" castshadow="true" pos="-6.830 6.830 0.500" dir="0.683 -0.683 0.259" diffuse="0.040 0.032 0.037" specular="0.2 0.2 0.2" />
-    <geom name="floor" type="hfield" hfield="terrain" pos="0 0 0" rgba="0.45 0.32 0.18 1" condim="4" friction="0.895 0.0382 0.00707" solimp="0.850 0.999 0.0213" solref="0.0180 1" contype="1" conaffinity="31" />
-    <body name="torso" pos="0 0 2.2420">
+    <light name="sun" directional="true" castshadow="true" pos="-3.536 3.536 8.660" dir="0.354 -0.354 -0.866" diffuse="0.950 0.920 0.850" specular="0.2 0.2 0.2" />
+    <geom name="floor" type="hfield" hfield="terrain" pos="0 0 0" rgba="0 0 0 0" condim="4" friction="1.490 0.0715 0.01403" solimp="0.850 0.999 0.0125" solref="0.0110 1" contype="1" conaffinity="31" />
+    <geom name="terrain_visual" type="mesh" mesh="terrain_surface" rgba="0.45 0.32 0.18 1" contype="0" conaffinity="0"/>
+    <body name="torso" pos="0 0 0.5620">
       <inertial pos="-0.0192447 0 -0.0101645" quat="0.439032 0.439032 -0.554303 0.554303" mass="1.02487" diaginertia="0.0402837 0.0351039 0.0308832" />
       <joint name="world_to_torso" type="free" />
       <geom size="0.15 0.15 0.05" type="box" rgba="0.3 0.3 0.3 1" class="robot" />
@@ -195,6 +197,6 @@
     <position name="act_br_foot"             joint="br_foot"             kp="8" ctrlrange="0 85.9437"       forcelimited="true" forcerange="-1.96 1.96" />
   </actuator>
   <keyframe>
-    <key name="home" qpos="0 0 2.2420 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0" />
+    <key name="home" qpos="0 0 0.5620 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0" />
   </keyframe>
 </mujoco>
