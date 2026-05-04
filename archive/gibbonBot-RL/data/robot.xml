@@ -15,7 +15,7 @@
     </default>
   </default>
   <worldbody>
-    <body name="torso" pos="0 0 1.0531">
+    <body name="torso" pos="0 0 0.5620">
       <inertial pos="-0.0192447 0 -0.0101645" quat="0.439032 0.439032 -0.554303 0.554303" mass="1.02487" diaginertia="0.0402837 0.0351039 0.0308832" />
       <joint name="world_to_torso" type="free" />
       <geom size="0.15 0.15 0.05" type="box" rgba="0.3 0.3 0.3 1" class="robot" />
@@ -181,6 +181,6 @@
     <position name="act_br_foot"             joint="br_foot"             kp="8" ctrlrange="0 85.9437"       forcelimited="true" forcerange="-1.96 1.96" />
   </actuator>
   <keyframe>
-    <key name="home" qpos="0 0 1.0531 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0" />
+    <key name="home" qpos="0 0 0.5620 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0" />
   </keyframe>
 </mujocoinclude>

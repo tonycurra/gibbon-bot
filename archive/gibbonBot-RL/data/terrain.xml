@@ -2,7 +2,7 @@
 <mujocoinclude>
   <asset>
     <!-- size: half-x, half-y, max-height, base-thickness -->
-    <hfield name="terrain" file="terrain.png" size="5.0 5.0 1.0394 0.05" />
+    <hfield name="terrain" file="terrain.png" size="5.0 5.0 0.1000 0.05" />
     <mesh name="terrain_surface" file="terrain_surface.obj"/>
     <texture name="skybox" type="skybox" builtin="gradient" rgb1="0.350 0.550 0.850" rgb2="0.700 0.833 0.960" width="256" height="256" />
   </asset>

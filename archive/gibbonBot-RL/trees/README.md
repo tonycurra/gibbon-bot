@@ -25,24 +25,44 @@ CLI flags (see `generate.py`):
 | `--pos` | x y | base position (z is sampled from the live heightfield) |
 | `--seed` | int | rng seed |
 
+## Backends
+
+`generate.py` automatically picks the best available backend:
+
+1. **Blender + Sapling Tree Gen** (preferred) — invokes Blender headlessly
+   via `blender --background --python trees/blender_sapling.py -- ...`.
+   Produces real OBJ meshes saved under `data/trees/`.
+2. **Primitives fallback** — pure-Python capsules + ellipsoids when
+   Blender is missing on PATH or fails. Force with `--primitives`.
+
+Install Blender once: `sudo apt install blender` (Blender 4.x recommended).
+
 ## Modules
 
 | module | role |
 |--------|------|
-| `varieties.py` | `young` / `mature` / `ancient` preset dicts |
-| `primitives.py` | builds a tree as MuJoCo capsules + ellipsoids and emits `grove.xml` |
-| `generate.py` | CLI orchestrator — parses args, samples terrain height, dispatches to a builder, writes `grove.xml` |
+| `varieties.py` | `young` / `mature` / `ancient` preset dicts (used by both backends) |
+| `primitives.py` | Pure-Python tree as MuJoCo capsules + ellipsoids; emits primitive grove.xml |
+| `blender_sapling.py` | Runs *inside* Blender — Sapling tree → wood OBJ + leaves OBJ + skeleton JSON |
+| `generate.py` | Orchestrator — picks backend, samples terrain height, emits `grove.xml` (mesh-based or primitive) |
+
+## Outputs
+
+- `data/grove.xml` (always) — MJCF fragment included by `data/scene.xml`.
+- `data/trees/tree_<id>_wood.obj` (Blender path) — trunk + branches mesh.
+- `data/trees/tree_<id>_leaves.obj` (Blender path) — leaf cards.
+- `data/trees/tree_<id>.json` (Blender path) — branch midline coordinates
+  + olive tip positions. Consumed by Track 2c (articulated branches) and
+  Track 2d (dynamic olives).
+
+`data/trees/*` is gitignored.
 
 ## Roadmap (matches `GROVE_MASTERPLAN.md`)
 
 | status | track | adds |
 |--------|-------|------|
 | ✅ Phase 1 | primitives | capsule trunk + branches, ellipsoid foliage, trunk collision |
-| ⏳ 2a | hot-reload | `serve_web.py` `/grove` endpoint + browser slider panel |
-| ⏳ 2b | `blender_sapling.py` | Blender Python script using Sapling Tree Gen, exports OBJ wood/leaves + branch JSON; `generate.py` invokes Blender as subprocess and falls back to primitives if absent |
-| ⏳ 2c | `articulate.py` | branches as nested `<body>` chains with hinge stiffness so they bend on contact |
-| ⏳ 2d | `olives.py` | dynamic olive bodies + breakable weld constraints |
-
-Generated mesh files (when Blender lands) are saved under `data/trees/`,
-which is gitignored. A `cache_index.json` maps `(params)` → file paths
-so repeat slider drags reuse cached OBJs.
+| ✅ 2a | hot-reload | `serve_web.py` `/grove` endpoint + browser slider panel |
+| ✅ 2b | `blender_sapling.py` | Blender Sapling export → OBJ + JSON skeleton; primitive fallback intact |
+| ⏳ 2c | `articulate.py` | branches as nested `<body>` chains with ball-joint stiffness so they bend on contact |
+| ⏳ 2d | `olives.py` | dynamic olive bodies + breakable weld constraints (force/torque sensor + `eq_active` toggle) |
