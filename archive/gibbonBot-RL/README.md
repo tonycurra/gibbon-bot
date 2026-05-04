@@ -55,7 +55,9 @@ Then `python view.py`. Useful for verifying physics (friction, contact, motor li
 | `envs/stand_env_mjx.py` | MJX environment (stateless, vmappable) |
 | `envs/params_mjx.py` | Training parameters — edit values, restart training |
 | `envs/stand_env.py` | Old CPU Gymnasium reference env (kept for reference, not the main path) |
-| `data/scene.xml` | Robot MJCF (joint ranges/torques match real ST32xx motors) |
+| `data/scene.xml` | Top-level MJCF manifest — `<include>`s `terrain.xml` + `robot.xml` |
+| `data/robot.xml` | Robot bodies/joints/actuators/keyframe (joint ranges match real ST32xx motors) |
+| `data/terrain.xml` | Heightfield, terrain mesh, sun, sky, headlight |
 | `data/motors.md` | Motor specs (ST3235 / ST3215 / ST3215-HS) + per-joint mapping |
 | `data/controls.md` | Real-robot web UI, safety, startup, sim-to-real notes |
 | `utils/lineage.py` | Per-run hardware/env metadata logger |

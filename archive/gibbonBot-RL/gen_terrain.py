@@ -49,7 +49,8 @@ softness = max(0.0, min(1.0, args.softness))
 grip = max(0.0, min(1.0, args.grip))
 brightness = max(0.0, min(1.5, args.brightness))
 
-SCENE = Path("data/scene.xml")
+TERRAIN = Path("data/terrain.xml")
+ROBOT   = Path("data/robot.xml")
 PNG = Path("data/terrain.png")
 RES = 256
 HALF_EXTENT = 5.0
@@ -203,15 +204,15 @@ ambient = tuple(c * brightness for c in ambient)
 def fmt(v):
     return " ".join(f"{x:.3f}" for x in v)
 
-# ---------- patch scene.xml ----------
-text = SCENE.read_text()
+# ---------- patch terrain.xml ----------
+ttext = TERRAIN.read_text()
 
 # hfield size
 new_size = f'size="{HALF_EXTENT} {HALF_EXTENT} {zmax:.4f} 0.05"'
-text, n = re.subn(r'(<hfield\b[^>]*?)\s+size="[^"]*"',
-                  lambda m: m.group(1) + " " + new_size, text, count=1)
+ttext, n = re.subn(r'(<hfield\b[^>]*?)\s+size="[^"]*"',
+                   lambda m: m.group(1) + " " + new_size, ttext, count=1)
 if n != 1:
-    raise RuntimeError("could not patch hfield size")
+    raise RuntimeError("could not patch hfield size in terrain.xml")
 
 # floor physics
 def patch_floor(s, attr, value):
@@ -219,21 +220,20 @@ def patch_floor(s, attr, value):
         r'(<geom\b[^>]*\bname="floor"[^>]*?\b' + attr + r'=")[^"]*(")',
         lambda m: m.group(1) + value + m.group(2), s, count=1,
     )
-
 for attr, val in [("friction", friction), ("solimp", solimp), ("solref", solref)]:
-    text, k = patch_floor(text, attr, val)
+    ttext, k = patch_floor(ttext, attr, val)
     if k != 1:
         raise RuntimeError(f"could not patch floor {attr}")
 
 # skybox colors (rgb1=top, rgb2=horizon)
-text, k = re.subn(
+ttext, k = re.subn(
     r'(<texture\b[^>]*\bname="skybox"[^>]*\brgb1=")[^"]*(")',
-    lambda m: m.group(1) + fmt(sky_top) + m.group(2), text, count=1)
+    lambda m: m.group(1) + fmt(sky_top) + m.group(2), ttext, count=1)
 if k != 1:
     raise RuntimeError("could not patch skybox rgb1")
-text, k = re.subn(
+ttext, k = re.subn(
     r'(<texture\b[^>]*\bname="skybox"[^>]*\brgb2=")[^"]*(")',
-    lambda m: m.group(1) + fmt(sky_horizon) + m.group(2), text, count=1)
+    lambda m: m.group(1) + fmt(sky_horizon) + m.group(2), ttext, count=1)
 if k != 1:
     raise RuntimeError("could not patch skybox rgb2")
 
@@ -243,39 +243,36 @@ def patch_sun(s, attr, value):
         r'(<light\b[^>]*\bname="sun"[^>]*?\b' + attr + r'=")[^"]*(")',
         lambda m: m.group(1) + value + m.group(2), s, count=1,
     )
+for attr, val in [("pos", fmt(light_pos)), ("dir", fmt(light_dir)), ("diffuse", fmt(light_rgb))]:
+    ttext, k = patch_sun(ttext, attr, val)
+    if k != 1:
+        raise RuntimeError(f"could not patch sun {attr}")
 
-text, k = patch_sun(text, "pos", fmt(light_pos))
-if k != 1:
-    raise RuntimeError("could not patch sun pos")
-text, k = patch_sun(text, "dir", fmt(light_dir))
-if k != 1:
-    raise RuntimeError("could not patch sun dir")
-text, k = patch_sun(text, "diffuse", fmt(light_rgb))
-if k != 1:
-    raise RuntimeError("could not patch sun diffuse")
-
-# headlight ambient (controls overall scene fill)
-text, k = re.subn(
+# headlight ambient
+ttext, k = re.subn(
     r'(<headlight\b[^>]*\bambient=")[^"]*(")',
-    lambda m: m.group(1) + fmt(ambient) + m.group(2), text, count=1)
+    lambda m: m.group(1) + fmt(ambient) + m.group(2), ttext, count=1)
 if k != 1:
     raise RuntimeError("could not patch headlight ambient")
 
-# torso spawn pos — keep robot above terrain at spawn point
-text, k = re.subn(
+TERRAIN.write_text(ttext)
+
+# ---------- patch robot.xml (spawn z + keyframe) ----------
+rtext = ROBOT.read_text()
+
+rtext, k = re.subn(
     r'(<body\b[^>]*\bname="torso"[^>]*\bpos=")[^"]*(")',
-    lambda m: m.group(1) + f"0 0 {spawn_z:.4f}" + m.group(2), text, count=1)
+    lambda m: m.group(1) + f"0 0 {spawn_z:.4f}" + m.group(2), rtext, count=1)
 if k != 1:
-    raise RuntimeError("could not patch torso pos")
+    raise RuntimeError("could not patch torso pos in robot.xml")
 
-# keyframe "home" — first 3 numbers of qpos are the torso x y z
-text, k = re.subn(
+rtext, k = re.subn(
     r'(<key\b[^>]*\bname="home"[^>]*\bqpos=")[^ ]+ [^ ]+ [^ ]+( )',
-    lambda m: m.group(1) + f"0 0 {spawn_z:.4f}" + m.group(2), text, count=1)
+    lambda m: m.group(1) + f"0 0 {spawn_z:.4f}" + m.group(2), rtext, count=1)
 if k != 1:
-    raise RuntimeError("could not patch keyframe home qpos")
+    raise RuntimeError("could not patch keyframe home qpos in robot.xml")
 
-SCENE.write_text(text)
+ROBOT.write_text(rtext)
 
 angle_deg = np.degrees(np.arctan(args.slope / 100.0))
 print(f"Saved {PNG}")
@@ -287,4 +284,4 @@ print(f"  sun:        azim={args.sun_azim}° elev={args.sun_elev}°  brightness�
 print(f"              dir={fmt(light_dir)}  diffuse={fmt(light_rgb)}")
 print(f"  sky:        top={fmt(sky_top)}  horizon={fmt(sky_horizon)}")
 print(f"  spawn z:    {spawn_z:.3f} m  (terrain at (0,0): {terrain_at_spawn:.3f} m)")
-print(f"Patched {SCENE}")
+print(f"Patched {TERRAIN} + {ROBOT}")
