@@ -3,4 +3,5 @@
   <compiler angle="degree" />
   <include file="terrain.xml"/>
   <include file="robot.xml"/>
+  <include file="grove.xml"/>
 </mujoco>

@@ -65,15 +65,19 @@ gen_grove.py        ← NEW: procedural olive trees → grove.xml + .obj files
       `html_viewer` is on a previous commit; will rebase or cherry-pick the
       split when grove work needs it).
 
-### Phase 1 — One olive tree, ugly but real   `Status: TODO`
-- [ ] `gen_grove.py --trees 1 --variety mature` → writes `grove.xml` +
-      `data/trees/tree_0.obj` (visual) + a trunk capsule collision geom.
-- [ ] Trunk: tapered cylinder mesh, 6–8 segments, slightly bent.
-- [ ] 3–5 main branches, each branched once. Foliage: ellipsoid clusters with
-      leaf-coloured material.
-- [ ] No textures yet — flat olive-green / bark-grey rgba.
-- [ ] `scene.xml` includes `grove.xml`. Robot can walk into trunk; trunk has
-      collision.
+### Phase 1 — One olive tree, ugly but real   `Status: DONE`
+- [x] `gen_grove.py --variety {young|mature|ancient}` writes `data/grove.xml`.
+- [x] Trunk: 4 stacked capsules along a slightly bent gnarled curve, all
+      collision-enabled (climbable). Tapered base→top.
+- [x] Branches: 3–6 outward+up capsules (visual-only for now; collision in
+      Phase 5 climbing pass).
+- [x] Foliage: ellipsoid clusters at trunk crown + each branch tip, oblate.
+- [x] Flat olive-green / bark-brown rgba (no textures).
+- [x] `scene.xml` includes `grove.xml`. MJX loads with `nbody=26` (no shift),
+      `ngeom=54` (was 39, +15 tree geoms).
+- **Note**: switched from "OBJ mesh" to MuJoCo primitives for Phase 1 — same
+  visual outcome, far less code, faster to iterate. OBJ-based detailed shapes
+  deferred to Phase 4 (realism pass).
 
 ### Phase 2 — Parameterized trees   `Status: TODO`
 - [ ] Variety presets (young / mature / ancient) tune: trunk diameter, height,
