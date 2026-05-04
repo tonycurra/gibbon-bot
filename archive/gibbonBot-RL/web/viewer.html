@@ -161,6 +161,32 @@
     #terrain .chip:hover { background: rgba(255,255,255,0.12); }
     #terrain .chip.active { background: var(--accent); color: #062c3a; border-color: transparent; }
 
+    /* grove panel — mirrors terrain panel, positioned top-right */
+    #grove {
+      position: fixed; right: 12px; top: calc(8px + var(--safe-t));
+      background: var(--pill); border: 1px solid var(--pill-bd);
+      backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+      border-radius: 14px; padding: 10px 12px;
+      display: flex; flex-direction: column; gap: 8px;
+      min-width: 180px; max-width: 220px;
+      font-size: 12px;
+    }
+    #grove.collapsed > .row { display: none; }
+    #grove header { display: flex; justify-content: space-between; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+    #grove header span:last-child { color: var(--muted); font-size: 11px; }
+    #grove .row { display: flex; flex-direction: column; gap: 3px; }
+    #grove label { display: flex; justify-content: space-between; color: var(--muted); }
+    #grove label b { color: var(--fg); font-weight: 500; }
+    #grove input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 18px; background: transparent; }
+    #grove input[type=range]::-webkit-slider-runnable-track { height: 3px; background: rgba(255,255,255,0.18); border-radius: 2px; }
+    #grove input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 14px; height: 14px; margin-top: -6px; border-radius: 50%; background: var(--accent); }
+    #grove input[type=range]::-moz-range-track { height: 3px; background: rgba(255,255,255,0.18); border-radius: 2px; }
+    #grove input[type=range]::-moz-range-thumb { width: 14px; height: 14px; border: 0; border-radius: 50%; background: var(--accent); }
+    #grove .chips { display: flex; flex-wrap: wrap; gap: 4px; }
+    #grove .chip { flex: 0 0 auto; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: var(--fg); padding: 3px 9px; border-radius: 999px; font-size: 11px; cursor: pointer; font-family: inherit; }
+    #grove .chip:hover { background: rgba(255,255,255,0.12); }
+    #grove .chip.active { background: var(--accent); color: #062c3a; border-color: transparent; }
+
     /* hint text on first load */
     #hint {
       position: fixed; left: 50%; top: 50%;
@@ -220,6 +246,40 @@
     <div class="row">
       <label>sun ° <b><span id="v-sun_elev">60</span></b></label>
       <input id="s-sun_elev" type="range" min="-15" max="90" step="5" value="60">
+    </div>
+  </section>
+
+  <section id="grove" class="collapsed" aria-label="grove controls">
+    <header onclick="this.parentElement.classList.toggle('collapsed')">
+      <strong>grove</strong><span id="grove-status">tap to edit</span>
+    </header>
+    <div class="row">
+      <label>variety</label>
+      <div class="chips" id="variety-chips">
+        <button type="button" class="chip" data-variety="young">young</button>
+        <button type="button" class="chip active" data-variety="mature">mature</button>
+        <button type="button" class="chip" data-variety="ancient">ancient</button>
+      </div>
+    </div>
+    <div class="row">
+      <label>size <b><span id="v-size">1.00</span></b></label>
+      <input id="g-size" type="range" min="0.5" max="2.0" step="0.05" value="1.00">
+    </div>
+    <div class="row">
+      <label>branches <b><span id="v-gbranches">5</span></b></label>
+      <input id="g-branches" type="range" min="2" max="8" step="1" value="5">
+    </div>
+    <div class="row">
+      <label>leaves <b><span id="v-gleaves">0.60</span></b></label>
+      <input id="g-leaves" type="range" min="0" max="1" step="0.05" value="0.60">
+    </div>
+    <div class="row">
+      <label>detachment <b><span id="v-gdetach">0.30</span></b></label>
+      <input id="g-detachment" type="range" min="0" max="1" step="0.05" value="0.30">
+    </div>
+    <div class="row">
+      <label>seed <b><span id="v-gseed">42</span></b></label>
+      <input id="g-seed" type="range" min="0" max="999" step="1" value="42">
     </div>
   </section>
 
@@ -352,6 +412,7 @@
         statusEl.textContent = paused ? 'paused' : 'live';
       }
       if (s.reload) terStatus.textContent = s.reload === 'idle' ? 'ready' : s.reload;
+      if (s.grove_status) groveStatus.textContent = s.grove_status === 'idle' ? 'ready' : s.grove_status;
     } catch (_) {}
   }, 250);
 
@@ -442,10 +503,65 @@
     });
   });
 
+  // ── grove sliders (mirror of terrain — variety + size + branches + leaves + detachment + seed)
+  const groveStatus = $('grove-status');
+  const groveState = { variety: 'mature', size: 1.0, branches: 5, leaves: 0.6, detachment: 0.3, seed: 42 };
+  let groveTimer = null;
+
+  function pushGrove() {
+    groveStatus.textContent = 'building…';
+    fetch('/grove', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(groveState),
+    }).catch(()=> { groveStatus.textContent = 'error'; });
+  }
+
+  // variety chips
+  document.querySelectorAll('#variety-chips .chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      groveState.variety = chip.dataset.variety;
+      document.querySelectorAll('#variety-chips .chip').forEach(c =>
+        c.classList.toggle('active', c === chip));
+      clearTimeout(groveTimer);
+      groveTimer = setTimeout(pushGrove, 200);
+    });
+  });
+
+  // numeric sliders
+  const G_BIND = [
+    ['g-size',       'size',       'v-size',       v => v.toFixed(2)],
+    ['g-branches',   'branches',   'v-gbranches',  v => v.toFixed(0)],
+    ['g-leaves',     'leaves',     'v-gleaves',    v => v.toFixed(2)],
+    ['g-detachment', 'detachment', 'v-gdetach',    v => v.toFixed(2)],
+    ['g-seed',       'seed',       'v-gseed',      v => v.toFixed(0)],
+  ];
+  G_BIND.forEach(([sliderId, key, labelId, fmt]) => {
+    const slider = $(sliderId);
+    const label  = $(labelId);
+    slider.addEventListener('input', () => {
+      const v = parseFloat(slider.value);
+      groveState[key] = (key === 'branches' || key === 'seed') ? Math.round(v) : v;
+      label.textContent = fmt(v);
+      clearTimeout(groveTimer);
+      groveTimer = setTimeout(pushGrove, 400);    // a hair longer than terrain — Blender will be slower later
+    });
+  });
+
   fetch('/state').then(r => r.json()).then(s => {
     az = s.azimuth; el = s.elevation; dist = s.distance;
     if (s.torso) lookat = s.torso.slice();
     renderedChat = (s.chat || []).length;
+    if (s.grove) {
+      Object.assign(groveState, s.grove);
+      // sync chips/sliders to server state
+      document.querySelectorAll('#variety-chips .chip').forEach(c =>
+        c.classList.toggle('active', c.dataset.variety === groveState.variety));
+      G_BIND.forEach(([sliderId, key, labelId, fmt]) => {
+        const v = groveState[key];
+        $(sliderId).value = v;
+        $(labelId).textContent = fmt(v);
+      });
+    }
   }).catch(()=>{});
   </script>
 </body>

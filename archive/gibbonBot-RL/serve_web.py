@@ -58,6 +58,12 @@ reload_request: dict | None = None
 reload_status = "idle"   # 'idle' | 'building' | 'error: ...'
 terrain_top = 0.0        # max world-z of heightfield surface (for camera clamp)
 
+# current grove params (mirror trees.generate defaults)
+grove_params = {"variety": "mature", "size": 1.0, "branches": 5,
+                "leaves": 0.6, "detachment": 0.3, "seed": 42}
+grove_request: dict | None = None
+grove_status = "idle"
+
 
 def _terrain_top(m: mujoco.MjModel) -> float:
     """World-space max-z of the heightfield surface (used for camera init only)."""
@@ -125,10 +131,39 @@ def _render_loop():
     Idles when no client is watching; also handles terrain hot-reload here so
     the GL context and model stay in sync.
     """
-    global latest_jpeg, frame_id, model, data, reload_request, reload_status, terrain_top
+    global latest_jpeg, frame_id, model, data
+    global reload_request, reload_status, grove_request, grove_status, terrain_top
     renderer = mujoco.Renderer(model, H, W)
     terrain_top = _terrain_top(model)
     period = 1.0 / FPS
+
+    def _params_to_cli(params: dict) -> list[str]:
+        out = []
+        for k, v in params.items():
+            flag = f"--{k.replace('_','-')}"
+            if isinstance(v, (list, tuple)):
+                out += [flag, *(str(x) for x in v)]
+            else:
+                out += [flag, str(v)]
+        return out
+
+    def _swap_model() -> mujoco.Renderer:
+        """Reload model from disk, swap globals, recreate renderer."""
+        nonlocal renderer
+        global model, data, terrain_top
+        with sim_lock:
+            new_model = mujoco.MjModel.from_xml_path(MODEL_PATH)
+            new_data = mujoco.MjData(new_model)
+            mujoco.mj_resetDataKeyframe(new_model, new_data, 0)
+            mujoco.mj_forward(new_model, new_data)
+            model = new_model
+            data = new_data
+        renderer.close()
+        renderer = mujoco.Renderer(model, H, W)
+        terrain_top = _terrain_top(model)
+        _clamp_camera(cam, model)
+        return renderer
+
     while True:
         # handle pending terrain reload
         if reload_request is not None:
@@ -136,21 +171,9 @@ def _render_loop():
             reload_request = None
             reload_status = "building"
             try:
-                cmd = [sys.executable, "gen_terrain.py"]
-                for k, v in params.items():
-                    cmd += [f"--{k.replace('_','-')}", str(v)]
+                cmd = [sys.executable, "gen_terrain.py"] + _params_to_cli(params)
                 subprocess.run(cmd, check=True, capture_output=True, timeout=15)
-                with sim_lock:
-                    new_model = mujoco.MjModel.from_xml_path(MODEL_PATH)
-                    new_data = mujoco.MjData(new_model)
-                    mujoco.mj_resetDataKeyframe(new_model, new_data, 0)
-                    mujoco.mj_forward(new_model, new_data)
-                    model = new_model
-                    data = new_data
-                renderer.close()
-                renderer = mujoco.Renderer(model, H, W)
-                terrain_top = _terrain_top(model)
-                _clamp_camera(cam, model)
+                _swap_model()
                 terrain_params.update(params)
                 reload_status = "idle"
             except subprocess.CalledProcessError as e:
@@ -159,6 +182,24 @@ def _render_loop():
             except Exception as e:
                 reload_status = f"error: {e}"
                 print(f"[terrain] {reload_status}")
+
+        # handle pending grove reload
+        if grove_request is not None:
+            params = grove_request
+            grove_request = None
+            grove_status = "building"
+            try:
+                cmd = [sys.executable, "-m", "trees.generate"] + _params_to_cli(params)
+                subprocess.run(cmd, check=True, capture_output=True, timeout=30)
+                _swap_model()
+                grove_params.update(params)
+                grove_status = "idle"
+            except subprocess.CalledProcessError as e:
+                grove_status = f"error: {e.stderr.decode()[:120] if e.stderr else e}"
+                print(f"[grove] {grove_status}")
+            except Exception as e:
+                grove_status = f"error: {e}"
+                print(f"[grove] {grove_status}")
 
         # gate: nothing to do if nobody is watching
         with frame_cond:
@@ -281,6 +322,8 @@ class Handler(BaseHTTPRequestHandler):
                     "terrain":   terrain_params,
                     "reload":    reload_status,
                     "torso":     torso_pos,
+                    "grove":     grove_params,
+                    "grove_status": grove_status,
                 }
             ).encode()
             self._reply(200, "application/json", body)
@@ -320,6 +363,27 @@ class Handler(BaseHTTPRequestHandler):
             reload_request = merged
             with frame_cond:
                 frame_cond.notify_all()    # wake render thread if idle
+            self._reply(200, "application/json", json.dumps({"queued": merged}).encode())
+
+        elif self.path == "/grove":
+            global grove_request
+            VARIETIES_OK = {"young", "mature", "ancient"}
+            FLOAT_KEYS = {"size", "leaves", "detachment"}
+            INT_KEYS   = {"branches", "seed"}
+            params: dict = {}
+            for k, v in body.items():
+                if k == "variety" and v in VARIETIES_OK:
+                    params[k] = v
+                elif k in FLOAT_KEYS:
+                    params[k] = float(v)
+                elif k in INT_KEYS:
+                    params[k] = int(v)
+                elif k == "pos" and isinstance(v, list) and len(v) == 2:
+                    params[k] = [float(v[0]), float(v[1])]
+            merged = {**grove_params, **params}
+            grove_request = merged
+            with frame_cond:
+                frame_cond.notify_all()
             self._reply(200, "application/json", json.dumps({"queued": merged}).encode())
 
         elif self.path == "/chat":

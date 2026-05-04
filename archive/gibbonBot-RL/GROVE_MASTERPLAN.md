@@ -85,14 +85,20 @@ Reorganised: tree-gen code lives in `trees/` package. CLI is
 `python -m trees.generate`. Full plan in `.claude/plans/...` — broken
 into four shippable sub-tracks:
 
-#### 2a — Browser hot-reload pipe   `Status: TODO`
-- [ ] `/grove` POST endpoint in `serve_web.py`, mirroring `/terrain`.
-- [ ] Render-thread reload: subprocess `python -m trees.generate ...`
-      → `MjModel.from_xml_path` → `mj_resetDataKeyframe` → swap
-      globals → recreate renderer.
-- [ ] Request-serialization lock so terrain + grove POSTs don't race.
-- [ ] Tree-panel in `web/viewer.html`: variety dropdown + sliders for
-      size, branches, leaves, detachment, seed. Debounced.
+#### 2a — Browser hot-reload pipe   `Status: DONE`
+- [x] `/grove` POST endpoint in `serve_web.py`, mirrors `/terrain`.
+- [x] Render-thread reload: subprocess `python -m trees.generate ...`
+      → `_swap_model()` helper (extracted, shared with terrain) →
+      reloads `MjModel`, resets to keyframe, recreates renderer.
+- [x] Request handling: terrain and grove blocks run sequentially in
+      the render-thread loop. If both fire in the same tick, terrain
+      reloads first then grove triggers a second swap. Correct, mildly
+      wasteful — fine until we measure.
+- [x] Tree-panel in `web/viewer.html`: variety chips (young / mature /
+      ancient) + sliders for size / branches / leaves / detachment /
+      seed. 400ms debounce. Header shows `building…` / `ready` /
+      `error` from `grove_status` in `/state`.
+- [x] Initial slider values sync from `/state.grove` on page load.
 
 #### 2b — Blender + Sapling Tree Gen   `Status: TODO`
 - [ ] One-time install: `apt install blender`.
@@ -108,8 +114,12 @@ into four shippable sub-tracks:
 
 #### 2c — Articulated flexible branches   `Status: TODO`
 - [ ] `trees/articulate.py` — branches as nested `<body>` chains with
-      hinge joints (stiffness + damping). Capsule per segment with
-      collision so the robot can both bend and climb.
+      **ball joints** (sway in all directions, not just one plane) +
+      stiffness + damping. Capsule per segment with collision so the
+      robot can both bend and climb.
+- [ ] Investigate `<composite type="cable">` as a shortcut: it auto-
+      generates the chain of cylinders + ball joints. Use if the API
+      gives us per-segment collision/material control, else hand-emit.
 - [ ] **MJX edit**: `envs/stand_env_mjx.py:197` slices `qpos[7:]` →
       `qpos[7:7+24]` (robot joints only). Same for `qvel`.
 - [ ] `--rigid-branches` flag for training scenes (skip articulation
@@ -118,11 +128,22 @@ into four shippable sub-tracks:
 #### 2d — Dynamic olives with breakable welds   `Status: TODO`
 - [ ] `trees/olives.py` — emits `<body><freejoint>` + sphere geom +
       `<equality><weld>` to parent branch.
-- [ ] Step hook in env: monitor `data.efc_force` for each olive weld;
-      `data.eq_active[i] = 0` when stem-strength threshold exceeded.
+- [ ] Add a `<force>` (and optionally `<torque>`) sensor on each weld
+      so we read stem load by sensor name instead of decoding
+      `data.efc_force` indices.
+- [ ] Step hook in env: when sensor magnitude > stem strength,
+      `data.eq_active[i] = 0` → olive becomes free.
 - [ ] `--olives` flag, default off for training.
 - [ ] Olive collision bitmask: only matches robot hands (avoid contact
       explosion with branches/ground while welded).
+
+### Phase 6 (new) — Shaker harvest curriculum   `Status: TODO`
+Real olive harvesting is mostly mechanical shakers, not climbing.
+A shaker mode is also a much easier first RL task than climb-and-pick.
+- [ ] `<velocity>` or `<position>` actuator at trunk base. Driven by
+      `target = A * sin(2π f t)` with f ≈ 10–25 Hz, A small.
+- [ ] Reward = number of olives detached per second.
+- [ ] Curriculum: shaker mode → climb to specific olive → manual pick.
 
 ### Phase 3 — Grove   `Status: TODO`
 - [ ] `--count N --layout grid|poisson|cluster` distributes trees over the
