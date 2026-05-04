@@ -46,36 +46,90 @@ except ImportError:  # pragma: no cover
 #
 # Keys map to operator kwargs of `bpy.ops.curve.tree_add`. For Blender 4
 # the operator name is unchanged; properties only differ in a few corners.
+# Olive-tuned Sapling parameters. Real olives are SHORT, THICK, low-branching,
+# with small silvery-green leaves and gnarled trunks. Generic tree presets
+# look more like aspens — these push toward Mediterranean orchard shapes:
+#   - high `ratio` (thick trunk) and strong `taper`
+#   - `base_size` low so branches start near the ground
+#   - many short upper-level branches (`branches[2]` high)
+#   - small leaves (real olive leaf ≈ 3cm)
+#   - `prune_*` shapes the canopy into a compact dense crown
+#   - `attract_up` and `curve_v` add upright gnarliness
 VARIETIES = {
     "young": dict(
-        scale=2.5,        # overall height in metres
-        scale_v=0.2,      # height variation
-        length=(0.8, 0.5, 0.4, 0.3),
-        ratio=0.012,      # trunk thickness ratio
-        branches=(0, 12, 12, 0),
+        scale=2.0,
+        scale_v=0.2,
+        length=(0.5, 0.45, 0.30, 0.20),
+        length_v=(0.0, 0.10, 0.10, 0.10),
+        ratio=0.020,
+        ratio_power=1.0,
+        taper=(1.3, 1.5, 1.5, 1.5),
+        branches=(0, 8, 18, 0),
         levels=3,
-        leaf_count=120,
-        leaf_scale=0.06,
+        base_size=0.20,
+        base_splits=0,
+        split_angle=(0, 32, 35, 30),
+        split_angle_v=(0, 8, 8, 8),
+        attract_up=(0, 0.4, 0.3, 0.0),
+        curve=(0, 30, 40, 0),
+        curve_v=(20, 60, 80, 0),
+        prune_ratio=0.4,
+        prune_width=0.6,
+        prune_width_peak=0.5,
+        prune_height=0.55,
+        leaf_count=140,
+        leaf_scale=0.030,
+        leaf_scale_x=0.4,
     ),
     "mature": dict(
-        scale=4.0,
+        scale=3.5,
         scale_v=0.3,
-        length=(1.0, 0.7, 0.5, 0.3),
-        ratio=0.020,
-        branches=(0, 18, 16, 0),
+        length=(0.55, 0.55, 0.30, 0.20),
+        length_v=(0.0, 0.15, 0.15, 0.10),
+        ratio=0.045,                 # noticeably thick trunk
+        ratio_power=1.1,
+        taper=(1.6, 1.6, 1.5, 1.5),
+        branches=(0, 14, 28, 0),     # many twigs in the canopy
         levels=3,
-        leaf_count=200,
-        leaf_scale=0.07,
+        base_size=0.12,              # branches start low
+        base_splits=0,
+        split_angle=(0, 38, 38, 30),
+        split_angle_v=(0, 10, 10, 8),
+        attract_up=(0, 0.5, 0.3, 0.0),
+        curve=(0, 35, 50, 0),
+        curve_v=(40, 80, 100, 0),    # gnarled branches
+        prune_ratio=0.6,
+        prune_width=0.85,            # broad spreading canopy
+        prune_width_peak=0.45,
+        prune_height=0.55,
+        leaf_count=240,
+        leaf_scale=0.032,
+        leaf_scale_x=0.4,
     ),
     "ancient": dict(
-        scale=3.5,        # not as tall as mature — gnarled and broad
+        scale=3.0,                   # not very tall — squat and wide
         scale_v=0.4,
-        length=(0.7, 0.9, 0.7, 0.4),    # short trunk, long branches
-        ratio=0.040,      # very thick
-        branches=(0, 24, 20, 0),
+        length=(0.40, 0.60, 0.35, 0.20),
+        length_v=(0.0, 0.20, 0.20, 0.10),
+        ratio=0.085,                 # massively thick trunk
+        ratio_power=1.2,
+        taper=(2.0, 1.8, 1.5, 1.5),  # dramatic taper
+        branches=(0, 18, 30, 0),
         levels=3,
-        leaf_count=260,
-        leaf_scale=0.08,
+        base_size=0.06,              # branches start very low (knotty base)
+        base_splits=2,               # multi-trunk character
+        split_angle=(0, 45, 40, 30),
+        split_angle_v=(0, 15, 12, 8),
+        attract_up=(0, 0.35, 0.25, 0.0),
+        curve=(0, 50, 60, 0),
+        curve_v=(70, 120, 140, 0),   # heavy gnarl
+        prune_ratio=0.7,
+        prune_width=1.10,            # wider than tall
+        prune_width_peak=0.4,
+        prune_height=0.50,
+        leaf_count=320,
+        leaf_scale=0.035,
+        leaf_scale_x=0.4,
     ),
 }
 
@@ -148,6 +202,10 @@ def build_tree(args) -> tuple:
     # Sapling's tree_add accepts many props as kwargs. Order/quantity of
     # `branches` and `length` tuples must match `levels`. Levels=2 keeps
     # things light; bumping to 3 gives bushier subdivision.
+    # branch_count from CLI replaces level-1 (primary branches); level-2
+    # stays at the variety's preset for a denser canopy.
+    branches_tuple = (0, branch_count, V["branches"][2], V["branches"][3])
+
     op_kwargs = dict(
         do_update=True,
         bevel=True,
@@ -157,13 +215,28 @@ def build_tree(args) -> tuple:
         scale=V["scale"] * args.size,
         scaleV=V["scale_v"],
         length=V["length"],
+        lengthV=V.get("length_v", (0, 0, 0, 0)),
         ratio=V["ratio"],
-        branches=(0, branch_count, branch_count, 0),
+        ratioPower=V.get("ratio_power", 1.2),
+        taper=V.get("taper", (1, 1, 1, 1)),
+        branches=branches_tuple,
         levels=V["levels"],
+        baseSize=V.get("base_size", 0.25),
+        baseSplits=V.get("base_splits", 0),
+        splitAngle=V.get("split_angle", (0, 30, 30, 30)),
+        splitAngleV=V.get("split_angle_v", (0, 0, 0, 0)),
+        attractUp=V.get("attract_up", (0, 0, 0, 0)),
+        curve=V.get("curve", (0, 0, 0, 0)),
+        curveV=V.get("curve_v", (0, 0, 0, 0)),
+        prune=V.get("prune_ratio", 0) > 0,
+        pruneRatio=V.get("prune_ratio", 0),
+        pruneWidth=V.get("prune_width", 0.5),
+        pruneWidthPeak=V.get("prune_width_peak", 0.5),
         showLeaves=leaf_count > 0,
         leaves=leaf_count,
         leafShape="hex",
         leafScale=V["leaf_scale"] * args.size,
+        leafScaleX=V.get("leaf_scale_x", 1.0),
     )
     try:
         bpy.ops.curve.tree_add(**op_kwargs)

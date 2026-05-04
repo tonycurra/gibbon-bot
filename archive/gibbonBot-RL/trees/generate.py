@@ -38,8 +38,8 @@ TREES_DIR     = REPO_ROOT / "data" / "trees"
 BLENDER_SCRIPT = REPO_ROOT / "trees" / "blender_sapling.py"
 HALF_EXTENT   = 5.0
 
-BARK   = "0.36 0.27 0.18 1"
-LEAVES = "0.45 0.55 0.32 1"
+BARK   = "0.48 0.42 0.34 1"   # silvery-warm gray, characteristic of olive bark
+LEAVES = "0.50 0.58 0.40 1"   # silvery-green, leaning a touch dusty
 
 
 # ─────────────────────────── terrain height sampling ─────────────────────────
