@@ -100,17 +100,25 @@ into four shippable sub-tracks:
       `error` from `grove_status` in `/state`.
 - [x] Initial slider values sync from `/state.grove` on page load.
 
-#### 2b — Blender + Sapling Tree Gen   `Status: TODO`
-- [ ] One-time install: `apt install blender`.
-- [ ] `trees/blender_sapling.py` — runs *inside* Blender via
-      `blender --background --python ...`. Sapling Tree Gen produces
-      olive-shaped mesh, exports `data/trees/<id>_wood.obj` +
-      `<id>_leaves.obj` + `<id>.json` (branch midlines, olive points).
-- [ ] `trees.generate` becomes orchestrator: invokes Blender, reads
-      JSON sidecar, emits `grove.xml` referencing the OBJs.
-- [ ] Graceful fallback to `trees.primitives` if Blender absent.
-- [ ] Cache: `data/trees/cache_index.json` skips re-runs for repeated
-      params.
+#### 2b — Blender + Sapling Tree Gen   `Status: DONE (initial pass)`
+- [x] One-time install: `apt install blender` (Blender 4.0.2 confirmed).
+- [x] `trees/blender_sapling.py` — runs *inside* Blender via
+      `blender --background --python ...`. Enables Sapling addon,
+      builds tree, exports `data/trees/tree_0_wood.obj` +
+      `tree_0_leaves.obj` + `tree_0.json` with branch skeleton +
+      olive tip positions.
+- [x] `trees.generate` is the orchestrator: invokes Blender,
+      parses JSON sidecar, emits mesh-based `grove.xml` referencing
+      the OBJs + a trunk collision capsule.
+- [x] Graceful fallback to `trees.primitives` if Blender absent or
+      fails (printed warning to stderr, primitive scene still loads).
+- [x] `--primitives` flag forces primitive backend even when Blender
+      is on PATH (faster iteration / debugging).
+- [ ] Future polish: cache index keyed on params so repeated identical
+      slider drags don't re-spawn Blender. Skip until we measure pain.
+- [ ] Future polish: tune Sapling per-variety params after seeing the
+      first browser renders — current tuning is rough; mature/ancient
+      may need wider trunks or shorter branches.
 
 #### 2c — Articulated flexible branches   `Status: TODO`
 - [ ] `trees/articulate.py` — branches as nested `<body>` chains with

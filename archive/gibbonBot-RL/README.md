@@ -112,7 +112,7 @@ The script writes `data/terrain.png` (256×256 heightfield), `data/terrain_surfa
 python -m trees.generate --variety mature --leaves 0.7 --branches 5
 ```
 
-The `trees/` package is a self-contained generation pipeline (see [trees/README.md](trees/README.md)). It currently emits MuJoCo primitives; Blender + Sapling Tree Gen integration, articulated branches, and dynamic olives are queued in [GROVE_MASTERPLAN.md](GROVE_MASTERPLAN.md) Phase 2.
+The `trees/` package is a self-contained generation pipeline (see [trees/README.md](trees/README.md)). With **Blender** installed (`sudo apt install blender`), it generates real tree meshes via Sapling Tree Gen → `data/trees/*.obj`. Without Blender it falls back to MuJoCo primitive geoms (capsules + ellipsoids). Articulated branches and dynamic olives are queued in [GROVE_MASTERPLAN.md](GROVE_MASTERPLAN.md) Phase 2.
 
 | flag | range | meaning |
 |------|-------|---------|
