@@ -90,6 +90,15 @@ python view.py --env walk
 The terminal log shows `mean_dist` per update — should trend down from ~3.0 toward
 `SUCCESS_DIST` (default 0.6).
 
+**Walk-env speed defaults** (8GB GPUs and lower):
+- `PHYSICS_STEPS_PER_ACTION = 16` (was 32)
+- `MAX_STEPS = 300` (was 600)
+- Floor collision is a **plane**, not the heightfield (heightfield is visual-only).
+  Heightfield collision is the dominant per-step cost; for flat-ground walking
+  it's not needed. Re-enable later for terrain robustness training.
+
+If you have a beefier GPU, raise `--envs` and tune those back up.
+
 ---
 
 ## Forest scene generator

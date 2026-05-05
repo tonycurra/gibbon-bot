@@ -36,4 +36,4 @@ ENT_COEF = 0.05
 CLIP_EPS = 0.15
 
 # ─── Physics (requires restart) ──────────────────────────────────────────────
-PHYSICS_STEPS_PER_ACTION = 32
+PHYSICS_STEPS_PER_ACTION = 16
