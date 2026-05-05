@@ -175,7 +175,7 @@ def step(mx, jnt_lo, jnt_hi, tree_xy, dx, action, motor_pos, prev_action, prev_d
 
     # Smooth proximity reward — extra signal near goal so the policy learns
     # to stop, not just orbit.
-    prox_tree_reward = w_proximity_tree * jnp.exp(-dist / max(success_dist, 1e-3))
+    prox_tree_reward = w_proximity_tree * jnp.exp(-dist / jnp.maximum(success_dist, 1e-3))
 
     smooth_penalty = w_smooth * jnp.sum((filt_action - prev_action) ** 2)
     jvel_penalty   = w_jvel * jnp.sum(dx.qvel[6:6 + ACT_DIM] ** 2)
