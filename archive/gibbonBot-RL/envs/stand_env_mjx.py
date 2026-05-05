@@ -87,10 +87,10 @@ def load_model():
             mj_model.geom_contype[i] = 0
             mj_model.geom_conaffinity[i] = 0
 
-    # Apply hardware overrides from params_mjx (free-joint DoFs at 0..5 are skipped).
-    damping = float(getattr(_p, "JOINT_DAMPING", 4.0))
-    kp      = float(getattr(_p, "MOTOR_KP",      8.0))
-    mj_model.dof_damping[6:] = damping
+    # Joint damping is set per-joint in scene.xml via motor-class defaults
+    # (st3235 / st3215_hs), derived from datasheet τ_stall / ω_no_load.
+    # MOTOR_KP stays a tuning knob (controller stiffness, not motor spec).
+    kp = float(getattr(_p, "MOTOR_KP", 8.0))
     mj_model.actuator_gainprm[:, 0] = kp
     mj_model.actuator_biasprm[:, 1] = -kp  # position actuator bias must match -kp
 

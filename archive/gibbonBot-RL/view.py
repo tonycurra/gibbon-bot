@@ -22,7 +22,6 @@ import mujoco.viewer
 # ── config ────────────────────────────────────────────────────────────────────
 POLICY        = "latest"   # "zero" | "random" | "latest"
 SCENE         = pathlib.Path("data/scene.xml")
-RUNS          = pathlib.Path("runs/ape_stand_mjx")
 PHYSICS_STEPS = 32         # physics sub-steps per action (matches training)
 MOTOR_SPEED   = 0.10       # max joint travel per action (matches training)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -30,8 +29,13 @@ MOTOR_SPEED   = 0.10       # max joint travel per action (matches training)
 _parser = argparse.ArgumentParser()
 _parser.add_argument("--since", type=float, default=0.0,
                      help="ignore checkpoints saved before this unix timestamp")
+_parser.add_argument("--env", choices=["stand", "walk"], default="stand",
+                     help="which env was trained (selects runs dir + obs format)")
 _args = _parser.parse_args()
 SINCE = _args.since
+ENV   = _args.env
+RUNS  = pathlib.Path("runs/ape_walk_mjx" if ENV == "walk" else "runs/ape_stand_mjx")
+OBS_DIM = 86 if ENV == "walk" else 83
 
 
 def latest_checkpoint():
@@ -47,7 +51,7 @@ def _build_net():
     import jax.numpy as jnp
     import flax.linen as nn
 
-    ACT_DIM, OBS_DIM = 24, 83
+    ACT_DIM = 24
 
     class Net(nn.Module):
         @nn.compact
@@ -100,6 +104,15 @@ def main():
     # space.
     jnt_lo  = np.array([model.jnt_range[i][0] for i in range(1, 1 + ACT_DIM)])
     jnt_hi  = np.array([model.jnt_range[i][1] for i in range(1, 1 + ACT_DIM)])
+
+    tree_xy = None
+    if ENV == "walk":
+        try:
+            gid = model.geom("t0_trunk").id
+            tree_xy = np.array(model.geom_pos[gid][:2], dtype=np.float32)
+            print(f"[view] walk env, tree at xy={tree_xy.tolist()}")
+        except (KeyError, ValueError):
+            print("[view] WARNING: walk env but no t0_trunk geom — run gen_trees.py --inject")
 
     predict     = None
     last_ckpt   = None
@@ -173,12 +186,17 @@ def main():
                 elif predict is not None:
                     # robot joints only — bound slices to ACT_DIM so grove
                     # DOFs (branches/olives) don't poison the observation.
-                    obs = np.concatenate([
+                    obs_parts = [
                         data.qpos[2:3], data.qpos[3:7],
                         data.qvel[0:3], data.qvel[3:6],
                         data.qpos[7:7 + ACT_DIM], data.qvel[6:6 + ACT_DIM],
                         data.qfrc_actuator[6:6 + ACT_DIM],
-                    ]).astype(np.float32)
+                    ]
+                    if ENV == "walk" and tree_xy is not None:
+                        rel = tree_xy - data.qpos[0:2].astype(np.float32)
+                        obs_parts.append(rel)
+                        obs_parts.append(np.array([np.linalg.norm(rel)], dtype=np.float32))
+                    obs = np.concatenate(obs_parts).astype(np.float32)
                     action = predict(obs)
                 else:
                     action = rng.uniform(-1, 1, size=ACT_DIM).astype(np.float32)

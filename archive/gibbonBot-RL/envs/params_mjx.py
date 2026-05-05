@@ -67,8 +67,8 @@ CLIP_EPS = 0.15
 # Higher = slower JIT compile and slower rollouts. Drop to 16-32 for quick iteration.
 PHYSICS_STEPS_PER_ACTION = 32
 
-# Joint damping (N·m·s/rad).  1.5–8 is realistic for ST32xx motors.
-JOINT_DAMPING = 1.5
+# Joint damping is now per-joint in data/scene.xml via motor-class defaults
+# (st3235 → 0.62, st3215_hs → 0.18). Edit there to tune.
 
 # Position-controller P-gain.  force = kp·(target − actual)
 #   4 → soft   8 → balanced   20 → stiff

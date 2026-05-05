@@ -66,6 +66,62 @@ Categories in the slider UI (top → bottom by visible impact):
 
 ---
 
+## Walk-to-tree training
+
+Separate environment + params + train script for "walk toward a tree without
+dragging torso on the ground":
+
+```bash
+python gen_trees.py --inject data/scene.xml --at 3.0 0.0   # one tree at (3, 0)
+python train_walk_mjx.py                                    # train with viewer
+```
+
+Files:
+
+- `envs/walk_env_mjx.py` — env (OBS_DIM=86, adds tree-relative xy + dist)
+- `envs/params_walk_mjx.py` — knobs: `W_PROGRESS`, `GROUND_CLEARANCE`, `W_GROUND`, `SUCCESS_DIST`
+- `train_walk_mjx.py` — PPO loop, mirrors `train_mjx.py`, saves to `runs/ape_walk_mjx/`
+
+To watch a trained walk policy without training:
+```bash
+python view.py --env walk
+```
+
+The terminal log shows `mean_dist` per update — should trend down from ~3.0 toward
+`SUCCESS_DIST` (default 0.6).
+
+---
+
+## Forest scene generator
+
+```bash
+python gen_trees.py --n 8 --seed 42                  # write data/trees_forest.xml
+python gen_trees.py --inject data/scene.xml --n 12   # inject into existing scene
+python gen_trees.py --inject data/scene.xml --at 3 0 # one tree at fixed pos
+python view_scene.py data/trees_forest.xml           # view standalone forest
+```
+
+Trees are capsule trunks + random branch capsules, friction tuned to ~0.7
+(realistic for dry bark). Heights sampled from terrain.png so trees plant
+correctly on uneven ground.
+
+---
+
+## Motor specs
+
+`data/motors.md` documents the Waveshare ST32xx servos. Per-class joint damping
+is set in `<default>` blocks at the top of `data/scene.xml` — derived from the
+linear DC motor model `damping ≈ τ_stall / ω_no_load`:
+
+- ST3235 / ST3215 main joints → `damping=0.62` (2.94 N·m / 4.71 rad/s)
+- ST3215-HS gripper/foot      → `damping=0.18` (1.96 N·m / 11.10 rad/s)
+
+If you tune reward shaping, note that `qvel²` penalties scale with motor speed —
+the original stand env's `W_JVEL=0.5` was tuned for over-damped motors and will
+over-penalise now. Walk env has been re-tuned to `W_JVEL=0.005`.
+
+---
+
 ## Standalone viewer
 
 To watch any saved checkpoint without training:

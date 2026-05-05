@@ -20,9 +20,13 @@ Total: 24 motors (6 per limb × 4 limbs). The `-HS` (high-speed) variant trades 
 The MuJoCo `forcerange` and `actuatorfrcrange` are set to the stall torque values above (in N·m):
 
 - ST3235 / ST3215 joints → `forcerange="-2.94 2.94"`
-- ST3215-HS gripper/foot → `forcerange="-1.47 1.47"` *(currently set to 1.47; the spec allows up to 1.96 N·m — see note below)*
+- ST3215-HS gripper/foot → `forcerange="-1.96 1.96"`
 
-The current `1.47 N·m` value for the gripper/foot was inherited from the URDF conversion and underestimates the real motor (1.96 N·m). Increase to `1.96` to reflect actual hardware capability.
+Joint damping is set per-class in `<default>` blocks at the top of `scene.xml`,
+derived from the linear DC motor model `damping ≈ τ_stall / ω_no_load`:
+
+- ST3235 / ST3215 → `damping="0.62"` (2.94 N·m / 4.71 rad/s)
+- ST3215-HS      → `damping="0.18"` (1.96 N·m / 11.10 rad/s)
 
 ## ST3235 — main joints (16 of 24)
 

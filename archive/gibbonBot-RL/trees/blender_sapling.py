@@ -82,29 +82,31 @@ VARIETIES = {
         leaf_scale_x=0.4,
     ),
     "mature": dict(
-        scale=3.5,
+        # Real olive: ~4-6m tall, often wider than tall, multi-trunk from base,
+        # gnarled, with horizontal-spreading rounded canopy.
+        scale=3.0,
         scale_v=0.3,
-        length=(0.55, 0.55, 0.30, 0.20),
-        length_v=(0.0, 0.15, 0.15, 0.10),
-        ratio=0.045,                 # noticeably thick trunk
-        ratio_power=1.1,
-        taper=(1.6, 1.6, 1.5, 1.5),
-        branches=(0, 14, 28, 0),     # many twigs in the canopy
+        length=(0.45, 0.55, 0.35, 0.20),
+        length_v=(0.0, 0.20, 0.20, 0.10),
+        ratio=0.055,                 # thick trunk relative to height
+        ratio_power=1.2,
+        taper=(1.8, 1.7, 1.5, 1.5),  # strong taper toward branch tips
+        branches=(0, 16, 32, 0),     # dense canopy twigs
         levels=3,
-        base_size=0.12,              # branches start low
-        base_splits=0,
-        split_angle=(0, 38, 38, 30),
-        split_angle_v=(0, 10, 10, 8),
-        attract_up=(0, 0.5, 0.3, 0.0),
-        curve=(0, 35, 50, 0),
-        curve_v=(40, 80, 100, 0),    # gnarled branches
-        prune_ratio=0.6,
-        prune_width=0.85,            # broad spreading canopy
-        prune_width_peak=0.45,
-        prune_height=0.55,
-        leaf_count=240,
-        leaf_scale=0.032,
-        leaf_scale_x=0.4,
+        base_size=0.05,              # branches start very low (olive habit)
+        base_splits=2,               # multi-trunk from the base
+        split_angle=(0, 50, 42, 30), # wide branching angles → spreading
+        split_angle_v=(0, 12, 12, 8),
+        attract_up=(0, 0.15, 0.05, 0.0),  # branches go OUT, not up
+        curve=(0, 45, 55, 0),
+        curve_v=(80, 110, 130, 0),   # heavy gnarl on trunk + branches
+        prune_ratio=0.7,
+        prune_width=1.20,            # canopy wider than tall
+        prune_width_peak=0.40,
+        prune_height=0.45,           # squat rounded crown
+        leaf_count=280,
+        leaf_scale=0.030,
+        leaf_scale_x=0.3,            # narrow lance-shape leaves
     ),
     "ancient": dict(
         scale=3.0,                   # not very tall — squat and wide
@@ -130,6 +132,35 @@ VARIETIES = {
         leaf_count=320,
         leaf_scale=0.035,
         leaf_scale_x=0.4,
+    ),
+    "olive": dict(
+        # Built to spec: squat & thick (1m+ trunk on 5m tree), multi-trunk burly
+        # base, primaries break at ~1-2m, asymmetric billowing canopy as wide as
+        # tall or wider, heavy gnarl, narrow lanceolate leaves. The character
+        # lives in the trunk — push gnarl + ratio hard, keep canopy a cloud.
+        scale=4.5,                    # ~4-5m tall
+        scale_v=0.5,                  # asymmetric — symmetry kills it
+        length=(0.40, 0.55, 0.40, 0.22),
+        length_v=(0.0, 0.30, 0.25, 0.15),  # uneven branch lengths
+        ratio=0.110,                  # ~0.5m radius trunk (1m diameter)
+        ratio_power=1.3,              # branches stay thick a long way out
+        taper=(1.5, 1.6, 1.5, 1.5),   # less taper → trunk holds thickness
+        branches=(0, 14, 36, 0),      # few primaries, dense secondaries
+        levels=3,
+        base_size=0.25,               # primaries break at ~1-2m up
+        base_splits=2,                # multi-trunk burly base
+        split_angle=(0, 60, 45, 30),  # wide spread → outward then up
+        split_angle_v=(0, 20, 15, 10),
+        attract_up=(0, 0.20, 0.45, 0.0),  # spread out, then secondaries lift
+        curve=(0, 50, 60, 0),
+        curve_v=(140, 160, 150, 0),   # extreme gnarl (esp. trunk: 140)
+        prune_ratio=0.85,
+        prune_width=1.30,             # canopy WIDER than tall
+        prune_width_peak=0.35,        # widest below middle = billowing
+        prune_height=0.40,            # squat rounded crown
+        leaf_count=380,               # dense but airy
+        leaf_scale=0.045,             # 4-5cm leaves
+        leaf_scale_x=0.22,            # narrow lanceolate
     ),
 }
 
@@ -263,12 +294,21 @@ def build_tree(args) -> tuple:
 
     wood = None
     leaves = None
+    # Sapling emits an "envelope" curve when prune=True (the prune volume) —
+    # skip it; the actual tree curve is usually named "tree".
     for name in new_names:
         obj = bpy.data.objects[name]
-        if obj.type == "CURVE" and wood is None:
-            wood = obj
+        if obj.type == "CURVE" and "envelope" not in obj.name.lower():
+            if wood is None:
+                wood = obj
         elif obj.type == "MESH" and "leaves" in obj.name.lower():
             leaves = obj
+
+    # Clean up the envelope so it doesn't clutter the saved .blend.
+    for name in new_names:
+        obj = bpy.data.objects.get(name)
+        if obj is not None and "envelope" in obj.name.lower():
+            bpy.data.objects.remove(obj, do_unlink=True)
 
     print(f"[blender] tree_add produced: wood={wood.name if wood else None}"
           f"  leaves={leaves.name if leaves else None}",
@@ -327,6 +367,12 @@ def export_obj(obj, filepath: Path) -> None:
     bpy.context.view_layer.objects.active = obj
 
     if obj.type == "CURVE":
+        # Cap the bevelled tube ends so the trunk/branches aren't hollow
+        # open cylinders — without this you can see through the trunk.
+        try:
+            obj.data.use_fill_caps = True
+        except AttributeError:
+            pass
         bpy.ops.object.convert(target="MESH")
 
     # smooth shading for nicer renderer output
@@ -398,6 +444,9 @@ def main() -> None:
     export_obj(wood, wood_path)
     if leaves is not None:
         export_obj(leaves, leaves_path)
+
+    blend_path = out_dir / f"{args.output_id}.blend"
+    bpy.ops.wm.save_as_mainfile(filepath=str(blend_path))
 
     n_pts = sum(len(b["points"]) for b in branches)
     print(
