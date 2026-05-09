@@ -30,12 +30,14 @@ case "$cmd" in
     # python3 -u so crashes are flushed; keep stdbuf in case tee buffers; trap the
     # exit code so a crashed run leaves a visible footer in the log instead of
     # vanishing.
+    # In-process tee writes train.log line-buffered (shell tee buffered at 4KB).
+    # We just truncate the file at start; python appends from there.
     train_cmd="cd $REPO && export JAX_COMPILATION_CACHE_DIR=~/.jax_cache PYTHONUNBUFFERED=1 \
 && mkdir -p $RUN_DIR && : > $RUN_DIR/train.log \
-&& ( stdbuf -oL -eL python3 -u train_walk_mjx.py --no-watch --envs $ENVS \
+&& python3 -u train_walk_mjx.py --no-watch --envs $ENVS \
      --save-rollouts-every $ROLLOUT_EVERY --rollout-envs $ROLLOUT_ENVS $resume_flag; \
-     ec=\$?; echo \"[remote.sh] python exited with code \$ec\" ) 2>&1 | tee $RUN_DIR/train.log; \
-     echo \"[remote.sh] tmux command finished — pane will close\""
+   ec=\$?; echo \"[remote.sh] python exited with code \$ec\" >> $RUN_DIR/train.log; \
+   echo \"[remote.sh] tmux command finished — pane will close\""
     # auto-replace dead/stale sessions instead of refusing
     ssh "$REMOTE" "tmux kill-session -t $SESSION 2>/dev/null; \
                    tmux kill-session -t monitor 2>/dev/null; \

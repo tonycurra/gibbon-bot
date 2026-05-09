@@ -233,7 +233,29 @@ def load_latest(train_state, force=False):
     return train_state.replace(params=new_params), steps, "resumed"
 
 
+def _install_log_tee():
+    """Mirror stdout/stderr to runs/ape_walk_mjx/train.log line-buffered.
+    The shell `| tee` was buffering at 4KB and leaving the file stale; doing
+    this in-process guarantees flush-per-line."""
+    RUNS.mkdir(parents=True, exist_ok=True)
+    log_file = open(RUNS / "train.log", "a", buffering=1)
+    class _Tee:
+        def __init__(self, *streams): self.streams = streams
+        def write(self, s):
+            for st in self.streams:
+                try: st.write(s); st.flush()
+                except Exception: pass
+        def flush(self):
+            for st in self.streams:
+                try: st.flush()
+                except Exception: pass
+        def isatty(self): return False
+    sys.stdout = _Tee(sys.__stdout__, log_file)
+    sys.stderr = _Tee(sys.__stderr__, log_file)
+
+
 def main():
+    _install_log_tee()
     parser = argparse.ArgumentParser()
     parser.add_argument("--envs",     type=int, default=None)
     parser.add_argument("--resume",   action="store_true",
