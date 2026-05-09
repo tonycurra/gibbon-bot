@@ -1,13 +1,13 @@
 #!/bin/bash
-# Drive the remote H100 from your laptop. One command per action.
-#   ./remote.sh start    # kick training in detached tmux at H100-max settings
-#   ./remote.sh log      # live-tail the training log (Ctrl-C only stops the tail)
-#   ./remote.sh status   # last log lines + nvidia-smi snapshot
-#   ./remote.sh attach   # ssh in and attach to the tmux session
-#   ./remote.sh stop     # send Ctrl-C to training (graceful save), tmux survives
-#   ./remote.sh kill     # nuke the tmux session entirely
-#   ./remote.sh gpu      # one-shot nvidia-smi
-#   ./remote.sh sync     # one-shot pull of checkpoints + mlruns + rollouts
+# Drive the remote H100 from your laptop. Run from repo root:
+#   scripts/remote.sh start    # kick training in detached tmux at H100-max settings
+#   scripts/remote.sh log      # live-tail the training log
+#   scripts/remote.sh status   # last log lines + nvidia-smi snapshot
+#   scripts/remote.sh attach   # ssh in and attach to the tmux session
+#   scripts/remote.sh stop     # send Ctrl-C to training (graceful save)
+#   scripts/remote.sh kill     # nuke the tmux session entirely
+#   scripts/remote.sh gpu      # one-shot nvidia-smi
+#   scripts/remote.sh sync     # one-shot pull of checkpoints + mlruns + rollouts
 set -euo pipefail
 
 REMOTE=root@51.159.167.125
@@ -44,7 +44,7 @@ case "$cmd" in
     ssh "$REMOTE" "tmux kill-session -t $SESSION 2>/dev/null; \
                    tmux kill-session -t monitor 2>/dev/null; \
                    tmux new-session -d -s $SESSION '$train_cmd'; \
-                   tmux new-session -d -s monitor 'cd $REPO && ENVS=$ENVS stdbuf -oL -eL python3 -u monitor.py'"
+                   tmux new-session -d -s monitor 'cd $REPO && ENVS=$ENVS stdbuf -oL -eL python3 -u scripts/monitor.py'"
     echo "[remote.sh] training started in tmux session '$SESSION' on $REMOTE"
     echo "[remote.sh] watchdog started in tmux session 'monitor' (auto-restarts on stall)"
     echo "[remote.sh] envs=$ENVS  rollout_every=$ROLLOUT_EVERY  rollout_envs=$ROLLOUT_ENVS  resume=${RESUME:-auto}"
@@ -60,7 +60,7 @@ case "$cmd" in
     STAND_ENVS=${STAND_ENVS:-4096}
     STAND_DIR=$REPO/runs/ape_stand_mjx
     stand_cmd="cd $REPO && export JAX_COMPILATION_CACHE_DIR=~/.jax_cache_stand PYTHONUNBUFFERED=1 \
-   XLA_PYTHON_CLIENT_MEM_FRACTION=0.20 \
+   XLA_PYTHON_CLIENT_MEM_FRACTION=0.18 \
 && mkdir -p $STAND_DIR && : > $STAND_DIR/train.log \
 && python3 -u archive/train_mjx.py --no-watch --envs $STAND_ENVS --resume; \
    ec=\$?; echo \"[remote.sh] stand python exited with code \$ec\" >> $STAND_DIR/train.log"
@@ -110,7 +110,7 @@ case "$cmd" in
     ;;
 
   sync)
-    ./pull_checkpoints.sh &
+    "$(dirname "$0")/pull_checkpoints.sh" &
     pid=$!
     sleep 35
     kill "$pid" 2>/dev/null || true

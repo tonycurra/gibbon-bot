@@ -473,21 +473,66 @@ def main():
             stacked_rew = jnp.stack(buf_rew)
             stacked_dist = jnp.stack(buf_dist)
             stacked_done = jnp.stack(buf_done)
+            stacked_obs = jnp.stack(buf_obs)
             mean_rew = float(jnp.mean(stacked_rew))
             mean_dist = float(jnp.mean(stacked_dist))
-            min_dist = float(jnp.min(stacked_dist))            # closest approach this rollout
-            max_dist = float(jnp.max(stacked_dist))            # farthest drift
+            min_dist = float(jnp.min(stacked_dist))
+            max_dist = float(jnp.max(stacked_dist))
             best_rew = float(jnp.max(stacked_rew))
-            done_frac = float(jnp.mean(stacked_done))           # fraction of (env,t) pairs that ended → episode turnover
-            success_frac = float(jnp.mean(stacked_dist < 0.6)) # fraction of (env,t) within success radius
-            print(f"{update_count:>8}  {total_steps:>12,}  {sps:>8,.0f}  {mean_rew:>10.3f}  {mean_dist:>10.3f}  min_d={min_dist:.2f}  succ={success_frac*100:.1f}%", flush=True)
+            done_frac = float(jnp.mean(stacked_done))
+            success_frac = float(jnp.mean(stacked_dist < 0.6))
+            # Body tracking — robot kinematics from obs (T, N_ENVS, OBS_DIM)
+            # obs layout: [z(1), quat(4), linvel(3), angvel(3), jpos(24), jvel(24), torque(24), rel(2), dist(1), phase(2)]
+            torso_z   = stacked_obs[..., 0]
+            uprightness = stacked_obs[..., 1]           # quat w → 1 = upright, 0 = sideways, -1 = upside down
+            speed_xy  = jnp.linalg.norm(stacked_obs[..., 5:7], axis=-1)
+            jvel_norm = jnp.linalg.norm(stacked_obs[..., 35:59], axis=-1)  # joint velocity magnitude
+            torque    = stacked_obs[..., 59:83]                            # 24 joint torques
+            # bilateral symmetry (FL-FR + BL-BR torque magnitude diff)
+            tFL, tFR = jnp.abs(torque[..., 0:6]),   jnp.abs(torque[..., 6:12])
+            tBL, tBR = jnp.abs(torque[..., 12:18]), jnp.abs(torque[..., 18:24])
+            asym = float(jnp.mean(jnp.sum((tFL - tFR) ** 2, axis=-1) + jnp.sum((tBL - tBR) ** 2, axis=-1)))
+            mean_speed   = float(jnp.mean(speed_xy))
+            max_speed    = float(jnp.max(speed_xy))
+            mean_z       = float(jnp.mean(torso_z))
+            mean_upright = float(jnp.mean(uprightness))
+            mean_jvel    = float(jnp.mean(jvel_norm))
+            print(f"{update_count:>8}  {total_steps:>12,}  {sps:>8,.0f}  rew={mean_rew:.2f}  d={mean_dist:.2f}  v={mean_speed:.2f}m/s  z={mean_z:.2f}  upr={mean_upright:.2f}  succ={success_frac*100:.1f}%  asym={asym:.1f}", flush=True)
             mlflow.log_metrics(
                 {"sps": sps, "mean_rew": mean_rew, "mean_dist": mean_dist,
                  "min_dist": min_dist, "max_dist": max_dist,
                  "best_rew": best_rew, "done_frac": done_frac,
-                 "success_frac": success_frac, "update": update_count},
+                 "success_frac": success_frac, "update": update_count,
+                 "mean_speed": mean_speed, "max_speed": max_speed,
+                 "mean_z": mean_z, "mean_upright": mean_upright,
+                 "mean_jvel": mean_jvel, "asym_torque": asym},
                 step=total_steps,
             )
+
+            # Auto-promote: if this rollout achieved a meaningful new best,
+            # snapshot the current weights into runs/<task>/keepers/ so they
+            # survive even if next iteration regresses or git collects junk.
+            if min_dist < 1.5 or success_frac > 0.05:
+                kdir = RUNS / "keepers"
+                kdir.mkdir(exist_ok=True)
+                tag = f"min_d{min_dist:.2f}_succ{success_frac:.2f}_step{total_steps}"
+                kpath = kdir / f"auto_{tag}.npz"
+                if not kpath.exists():
+                    flat, _ = jax.tree_util.tree_flatten(jax.device_get(train_state.params))
+                    np.savez(str(kpath), *flat)
+                    # Sidecar: full reproducibility unit (params + scene hash + metric snapshot).
+                    sidecar = {
+                        "tag": tag, "step": int(total_steps),
+                        "metrics": {"min_dist": min_dist, "success_frac": success_frac,
+                                    "mean_rew": mean_rew, "mean_speed": mean_speed,
+                                    "mean_z": mean_z, "asym_torque": asym},
+                        "params": p_params,
+                        "fingerprint": _fingerprint(),
+                        "obs_dim": OBS_DIM, "act_dim": ACT_DIM,
+                        "n_envs": N_ENVS, "n_steps": N_STEPS,
+                    }
+                    (kdir / f"auto_{tag}.json").write_text(json.dumps(sidecar, indent=2))
+                    print(f"[keeper] saved {kpath.name} + sidecar", flush=True)
 
         if total_steps - last_save >= save_every:
             save(train_state, total_steps)

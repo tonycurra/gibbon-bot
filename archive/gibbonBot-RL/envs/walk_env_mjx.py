@@ -24,7 +24,7 @@ _ROOT        = pathlib.Path(__file__).parent.parent
 SCENE        = _ROOT / "data" / "scene.xml"
 _PARAMS_FILE = pathlib.Path(__file__).parent / "params_walk_mjx.py"
 
-MAX_STEPS = 300   # ~10s sim time at 16 substeps × 0.002s — enough to reach a 3m tree
+MAX_STEPS = 100   # ~3.2s sim time. Either it moves quickly or episode ends — fast feedback.
 ACT_DIM   = 24
 # obs: torso z(1) + quat(4) + linvel(3) + angvel(3)
 #      + jpos(24) + jvel(24) + torques(24)

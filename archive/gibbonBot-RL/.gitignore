@@ -77,9 +77,14 @@ runs/*/autopilot.log
 archive/mjx_history/
 archive/training_output.log
 
-# Curated checkpoints worth keeping in git — drop a copy into runs/<task>/keepers/
+# Curated checkpoints worth keeping in git — auto-promoted by training when
+# min_dist < 1.5 OR success_frac > 5%. Each .npz has a .json sidecar with full
+# params + scene fingerprint + metric snapshot for reproducibility (gibbon-core memory).
 !runs/*/keepers/
 !runs/*/keepers/**
+
+# eval output (matplotlib)
+reward.png
 
 # Procedurally generated scenes (gen_trees.py output)
 data/trees_forest.xml

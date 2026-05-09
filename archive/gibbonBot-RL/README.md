@@ -1,65 +1,75 @@
 # gibbonBot-RL
 
-PPO + MuJoCo MJX (JAX, GPU-accelerated) for a 4-limbed robotic ape. Current
-focus: walk to a tree without dragging the torso. Long-term: olive grove
-navigation, climbing, and harvesting.
+PPO + MuJoCo MJX (JAX, GPU-accelerated) for a 4-limbed robotic ape.
+Currently learning to walk to a tree on flat ground.
 
-## Where to start
-
-| You want to… | Read |
-|---|---|
-| Train on a remote H100 (the main workflow) | [QUICKSTART.md](QUICKSTART.md) |
-| Active autopilot plan (walk-to-tree phases) | [PLAN.md](PLAN.md) |
-| Deep-dive on remote training (cost, teardown, perf) | [docs/REMOTE_GPU.md](docs/REMOTE_GPU.md) |
-| Plan ape-imitation training (AMP-style) | [docs/IMITATION_PLAN.md](docs/IMITATION_PLAN.md) |
-| Find which branch has which experiment | [docs/BRANCHES.md](docs/BRANCHES.md) |
-| Phased plan for the olive grove | [docs/GROVE_MASTERPLAN.md](docs/GROVE_MASTERPLAN.md) |
-
-## Local setup
+## Quickstart
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+# train remote (the everyday workflow)
+scripts/remote.sh start         # H100, walk task, autopilot, watchdog, all in one
+scripts/remote.sh status        # GPU util + log tail + tmux state
+scripts/remote.sh log           # live tail of training log
+scripts/remote.sh stop          # graceful save + exit
+
+# pull artifacts down + watch policy
+scripts/pull_checkpoints.sh &   # syncs runs/ + mlruns/ from remote, every 30s
+python view.py --env walk        # viewer hot-swaps to newest checkpoint
+python view.py --env walk --best # loads best-by-mlflow-mean_rew checkpoint
+
+# evaluate
+python -m utils.eval --task walk         # cross-run summary
+python -m utils.eval --task walk --plot  # writes reward.png
+mlflow ui                                # http://localhost:5000
+
+# back up before destroying instance
+scripts/archive_runs.sh
 ```
 
-## Repo layout
+## Layout
 
 ```
-.                           ← daily-use scripts + top-level docs
-├── train_walk_mjx.py       ← MJX/JAX PPO training loop (the main script)
-├── view.py                 ← live MuJoCo viewer, hot-swaps to latest checkpoint
-├── remote.sh               ← drive the remote GPU from local (start/status/log/...)
-├── pull_checkpoints.sh     ← rsync runs + mlruns + rollouts from remote
-├── gen_terrain.py          ← procedural terrain (slope/roughness/soil)
-├── gen_trees.py            ← procedural capsule trees
-│
-├── envs/                   ← MJX environments + their hyperparams
-│   ├── walk_env_mjx.py     ← walk-to-tree (current focus)
-│   ├── stand_env_mjx.py    ← simple stand-up
-│   ├── params_walk_mjx.py
-│   └── params_mjx.py
-├── data/                   ← scene.xml, motors.md, terrain assets
-├── trees/                  ← olive-tree generation pipeline (Blender + Sapling)
-├── utils/                  ← lineage logger, checkpoint tagger, rollout loader
-├── runs/                   ← training output (gitignored except lineage.json + keepers/)
-│
-├── docs/                   ← long-form historical / planning docs
-└── archive/                ← old code paths kept for reference (CPU trainer, browser viewer, etc.)
+.
+├── train_walk_mjx.py    main PPO trainer (the script you actually run)
+├── view.py              live MuJoCo viewer (hot-swaps to newest checkpoint)
+├── README.md            this file
+├── requirements.txt
+├── envs/                MJX environments + their hyperparams
+├── data/                scene.xml, robot meshes, motor specs, terrain
+├── trees/               olive-tree generation pipeline
+├── utils/               autopilot, eval, best-checkpoint loader, limb dynamics
+├── scripts/             remote.sh (drive remote GPU), monitor.py (watchdog),
+│                        pull_checkpoints.sh, archive_runs.sh, gen_terrain.py, gen_trees.py
+├── runs/                training output (mostly gitignored, except keepers/)
+├── mlruns/              mlflow tracking (gitignored, synced from remote)
+├── docs/                long-form: PLAN, CORE, BIOLOGY, REMOTE_GPU, BRANCHES, etc.
+└── archive/             defunct code paths kept for reference
 ```
 
-## The training loop in one paragraph
+## What gets preserved
 
-`train_walk_mjx.py` runs PPO with all envs vmapped on a single GPU. Every
-update, MLflow logs `sps`, `mean_rew`, `mean_dist`, all hyperparams, and the
-latest checkpoint name. With `--save-rollouts-every N`, every N-th update
-also dumps the rollout buffer (obs/act/rew/done/val/logp/adv/ret) so the
-GPU's compute isn't only producing weights — it produces a reusable
-transition dataset too. See [REMOTE_GPU.md](REMOTE_GPU.md) for the rollout
-flag details.
+| What | Where | In git? |
+|---|---|---|
+| Auto-promoted curated checkpoints | `runs/<task>/keepers/auto_*.npz` + `.json` | **yes** |
+| Reproducibility sidecar (params + fingerprint) | `runs/<task>/keepers/auto_*.json` | **yes** |
+| Streaming/intermediate checkpoints | `runs/<task>/mjx_*.npz` | gitignored, pulled by `pull_checkpoints.sh` |
+| MLflow run/metric history | `mlruns/` | gitignored, pulled |
+| Per-run lineage | `runs/<task>/lineage.json` | yes |
+| Robot URDF meshes | `data/meshes/*.stl` | yes |
+| Scene XML | `data/scene.xml` | yes |
 
-## What's not in the active workflow
+A keeper is auto-saved every PPO update where `min_dist < 1.5 m` OR
+`success_frac > 5 %` is achieved. Each keeper carries a sidecar JSON with
+the params, scene hash, and metric snapshot that produced it — full
+reproducibility unit.
 
-Anything in `archive/` (old `train_mjx.py` for stand task, the CPU
-stable-baselines3 trainer, the browser MJPEG viewer, the `mjx_history/` snapshot
-pile) — kept for reference only. See [archive/README.md](archive/README.md).
+## Docs
+
+- **[docs/QUICKSTART.md](docs/QUICKSTART.md)** — paste-able commands, deeper reference
+- **[docs/PLAN.md](docs/PLAN.md)** — autopilot training plan (phases A→D)
+- **[docs/CORE.md](docs/CORE.md)** — multi-task framework + per-limb diagnostics
+- **[docs/BIOLOGY.md](docs/BIOLOGY.md)** — evolutionary priors built into the policy
+- **[docs/REMOTE_GPU.md](docs/REMOTE_GPU.md)** — remote H100 deep-dive
+- **[docs/IMITATION_PLAN.md](docs/IMITATION_PLAN.md)** — ape-pose imitation roadmap
+- **[docs/BRANCHES.md](docs/BRANCHES.md)** — branch atlas
+- **[docs/GROVE_MASTERPLAN.md](docs/GROVE_MASTERPLAN.md)** — olive-grove environment
