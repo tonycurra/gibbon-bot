@@ -173,7 +173,14 @@ def main():
 
     def do_reset():
         mujoco.mj_resetData(model, data)
-        yaw = rng.uniform(-np.pi, np.pi)
+        # Match training reset: spawn at origin facing the tree (±0.5 rad noise).
+        # If we randomize yaw across 360°, the policy sees orientations it was
+        # never trained on and runs off in arbitrary directions.
+        if ENV == "walk" and tree_xy is not None:
+            yaw_target = float(np.arctan2(tree_xy[1], tree_xy[0]))
+            yaw = yaw_target + rng.uniform(-0.5, 0.5)
+        else:
+            yaw = rng.uniform(-np.pi, np.pi)
         data.qpos[0]  = rng.uniform(-0.1, 0.1)
         data.qpos[1]  = rng.uniform(-0.1, 0.1)
         # spawn at the patched torso height (set by gen_terrain.py based on

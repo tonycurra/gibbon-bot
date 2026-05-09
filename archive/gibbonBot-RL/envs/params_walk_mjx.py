@@ -8,15 +8,14 @@ MOTOR_KP = 8.0
 # ─── Goal: walk toward tree without dragging torso ───────────────────────────
 TARGET_Z = 0.30           # desired torso height while walking
 TARGET_TOL = 0.10         # Gaussian sigma around target_z
-W_HEIGHT = 1.5            # reduced from 4.0 — was making standing-still too cushy
+W_HEIGHT = 0.5            # cut hard — standing pays minimal. Was anchoring policy to "do nothing".
 W_UPRIGHT = 3.0           # bonus when w > 0
 
 W_PROGRESS = 80.0         # main signal: reward each meter closer per step
-W_FWD_VEL = 8.0           # direct reward for forward velocity toward tree —
-                          # bootstraps exploration, fires even on tiny first steps
+W_FWD_VEL = 25.0          # 3x bumped — direct reward for moving toward tree dominates standing
 W_PROXIMITY_TREE = 1.0    # smooth bonus near goal
 SUCCESS_DIST = 0.6        # within this radius of tree → episode wins
-W_SUCCESS = 50.0          # one-shot reward on success
+W_SUCCESS = 200.0         # one-shot reward on success — make it the obvious winning move
 
 # ─── Ground avoidance ────────────────────────────────────────────────────────
 GROUND_CLEARANCE = 0.18   # torso must stay above this z
@@ -24,7 +23,7 @@ W_GROUND = 25.0           # quadratic penalty for dipping below
 
 # ─── Survival ────────────────────────────────────────────────────────────────
 W_ALIVE = 0.2
-FLIP_PENALTY = 80.0
+FLIP_PENALTY = 30.0       # cut — falling is fine, exploration matters more
 
 # ─── Smoothness ──────────────────────────────────────────────────────────────
 W_SMOOTH = 0.05     # cut hard — polish, not bootstrap. Restore once walk emerges.
@@ -34,7 +33,7 @@ W_ENERGY = 0.005
 
 # ─── PPO ─────────────────────────────────────────────────────────────────────
 LEARNING_RATE = 0.00037
-ENT_COEF = 0.1
+ENT_COEF = 0.2            # more entropy = more random exploration to escape standstill
 CLIP_EPS = 0.15
 
 # ─── Physics (requires restart) ──────────────────────────────────────────────

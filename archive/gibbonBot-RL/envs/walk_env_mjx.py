@@ -24,7 +24,7 @@ _ROOT        = pathlib.Path(__file__).parent.parent
 SCENE        = _ROOT / "data" / "scene.xml"
 _PARAMS_FILE = pathlib.Path(__file__).parent / "params_walk_mjx.py"
 
-MAX_STEPS = 100   # ~3.2s sim time. Either it moves quickly or episode ends — fast feedback.
+MAX_STEPS = 60    # ~1.9s sim time. Make-or-break: commit and reach tree, or episode ends.
 ACT_DIM   = 24
 # obs: torso z(1) + quat(4) + linvel(3) + angvel(3)
 #      + jpos(24) + jvel(24) + torques(24)
@@ -209,6 +209,12 @@ def step(mx, jnt_lo, jnt_hi, tree_xy, dx, action, motor_pos, prev_action, prev_d
     upside_down = w < 0
     on_ground   = torso_z < (ground_clearance * 0.5)
     success     = dist < success_dist
+    # Make-or-break: after a short grace period, if the robot isn't moving
+    # toward the tree at a meaningful pace, kill the episode and reset. No
+    # reward for standing still — get on with it.
+    GRACE_STEPS = 15
+    MIN_FWD_VEL = 0.20
+    stalled = (step_idx > GRACE_STEPS) & (fwd_vel < MIN_FWD_VEL)
 
     alive_bonus = w_alive * (1.0 - upside_down.astype(jnp.float32))
     success_bonus = jnp.where(success, w_success, 0.0)
@@ -220,7 +226,7 @@ def step(mx, jnt_lo, jnt_hi, tree_xy, dx, action, motor_pos, prev_action, prev_d
               - symmetry_penalty
               - flip_penalty * upside_down)
 
-    done = upside_down | on_ground | success
+    done = upside_down | on_ground | success | stalled
 
     return dx, obs, reward, done, motor_pos, filt_action, dist, step_idx
 
