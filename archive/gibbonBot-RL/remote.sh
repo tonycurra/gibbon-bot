@@ -27,13 +27,17 @@ case "$cmd" in
   start)
     resume_flag=""
     [[ -n "$RESUME" ]] && resume_flag="--resume"
-    train_cmd="cd $REPO && source .venv/bin/activate \
-&& export JAX_COMPILATION_CACHE_DIR=~/.jax_cache \
+    # python3 -u so crashes are flushed; keep stdbuf in case tee buffers; trap the
+    # exit code so a crashed run leaves a visible footer in the log instead of
+    # vanishing.
+    train_cmd="cd $REPO && export JAX_COMPILATION_CACHE_DIR=~/.jax_cache PYTHONUNBUFFERED=1 \
 && mkdir -p $RUN_DIR && : > $RUN_DIR/train.log \
-&& python train_walk_mjx.py --no-watch --envs $ENVS \
-   --save-rollouts-every $ROLLOUT_EVERY --rollout-envs $ROLLOUT_ENVS $resume_flag \
-   2>&1 | tee $RUN_DIR/train.log"
-    ssh "$REMOTE" "tmux has-session -t $SESSION 2>/dev/null && echo '[remote.sh] session $SESSION already exists — use attach/stop' && exit 1; \
+&& ( stdbuf -oL -eL python3 -u train_walk_mjx.py --no-watch --envs $ENVS \
+     --save-rollouts-every $ROLLOUT_EVERY --rollout-envs $ROLLOUT_ENVS $resume_flag; \
+     ec=\$?; echo \"[remote.sh] python exited with code \$ec\" ) 2>&1 | tee $RUN_DIR/train.log; \
+     echo \"[remote.sh] tmux command finished — pane will close\""
+    # auto-replace dead/stale sessions instead of refusing
+    ssh "$REMOTE" "tmux kill-session -t $SESSION 2>/dev/null; \
                    tmux new-session -d -s $SESSION '$train_cmd'"
     echo "[remote.sh] training started in tmux session '$SESSION' on $REMOTE"
     echo "[remote.sh] envs=$ENVS  rollout_every=$ROLLOUT_EVERY  rollout_envs=$ROLLOUT_ENVS  resume=${RESUME:-no}"

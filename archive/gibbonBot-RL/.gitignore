@@ -55,6 +55,8 @@ docs/*.toc
 !/data/scene.xml
 !/data/*.xml
 !/data/*.md
+!/data/meshes/
+!/data/meshes/**
 output/
 results/
 
