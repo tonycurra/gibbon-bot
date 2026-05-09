@@ -208,11 +208,22 @@ def load_latest(train_state, force=False):
                 old_d = old.get("parts", {}).get(f, "(missing)")
                 marker = "  " if old_d == d else "≠ "
                 print(f"  {marker}{f}: was {old_d} now {d}", flush=True)
-            if not force:
-                print("[resume] refusing to auto-resume. Pass --resume to force-load anyway,", flush=True)
-                print("[resume] or move/delete runs/ape_walk_mjx/mjx_*.npz to start fresh.", flush=True)
-                sys.exit(2)
-            print("[resume] --resume given, loading anyway despite mismatch.", flush=True)
+            if force:
+                print("[resume] --resume given, loading anyway despite mismatch.", flush=True)
+            else:
+                # Auto-branch: archive the old run so nothing is lost, then start fresh.
+                short = old.get("hash", "unknown")[:8]
+                stamp = time.strftime("%Y%m%d-%H%M%S")
+                archive_dir = RUNS / "_history" / f"{stamp}_{short}"
+                archive_dir.mkdir(parents=True, exist_ok=True)
+                moved = 0
+                for f in list(RUNS.glob("mjx_*.npz")) + list(RUNS.glob("latest.fingerprint.json")) + list(RUNS.glob("train.log")):
+                    if f.is_file():
+                        f.rename(archive_dir / f.name)
+                        moved += 1
+                print(f"[resume] archived {moved} files → {archive_dir}", flush=True)
+                print(f"[resume] starting fresh with new training inputs.", flush=True)
+                return train_state, 0, "branched"
     data = np.load(str(latest))
     flat = [jnp.asarray(data[k]) for k in data.files]
     _, treedef = jax.tree_util.tree_flatten(train_state.params)

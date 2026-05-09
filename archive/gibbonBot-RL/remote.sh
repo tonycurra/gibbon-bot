@@ -38,14 +38,21 @@ case "$cmd" in
      echo \"[remote.sh] tmux command finished — pane will close\""
     # auto-replace dead/stale sessions instead of refusing
     ssh "$REMOTE" "tmux kill-session -t $SESSION 2>/dev/null; \
-                   tmux new-session -d -s $SESSION '$train_cmd'"
+                   tmux kill-session -t monitor 2>/dev/null; \
+                   tmux new-session -d -s $SESSION '$train_cmd'; \
+                   tmux new-session -d -s monitor 'cd $REPO && ENVS=$ENVS python3 -u monitor.py 2>&1 | tee $RUN_DIR/monitor.log'"
     echo "[remote.sh] training started in tmux session '$SESSION' on $REMOTE"
-    echo "[remote.sh] envs=$ENVS  rollout_every=$ROLLOUT_EVERY  rollout_envs=$ROLLOUT_ENVS  resume=${RESUME:-no}"
-    echo "[remote.sh] watch with: ./remote.sh log    OR    ./remote.sh status"
+    echo "[remote.sh] watchdog started in tmux session 'monitor' (auto-restarts on stall)"
+    echo "[remote.sh] envs=$ENVS  rollout_every=$ROLLOUT_EVERY  rollout_envs=$ROLLOUT_ENVS  resume=${RESUME:-auto}"
+    echo "[remote.sh] watch with: ./remote.sh log    OR    ./remote.sh status    OR    ./remote.sh health"
     ;;
 
   log)
     ssh "$REMOTE" "tail -f $RUN_DIR/train.log"
+    ;;
+
+  health)
+    ssh "$REMOTE" "cat $RUN_DIR/health.json 2>/dev/null || echo '(no health.json yet — monitor not running)'"
     ;;
 
   status)
@@ -70,8 +77,8 @@ case "$cmd" in
     ;;
 
   kill)
-    ssh "$REMOTE" "tmux kill-session -t $SESSION 2>/dev/null || true"
-    echo "[remote.sh] tmux session '$SESSION' killed"
+    ssh "$REMOTE" "tmux kill-session -t $SESSION 2>/dev/null; tmux kill-session -t monitor 2>/dev/null; true"
+    echo "[remote.sh] tmux sessions '$SESSION' and 'monitor' killed"
     ;;
 
   gpu)
@@ -87,7 +94,7 @@ case "$cmd" in
     ;;
 
   *)
-    echo "usage: $0 {start|log|status|attach|stop|kill|gpu|sync}"
+    echo "usage: $0 {start|log|status|health|attach|stop|kill|gpu|sync}"
     echo "  ENVS=N RESUME=1 ./remote.sh start    # override defaults"
     exit 1
     ;;
