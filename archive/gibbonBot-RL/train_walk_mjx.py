@@ -353,12 +353,9 @@ def main():
 
         for t in range(N_STEPS):
             steps_here = total_steps + t * N_ENVS
-            if steps_here - last_save >= save_every and steps_here > start_steps:
-                save(train_state, steps_here)
-                last_save = steps_here
             if _stop[0]:
                 save(train_state, steps_here)
-                print("Done.")
+                print("Done.", flush=True)
                 sys.exit(0)
 
             rng, act_rng = jax.random.split(rng)
@@ -435,7 +432,7 @@ def main():
             sps = (total_steps - start_steps) / (time.time() - t0)
             mean_rew = float(jnp.mean(jnp.stack(buf_rew)))
             mean_dist = float(jnp.mean(jnp.stack(buf_dist)))
-            print(f"{update_count:>8}  {total_steps:>12,}  {sps:>8,.0f}  {mean_rew:>10.3f}  {mean_dist:>10.3f}")
+            print(f"{update_count:>8}  {total_steps:>12,}  {sps:>8,.0f}  {mean_rew:>10.3f}  {mean_dist:>10.3f}", flush=True)
             mlflow.log_metrics(
                 {"sps": sps, "mean_rew": mean_rew, "mean_dist": mean_dist,
                  "update": update_count},

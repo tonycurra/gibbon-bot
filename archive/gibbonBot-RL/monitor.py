@@ -25,6 +25,7 @@ import time
 RUN_DIR     = pathlib.Path("runs/ape_walk_mjx")
 LOG_PATH    = RUN_DIR / "train.log"
 HEALTH_PATH = RUN_DIR / "health.json"
+SELF_LOG    = RUN_DIR / "monitor.log"
 TMUX_NAME   = os.environ.get("TMUX_NAME", "train")
 POLL_SEC    = int(os.environ.get("POLL_SEC", 60))
 STALL_MIN   = float(os.environ.get("STALL_MIN", 3))
@@ -70,7 +71,7 @@ def _tmux_alive(name: str) -> bool:
 
 
 def _restart_training():
-    print(f"[monitor] restarting training in tmux session '{TMUX_NAME}'", flush=True)
+    _log(f"[monitor] restarting training in tmux session '{TMUX_NAME}'")
     subprocess.run(["tmux", "kill-session", "-t", TMUX_NAME],
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     train_cmd = (
@@ -89,8 +90,19 @@ def _write_health(status: dict):
     HEALTH_PATH.write_text(json.dumps(status, indent=2))
 
 
+def _log(msg: str):
+    line = f"{time.strftime('%H:%M:%S')} {msg}"
+    print(line, flush=True)
+    try:
+        SELF_LOG.parent.mkdir(parents=True, exist_ok=True)
+        with SELF_LOG.open("a") as f:
+            f.write(line + "\n")
+    except Exception:
+        pass
+
+
 def main():
-    print(f"[monitor] watching {LOG_PATH}; poll={POLL_SEC}s stall={STALL_MIN}min restart={RESTART}", flush=True)
+    _log(f"[monitor] watching {LOG_PATH}; poll={POLL_SEC}s stall={STALL_MIN}min restart={RESTART}")
     best_sps = 0
     last_metric_at = time.time()
     last_seen_update = -1
@@ -132,12 +144,12 @@ def main():
             "ok":               not problem,
         }
         _write_health(status)
-        print(f"[monitor] alive={alive} update={status['last_update']} sps={status['last_sps']} "
-              f"mean_rew={status['last_mean_rew']} idle={int(idle_s)}s "
-              f"{'PROBLEM' if problem else 'ok'}", flush=True)
+        _log(f"[monitor] alive={alive} update={status['last_update']} sps={status['last_sps']} "
+             f"mean_rew={status['last_mean_rew']} idle={int(idle_s)}s "
+             f"{'PROBLEM' if problem else 'ok'}")
 
         if problem and RESTART:
-            print(f"[monitor] problem detected — alive={alive} stall={stall} sps_low={sps_low} nan={nan_loss}", flush=True)
+            _log(f"[monitor] problem detected — alive={alive} stall={stall} sps_low={sps_low} nan={nan_loss}")
             _restart_training()
             last_metric_at = time.time()
             best_sps = 0

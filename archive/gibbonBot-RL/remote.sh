@@ -40,7 +40,7 @@ case "$cmd" in
     ssh "$REMOTE" "tmux kill-session -t $SESSION 2>/dev/null; \
                    tmux kill-session -t monitor 2>/dev/null; \
                    tmux new-session -d -s $SESSION '$train_cmd'; \
-                   tmux new-session -d -s monitor 'cd $REPO && ENVS=$ENVS python3 -u monitor.py 2>&1 | tee $RUN_DIR/monitor.log'"
+                   tmux new-session -d -s monitor 'cd $REPO && ENVS=$ENVS stdbuf -oL -eL python3 -u monitor.py'"
     echo "[remote.sh] training started in tmux session '$SESSION' on $REMOTE"
     echo "[remote.sh] watchdog started in tmux session 'monitor' (auto-restarts on stall)"
     echo "[remote.sh] envs=$ENVS  rollout_every=$ROLLOUT_EVERY  rollout_envs=$ROLLOUT_ENVS  resume=${RESUME:-auto}"
