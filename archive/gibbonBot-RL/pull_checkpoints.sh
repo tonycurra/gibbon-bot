@@ -8,6 +8,7 @@ MLF_SRC=$REMOTE:gibbonBot-RL/mlruns/
 MLF_DST=/home/tony/gibbonBot-RL/mlruns/
 while true; do
   rsync -az --include='mjx_*.npz' --include='*.json' --include='train.log' \
+        --include='rollouts/' --include='rollouts/*.npz' \
         --exclude='*' "$RUN_SRC" "$RUN_DST"
   rsync -az "$MLF_SRC" "$MLF_DST" 2>/dev/null
   sleep 30

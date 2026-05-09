@@ -28,6 +28,7 @@ import envs.params_walk_mjx as P
 import utils.lineage as lineage_mod
 
 RUNS = pathlib.Path("runs/ape_walk_mjx")
+ROLLOUTS = RUNS / "rollouts"
 
 N_STEPS     = 128
 EPOCHS      = 4
@@ -142,6 +143,17 @@ def update_step(train_state, rollout, ent_coef, clip_eps):
     return train_state, metrics
 
 
+def dump_rollout(update, steps, n_envs_keep, keep, **arrays):
+    ROLLOUTS.mkdir(parents=True, exist_ok=True)
+    path = ROLLOUTS / f"rollout_{update:08d}_{steps:012d}.npz"
+    host = {k: np.asarray(jax.device_get(v))[:, :n_envs_keep] for k, v in arrays.items()}
+    np.savez_compressed(str(path), **host)
+    existing = sorted(ROLLOUTS.glob("rollout_*.npz"))
+    for old in existing[:-keep]:
+        old.unlink()
+    print(f"[rollout] {path.name}  ({path.stat().st_size/1e6:.1f}MB, {len(existing[-keep:])} kept)")
+
+
 def save(train_state, steps):
     RUNS.mkdir(parents=True, exist_ok=True)
     path = RUNS / f"mjx_{steps:012d}.npz"
@@ -173,6 +185,12 @@ def main():
     parser.add_argument("--envs",     type=int, default=None)
     parser.add_argument("--resume",   action="store_true")
     parser.add_argument("--no-watch", dest="watch", action="store_false")
+    parser.add_argument("--save-rollouts-every", type=int, default=0,
+                        help="dump rollout buffer every N PPO updates (0=off)")
+    parser.add_argument("--rollout-envs", type=int, default=256,
+                        help="how many envs to keep per rollout dump (sub-sample for size)")
+    parser.add_argument("--rollout-keep", type=int, default=50,
+                        help="ring buffer: delete oldest rollouts beyond this count")
     parser.set_defaults(watch=True)
     args = parser.parse_args()
 
@@ -344,6 +362,14 @@ def main():
         rollout = (flat(obs_t), flat(act_t), flat(logp_t), flat(adv_t), flat(ret_t))
         train_state, _ = update_step(train_state, rollout, ent_coef, clip_eps)
         update_count += 1
+
+        if args.save_rollouts_every and update_count % args.save_rollouts_every == 0:
+            n_keep = min(args.rollout_envs, N_ENVS)
+            dump_rollout(
+                update_count, total_steps, n_keep, args.rollout_keep,
+                obs=obs_t, act=act_t, logp=logp_t, rew=rew_t,
+                done=done_t, val=val_t, adv=adv_t, ret=ret_t,
+            )
 
         if update_count % LOG_EVERY == 0:
             sps = (total_steps - start_steps) / (time.time() - t0)

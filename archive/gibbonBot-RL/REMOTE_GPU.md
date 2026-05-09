@@ -137,6 +137,7 @@ The compute artifacts you don't want to lose:
 | Policy weights | `runs/<task>/mjx_*.npz` | gitignored by default — pulled by `pull_checkpoints.sh` |
 | Metric history + hyperparams | `mlruns/` | gitignored — pulled by `pull_checkpoints.sh` |
 | Run lineage | `runs/<task>/lineage.json` | tracked in git |
+| Rollout transitions (opt-in) | `runs/<task>/rollouts/*.npz` | gitignored — pulled by `pull_checkpoints.sh` |
 
 To version a checkpoint that's worth keeping (e.g. "first run that walked"), copy it into `runs/<task>/keepers/` — that subdir is **not** gitignored, so you can `git add` curated weights without polluting history with every intermediate save.
 
@@ -147,6 +148,38 @@ git add runs/ape_walk_mjx/keepers/ && git commit -m "keep: v1 first walk"
 ```
 
 ---
+
+## Saving rollout transitions
+
+PPO normally consumes its rollout buffer in-place and discards it. To preserve
+the actual `(obs, action, reward, done, value, logp, advantage, return)`
+tuples the GPU produced — useful for offline RL, behavior cloning, or replay
+analysis later — opt in with:
+
+```bash
+python train_walk_mjx.py --no-watch --envs 8192 \
+    --save-rollouts-every 50 \
+    --rollout-envs 256 \
+    --rollout-keep 100
+```
+
+Each dump is one PPO update's experience, sub-sampled to `--rollout-envs`
+trajectories (full `N_STEPS` length). Default `--rollout-envs 256` keeps each
+file around ~10MB compressed at OBS_DIM=86. `--rollout-keep` is a ring buffer
+size — older files are deleted to bound disk use.
+
+Files land in `runs/ape_walk_mjx/rollouts/rollout_<update>_<steps>.npz` and
+are pulled by `pull_checkpoints.sh`. Load them with `utils.rollout_io`:
+
+```python
+from utils.rollout_io import list_rollouts, load_rollout
+files = list_rollouts("runs/ape_walk_mjx")
+r = load_rollout(files[-1])  # dict: obs/act/rew/done/val/logp/adv/ret
+```
+
+Tradeoff: dumping forces a `device_get` sync, so don't set
+`--save-rollouts-every` too aggressively (1 = every update would noticeably
+slow training). 50–100 is a good default at 8192 envs.
 
 ## Cost-saving rules
 
