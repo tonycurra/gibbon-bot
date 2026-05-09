@@ -77,3 +77,4 @@ archive/training_output.log
 
 # Procedurally generated scenes (gen_trees.py output)
 data/trees_forest.xml
+.claude/
