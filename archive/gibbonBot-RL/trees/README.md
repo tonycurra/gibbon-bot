@@ -59,7 +59,7 @@ Install Blender once: `sudo apt install blender` (Blender 4.x recommended).
 
 `data/trees/*` is gitignored.
 
-## Roadmap (matches `GROVE_MASTERPLAN.md`)
+## Roadmap (matches `docs/GROVE_MASTERPLAN.md`)
 
 | status | track | adds |
 |--------|-------|------|

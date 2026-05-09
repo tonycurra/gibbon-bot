@@ -29,9 +29,10 @@ case "$cmd" in
     [[ -n "$RESUME" ]] && resume_flag="--resume"
     train_cmd="cd $REPO && source .venv/bin/activate \
 && export JAX_COMPILATION_CACHE_DIR=~/.jax_cache \
+&& mkdir -p $RUN_DIR && : > $RUN_DIR/train.log \
 && python train_walk_mjx.py --no-watch --envs $ENVS \
    --save-rollouts-every $ROLLOUT_EVERY --rollout-envs $ROLLOUT_ENVS $resume_flag \
-   2>&1 | tee -a $RUN_DIR/train.log"
+   2>&1 | tee $RUN_DIR/train.log"
     ssh "$REMOTE" "tmux has-session -t $SESSION 2>/dev/null && echo '[remote.sh] session $SESSION already exists — use attach/stop' && exit 1; \
                    tmux new-session -d -s $SESSION '$train_cmd'"
     echo "[remote.sh] training started in tmux session '$SESSION' on $REMOTE"

@@ -1,158 +1,127 @@
-# Quickstart
+# Quickstart — train on a remote GPU
 
-Two modes: **GO** (default) when you're done tweaking and want to train, and **TUNE** when you want to fiddle with sliders.
+The whole workflow, in commands you can paste. Everything below assumes you
+have a remote H100 (or similar CUDA box) at the IP set in `remote.sh`. For
+the deep-dive (cost notes, teardown, troubleshooting), see
+[REMOTE_GPU.md](REMOTE_GPU.md).
 
----
-
-## GO mode — just train it
-
-```bash
-python train_mjx.py
-```
-
-Auto-picks **2048 envs on GPU** (or 64 on CPU). Spawns the viewer. **Does NOT spawn the params UI** — no temptation to tweak.
-
-Terminal shows per-episode trend so you can tell if it's learning:
-
-```
-Ep  12 TIMEOUT torso=0.282m  ep=2000  reward≈0.412 ↑  (best 0.418)  [mjx_000262144.npz]
-Ep  13 FLIPPED torso=0.094m  ep= 643  reward≈0.218 ↓  (best 0.418)  [mjx_000262144.npz]
-Ep  14 TIMEOUT torso=0.301m  ep=2000  reward≈0.451 ↑  (best 0.451)  ← new best!  [mjx_000393216.npz]
-```
-
-`↑` / `↓` is the trend vs the rolling 20-episode mean. When `↑` outpaces `↓` and the best keeps climbing, training is working. Walk away. Come back in 30 minutes.
-
-Other flags:
+## TL;DR
 
 ```bash
-python train_mjx.py --envs 4096      # override env count
-python train_mjx.py --resume         # continue from latest checkpoint
-python train_mjx.py --no-watch       # headless, no viewer
+# 0. (one-time) prep the remote box
+ssh root@<IP> 'apt update && apt install -y python3-pip python3-venv git tmux rsync'
+ssh root@<IP> 'git clone ssh://git@codeberg.org/tony_olivabot/gibbonBot-RL.git'
+ssh root@<IP> 'cd gibbonBot-RL && python3 -m venv .venv && source .venv/bin/activate \
+              && pip install --upgrade pip "jax[cuda12]" mujoco mujoco-mjx flax optax numpy mlflow'
+
+# 1. push your local changes
+git push
+
+# 2. start training in the background on the remote
+./remote.sh start
+
+# 3. confirm it's actually running
+./remote.sh status
+
+# 4. watch progress (any of these — separate terminals)
+./remote.sh log                    # raw log tail
+./pull_checkpoints.sh              # syncs checkpoints + mlruns + rollouts
+python view.py --env walk          # visual policy hot-swap
+mlflow ui                          # http://localhost:5000 — reward curves
+
+# 5. when you're done
+./remote.sh stop                   # graceful save
+./remote.sh sync                   # final pull
+# then destroy the instance in your cloud provider's console
 ```
 
-Checkpoints save to `runs/ape_stand_mjx/mjx_<steps>.npz` every 1M steps. Run metadata is appended to `runs/ape_stand_mjx/lineage.json`.
+## What `./remote.sh` does
 
----
+Single helper, one sub-command per action — no need to remember ssh+tmux flags:
 
-## TUNE mode — slider UI
+| Command | What |
+|---|---|
+| `./remote.sh start` | Kick training in detached tmux at H100-max defaults (16384 envs, rollout dumps every 50 updates) |
+| `./remote.sh status` | Last 30 log lines + `nvidia-smi` summary + tmux session list |
+| `./remote.sh log` | Live `tail -f` of `train.log` (Ctrl-C only stops the tail, training keeps running) |
+| `./remote.sh attach` | SSH in and join the tmux session interactively |
+| `./remote.sh stop` | Send Ctrl-C to training — fires the graceful save handler |
+| `./remote.sh kill` | Nuke the tmux session entirely (use after `stop` saved) |
+| `./remote.sh gpu` | One-shot `nvidia-smi` |
+| `./remote.sh sync` | One tick of `pull_checkpoints.sh` |
+
+Override defaults per invocation via env vars:
 
 ```bash
-python train_mjx.py --tune
+ENVS=8192 ./remote.sh start          # smaller batch
+RESUME=1 ./remote.sh start           # continue from latest checkpoint
+ROLLOUT_EVERY=100 ./remote.sh start  # less frequent rollout dumps
 ```
 
-Same as GO mode but with **32 envs**, saves every 5k steps, and the categorised slider UI (`envs/params_mjx.py`) auto-launches.
+## Three lenses on training progress
 
-Reward, motor, smoothness and learning params hot-reload between rollouts — no restart needed. Only `PHYSICS_STEPS_PER_ACTION` (marked ⚙ in the UI) requires a restart, since it's baked into the JIT compile.
+Pick whichever fits the moment. They're independent.
 
-Categories in the slider UI (top → bottom by visible impact):
+**Visual** — does the policy actually look like it's walking?
+```bash
+./pull_checkpoints.sh        # leave running in one terminal
+python view.py --env walk    # hot-swaps to each new checkpoint
+```
 
-| Category | What's in it |
-|----------|--------------|
-| ⚡ **Motion** | `PHYSICS_STEPS_PER_ACTION` ⚙, `MOTOR_MAX_SPEED`, `ACTION_SMOOTH_ALPHA`, `VIEWER_SPEED` |
-| 🧊 **Smoothness Penalties** | `W_SMOOTH`, `W_JVEL`, `W_ENERGY` |
-| 🎯 **Goal Shaping** | `TARGET_Z`, `TARGET_TOL`, `W_HEIGHT`, `W_UPRIGHT` |
-| 💀 **Survival** | `W_ALIVE`, `FLIP_PENALTY` |
-| 🤝 **Arm Safety** | `ARM_SAFETY_MARGIN`, `W_PROXIMITY` |
-| 🧠 **Learning** | `LEARNING_RATE`, `ENT_COEF`, `CLIP_EPS` |
+**Metric curves** — is reward climbing? Is sps stable?
+```bash
+./pull_checkpoints.sh   # also syncs mlruns/
+mlflow ui               # http://localhost:5000
+```
 
-**Live feedback bars** sit next to motor / smoothness / goal params, fed by `runs/ape_stand_mjx/live_stats.json` (written by the viewer). Bars colour-shift green → amber → red as the measured value approaches the slider's max.
+**Raw log** — lowest overhead, just see the printed updates:
+```bash
+./remote.sh log
+```
 
-**Bottom stats panel** shows current checkpoint, torso z, upright, ep length, rolling flip rate, and avg episode length.
+If `mean_rew` is climbing in the log but `view.py` looks stuck, your
+`pull_checkpoints.sh` isn't running or hasn't synced yet — check the local
+file mtimes in `runs/ape_walk_mjx/`.
 
-**Preset buttons** at the top:
-- **Smooth** — historical "good" smoothness values
-- **Fast train** — minimal penalties, fast iteration
-- **Reset defaults** — restore starter values
+## What gets saved where
 
----
+The H100's compute output, after a session:
 
-## Walk-to-tree training
+| What | Where | Auto-pulled? |
+|---|---|---|
+| Policy weights | `runs/ape_walk_mjx/mjx_*.npz` | yes (by `pull_checkpoints.sh`) |
+| Per-update metrics + hyperparams | `mlruns/` | yes |
+| Rollout transitions (opt-in) | `runs/ape_walk_mjx/rollouts/*.npz` | yes |
+| Run lineage | `runs/ape_walk_mjx/lineage.json` | tracked in git directly |
+| Stdout log | `runs/ape_walk_mjx/train.log` | yes |
 
-Separate environment + params + train script for "walk toward a tree without
-dragging torso on the ground":
+To keep a checkpoint in git permanently (e.g. "first run that walked"):
 
 ```bash
-python gen_trees.py --inject data/scene.xml --at 3.0 0.0   # one tree at (3, 0)
-python train_walk_mjx.py                                    # train with viewer
+mkdir -p runs/ape_walk_mjx/keepers
+cp runs/ape_walk_mjx/mjx_<good-step>.npz runs/ape_walk_mjx/keepers/v1_first_walk.npz
+git add runs/ape_walk_mjx/keepers/ && git commit -m "keep: v1 first walk"
 ```
 
-Files:
+The `keepers/` subdir is the only place under `runs/` that **isn't** gitignored.
 
-- `envs/walk_env_mjx.py` — env (OBS_DIM=86, adds tree-relative xy + dist)
-- `envs/params_walk_mjx.py` — knobs: `W_PROGRESS`, `GROUND_CLEARANCE`, `W_GROUND`, `SUCCESS_DIST`
-- `train_walk_mjx.py` — PPO loop, mirrors `train_mjx.py`, saves to `runs/ape_walk_mjx/`
+## Local-only iteration
 
-To watch a trained walk policy without training:
-```bash
-python view.py --env walk
-```
-
-The terminal log shows `mean_dist` per update — should trend down from ~3.0 toward
-`SUCCESS_DIST` (default 0.6).
-
-**Walk-env speed defaults** (8GB GPUs and lower):
-- `PHYSICS_STEPS_PER_ACTION = 16` (was 32)
-- `MAX_STEPS = 300` (was 600)
-- Floor collision is a **plane**, not the heightfield (heightfield is visual-only).
-  Heightfield collision is the dominant per-step cost; for flat-ground walking
-  it's not needed. Re-enable later for terrain robustness training.
-
-If you have a beefier GPU, raise `--envs` and tune those back up.
-
----
-
-## Forest scene generator
+If you don't have a remote GPU and just want to develop against `view.py`:
 
 ```bash
-python gen_trees.py --n 8 --seed 42                  # write data/trees_forest.xml
-python gen_trees.py --inject data/scene.xml --n 12   # inject into existing scene
-python gen_trees.py --inject data/scene.xml --at 3 0 # one tree at fixed pos
-python view_scene.py data/trees_forest.xml           # view standalone forest
+python view.py --env walk     # POLICY="latest" loads newest checkpoint
 ```
 
-Trees are capsule trunks + random branch capsules, friction tuned to ~0.7
-(realistic for dry bark). Heights sampled from terrain.png so trees plant
-correctly on uneven ground.
+Edit `POLICY` at the top of `view.py` to switch between `"zero"` / `"random"` /
+`"latest"` for sanity checks before committing to a long training run.
 
----
+## Troubleshooting
 
-## Motor specs
-
-`data/motors.md` documents the Waveshare ST32xx servos. Per-class joint damping
-is set in `<default>` blocks at the top of `data/scene.xml` — derived from the
-linear DC motor model `damping ≈ τ_stall / ω_no_load`:
-
-- ST3235 / ST3215 main joints → `damping=0.62` (2.94 N·m / 4.71 rad/s)
-- ST3215-HS gripper/foot      → `damping=0.18` (1.96 N·m / 11.10 rad/s)
-
-If you tune reward shaping, note that `qvel²` penalties scale with motor speed —
-the original stand env's `W_JVEL=0.5` was tuned for over-damped motors and will
-over-penalise now. Walk env has been re-tuned to `W_JVEL=0.005`.
-
----
-
-## Standalone viewer
-
-To watch any saved checkpoint without training:
-
-```bash
-python utils/watch_mjx.py            # loads latest mjx_*.npz
-python utils/watch_mjx.py --since 0  # explicitly load any checkpoint
-```
-
-The viewer hot-reloads `envs/params_mjx.py` — `VIEWER_SPEED` and `MOTOR_MAX_SPEED` change live.
-
----
-
-## Track what worked
-
-Every saved checkpoint automatically writes a `.params.json` sidecar capturing the params active at that moment. So you can always go back and see what produced a good policy.
-
-```bash
-python utils/tag.py "first stable stand, smooth motion"   # tag latest checkpoint
-python utils/tag.py 262144 "before W_SMOOTH bump"         # tag by partial match
-python utils/tag.py --list                                # list all tagged ckpts
-python utils/lineage.py --checkpoints                     # tabular params per ckpt
-```
-
-Tags go to `runs/ape_stand_mjx/notes.md` (git-tracked). Workflow: train → spot a great episode in the viewer → grab the checkpoint name from the terminal → tag it. Future-you will thank present-you.
+| Symptom | First check |
+|---|---|
+| `./remote.sh start` says "session already exists" | `./remote.sh kill` then retry |
+| `attach` shows `[exited]` immediately | Training crashed — read the log: `ssh root@<IP> 'tail -80 gibbonBot-RL/runs/ape_walk_mjx/train.log'` |
+| `view.py` policy looks unchanged after hours | `pull_checkpoints.sh` not running, or remote `mean_rew` is flat (different problem — see mlflow) |
+| `GLFWError: DISPLAY missing` | You ran `view.py` over plain SSH. Run it locally instead. |
+| GPU util < 50% in `./remote.sh status` | Try `ENVS=24576 ./remote.sh start` |
