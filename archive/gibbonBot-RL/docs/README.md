@@ -6,6 +6,8 @@ top-level READMEs (`/README.md`, `/QUICKSTART.md`, `/REMOTE_GPU.md`,
 
 | Doc | What's in it |
 |---|---|
-| `BRANCHES.md` | Branch atlas — every direction the project has gone, which branch to checkout for which kind of work |
-| `GROVE_MASTERPLAN.md` | Phased plan for the olive-grove environment (terrain, trees, dynamic olives) |
-| `PARAMS_HISTORY.md` | Notes on hyperparam settings that worked / didn't, before mlflow took over tracking |
+| `REMOTE_GPU.md` | Deep-dive on remote H100 training (cost, teardown, perf) |
+| `IMITATION_PLAN.md` | Plan for ape-video imitation (AMP-style discriminator) |
+| `BRANCHES.md` | Branch atlas — every direction the project has gone |
+| `GROVE_MASTERPLAN.md` | Phased plan for the olive-grove environment |
+| `PARAMS_HISTORY.md` | Notes on hyperparam settings that worked, pre-mlflow |

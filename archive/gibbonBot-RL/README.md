@@ -9,8 +9,9 @@ navigation, climbing, and harvesting.
 | You want to… | Read |
 |---|---|
 | Train on a remote H100 (the main workflow) | [QUICKSTART.md](QUICKSTART.md) |
-| Deep-dive on remote training (cost, teardown, perf) | [REMOTE_GPU.md](REMOTE_GPU.md) |
-| Plan ape-imitation training (AMP-style) | [IMITATION_PLAN.md](IMITATION_PLAN.md) |
+| Active autopilot plan (walk-to-tree phases) | [PLAN.md](PLAN.md) |
+| Deep-dive on remote training (cost, teardown, perf) | [docs/REMOTE_GPU.md](docs/REMOTE_GPU.md) |
+| Plan ape-imitation training (AMP-style) | [docs/IMITATION_PLAN.md](docs/IMITATION_PLAN.md) |
 | Find which branch has which experiment | [docs/BRANCHES.md](docs/BRANCHES.md) |
 | Phased plan for the olive grove | [docs/GROVE_MASTERPLAN.md](docs/GROVE_MASTERPLAN.md) |
 

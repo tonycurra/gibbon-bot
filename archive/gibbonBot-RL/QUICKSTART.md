@@ -3,7 +3,7 @@
 The whole workflow, in commands you can paste. Everything below assumes you
 have a remote H100 (or similar CUDA box) at the IP set in `remote.sh`. For
 the deep-dive (cost notes, teardown, troubleshooting), see
-[REMOTE_GPU.md](REMOTE_GPU.md).
+[docs/REMOTE_GPU.md](docs/REMOTE_GPU.md).
 
 ## TL;DR
 

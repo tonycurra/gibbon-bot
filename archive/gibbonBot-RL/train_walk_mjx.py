@@ -49,7 +49,7 @@ def _fingerprint():
             h.update(b)
     return {"hash": h.hexdigest()[:16], "parts": parts, "ts": time.strftime("%Y-%m-%dT%H:%M:%S")}
 
-N_STEPS     = 128
+N_STEPS     = 32   # smaller rollout = faster feedback per metric line
 EPOCHS      = 4
 MINIBATCHES = 8
 GAMMA       = 0.99
