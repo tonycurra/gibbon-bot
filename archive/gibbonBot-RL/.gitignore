@@ -72,6 +72,8 @@ runs/*/_history/
 runs/*/health.json
 runs/*/latest.fingerprint.json
 runs/*/monitor.log
+runs/*/autopilot_state.json
+runs/*/autopilot.log
 archive/mjx_history/
 archive/training_output.log
 
