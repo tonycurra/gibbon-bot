@@ -68,6 +68,10 @@ runs/ape_walk_mjx/mjx_*.npz
 runs/ape_walk_mjx/mjx_*.params.json
 runs/ape_walk_mjx/live_stats.json
 runs/*/rollouts/
+runs/*/_history/
+runs/*/health.json
+runs/*/latest.fingerprint.json
+runs/*/monitor.log
 archive/mjx_history/
 archive/training_output.log
 
