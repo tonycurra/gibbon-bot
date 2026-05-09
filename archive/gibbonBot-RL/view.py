@@ -20,7 +20,7 @@ import mujoco
 import mujoco.viewer
 
 # ── config ────────────────────────────────────────────────────────────────────
-POLICY        = "demo"     # "zero" | "random" | "latest" | "demo"
+POLICY        = "latest"   # "zero" | "random" | "latest" | "demo"
 SCENE         = pathlib.Path("data/scene.xml")
 PHYSICS_STEPS = 32         # physics sub-steps per action (matches training)
 MOTOR_SPEED   = 0.10       # max joint travel per action (matches training)
