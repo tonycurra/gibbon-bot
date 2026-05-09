@@ -20,25 +20,29 @@ apt update && apt install -y python3-pip python3-venv git tmux rsync
 git clone ssh://git@codeberg.org/tony_olivabot/gibbonBot-RL.git ape && cd ape
 git checkout mjx-gpu
 python3 -m venv .venv && source .venv/bin/activate
-pip install --upgrade pip "jax[cuda12]" mujoco mujoco-mjx flax optax numpy
+pip install --upgrade pip "jax[cuda12]" mujoco mujoco-mjx flax optax numpy mlflow
 
 # === Start training in tmux ===
 export JAX_COMPILATION_CACHE_DIR=~/.jax_cache
 tmux new -s train
-python train_mjx.py --no-watch --envs 8192
+python train_walk_mjx.py --no-watch --envs 8192
 # Ctrl+B then D to detach. Reattach later: tmux a -t train
 ```
 
 ```bash
-# === Locally: stream checkpoints down + watch ===
-# Terminal 1 (sync loop, leave running):
-watch -n 30 'rsync -avz root@51.159.187.87:ape/runs/ape_stand_mjx/ runs/ape_stand_mjx/'
+# === Locally: stream checkpoints + mlflow runs down, watch policy ===
+# Terminal 1 (sync loop — pulls .npz + mlruns every 30s, leave running):
+./pull_checkpoints.sh
 
-# Terminal 2 (viewer):
-python utils/watch_mjx.py
+# Terminal 2 (viewer hot-swaps to each new checkpoint):
+python view.py --env walk
+
+# Terminal 3 (live metric curves: sps, mean_rew, mean_dist):
+mlflow ui
+# → http://localhost:5000
 ```
 
-That's it. The viewer hot-swaps to each new checkpoint as it arrives.
+That's it. Three lenses on the same run: visual policy, metric curves, and (optionally) the raw log via `tail -f runs/ape_walk_mjx/train.log`.
 
 ---
 
@@ -96,19 +100,51 @@ Push to `--envs 16384` if you want to use more VRAM (~50-60GB usage at that leve
 
 ## Watching from your laptop
 
-The viewer needs a screen, so it runs locally. Pull checkpoints down on a loop:
+Three independent lenses — pick whichever you need.
 
+**1. Visual policy + metric history** (the default):
 ```bash
-# Terminal 1 — checkpoint sync, leave running:
-watch -n 30 'rsync -avz root@51.159.187.87:ape/runs/ape_stand_mjx/ runs/ape_stand_mjx/'
+# Terminal 1 — pulls .npz checkpoints AND mlruns/ every 30s:
+./pull_checkpoints.sh
+
+# Terminal 2 — viewer hot-swaps to each new checkpoint:
+python view.py --env walk
+
+# Terminal 3 — local mlflow UI on the synced runs:
+mlflow ui     # → http://localhost:5000
 ```
 
+The `mlflow ui` reads `./mlruns/` (synced down by the pull script), so reward / sps / mean_dist curves stay live without ssh tunneling.
+
+**2. Just the log** (lowest overhead):
 ```bash
-# Terminal 2 — viewer:
-python utils/watch_mjx.py
+ssh root@<IP> 'tail -f gibbonBot-RL/runs/ape_walk_mjx/train.log'
 ```
 
-Every 30 seconds new checkpoints arrive locally; the viewer notices and hot-swaps. The reward-trend output in the viewer terminal (`reward≈X ↑/↓`) tells you whether training is improving without having to check anything else.
+**3. Live mlflow over ssh tunnel** (skip the rsync, view the remote store directly):
+```bash
+ssh -L 5000:localhost:5000 root@<IP>
+# on remote:
+cd gibbonBot-RL && source .venv/bin/activate && mlflow ui --host 0.0.0.0
+```
+
+## Preserving what the GPU produced
+
+The compute artifacts you don't want to lose:
+
+| What | Where | How to preserve |
+|---|---|---|
+| Policy weights | `runs/<task>/mjx_*.npz` | gitignored by default — pulled by `pull_checkpoints.sh` |
+| Metric history + hyperparams | `mlruns/` | gitignored — pulled by `pull_checkpoints.sh` |
+| Run lineage | `runs/<task>/lineage.json` | tracked in git |
+
+To version a checkpoint that's worth keeping (e.g. "first run that walked"), copy it into `runs/<task>/keepers/` — that subdir is **not** gitignored, so you can `git add` curated weights without polluting history with every intermediate save.
+
+```bash
+cp runs/ape_walk_mjx/mjx_000001523712.npz \
+   runs/ape_walk_mjx/keepers/v1_first_walk_2M_steps.npz
+git add runs/ape_walk_mjx/keepers/ && git commit -m "keep: v1 first walk"
+```
 
 ---
 
@@ -173,9 +209,10 @@ Then **shut the instance down from the Scaleway web console**. The meter does no
 ## Teardown checklist
 
 1. Ctrl+C in the tmux training session, wait for the final save line.
-2. One last sync from your laptop:
+2. One last sync from your laptop (run `./pull_checkpoints.sh` for one tick, or):
    ```bash
-   rsync -avz root@51.159.187.87:ape/runs/ape_stand_mjx/ runs/ape_stand_mjx/
+   rsync -avz root@<IP>:gibbonBot-RL/runs/ape_walk_mjx/ runs/ape_walk_mjx/
+   rsync -avz root@<IP>:gibbonBot-RL/mlruns/             mlruns/
    ```
 3. Sanity check the count matches:
    ```bash

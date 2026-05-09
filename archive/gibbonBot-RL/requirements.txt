@@ -28,5 +28,8 @@ argparse
 # Visualization
 opencv-python
 
+# Experiment tracking
+mlflow
+
 # For GPU support (uncomment if needed)
 # jax[cuda12] -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html

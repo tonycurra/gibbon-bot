@@ -16,6 +16,7 @@ import jax.numpy as jnp
 import flax.linen as nn
 import optax
 import numpy as np
+import mlflow
 
 from flax.training.train_state import TrainState
 
@@ -147,6 +148,9 @@ def save(train_state, steps):
     flat, _ = jax.tree_util.tree_flatten(jax.device_get(train_state.params))
     np.savez(str(path), *flat)
     print(f"[save] {path.name}")
+    if mlflow.active_run() is not None:
+        mlflow.set_tag("latest_checkpoint", path.name)
+        mlflow.log_metric("checkpoint_steps", steps, step=steps)
 
 
 def load_latest(train_state):
@@ -201,12 +205,43 @@ def main():
     dx_batch, obs_batch, motor_pos_batch, prev_action_batch, prev_dist_batch = v_reset(env_rngs)
     step_counts = jnp.zeros(N_ENVS, dtype=jnp.int32)
 
+    inherited_from = (
+        str(sorted(RUNS.glob("mjx_*.npz"))[-1])
+        if args.resume and list(RUNS.glob("mjx_*.npz")) else None
+    )
     lineage_mod.record(
-        RUNS, "walk_mjx", N_ENVS,
-        str(sorted(RUNS.glob("mjx_*.npz"))[-1]) if args.resume and list(RUNS.glob("mjx_*.npz")) else None,
+        RUNS, "walk_mjx", N_ENVS, inherited_from,
         pathlib.Path("data/scene.xml"),
         pathlib.Path("envs/walk_env_mjx.py"),
     )
+
+    mlflow.set_tracking_uri("file:./mlruns")
+    mlflow.set_experiment("ape_walk_mjx")
+    mlflow.start_run(run_name=time.strftime("%Y%m%d-%H%M%S"))
+    p_params = {k: getattr(P, k) for k in dir(P) if k.isupper() and not k.startswith("_")}
+    mlflow.log_params({
+        **p_params,
+        "N_ENVS": N_ENVS,
+        "N_STEPS": N_STEPS,
+        "EPOCHS": EPOCHS,
+        "MINIBATCHES": MINIBATCHES,
+        "GAMMA": GAMMA,
+        "GAE_LAMBDA": GAE_LAMBDA,
+        "VF_COEF": VF_COEF,
+        "MAX_GRAD": MAX_GRAD,
+        "TOTAL_STEPS": TOTAL_STEPS,
+        "save_every": save_every,
+        "MAX_STEPS_episode": int(MAX_STEPS),
+        "OBS_DIM": OBS_DIM,
+        "ACT_DIM": ACT_DIM,
+    })
+    mlflow.set_tags({
+        "task": "walk_mjx",
+        "inherited_from": inherited_from or "scratch",
+        "resume": str(bool(args.resume)),
+        "jax_backend": jax.default_backend(),
+        "start_steps": str(start_steps),
+    })
 
     total_steps  = start_steps
     update_count = 0
@@ -315,6 +350,11 @@ def main():
             mean_rew = float(jnp.mean(jnp.stack(buf_rew)))
             mean_dist = float(jnp.mean(jnp.stack(buf_dist)))
             print(f"{update_count:>8}  {total_steps:>12,}  {sps:>8,.0f}  {mean_rew:>10.3f}  {mean_dist:>10.3f}")
+            mlflow.log_metrics(
+                {"sps": sps, "mean_rew": mean_rew, "mean_dist": mean_dist,
+                 "update": update_count},
+                step=total_steps,
+            )
 
         if total_steps - last_save >= save_every:
             save(train_state, total_steps)
@@ -323,6 +363,9 @@ def main():
     reason = "Ctrl+C" if _stop[0] else "completed"
     print(f"[stop] {reason} — saving at {total_steps:,} steps")
     save(train_state, total_steps)
+    mlflow.set_tag("stop_reason", reason)
+    mlflow.set_tag("final_steps", str(total_steps))
+    mlflow.end_run()
     if watcher is not None:
         watcher.terminate()
     print("Done.")

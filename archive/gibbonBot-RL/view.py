@@ -308,16 +308,19 @@ def main():
                 else:
                     action = rng.uniform(-1, 1, size=ACT_DIM).astype(np.float32)
 
-                # Per-step sync + per-step sleep — the pattern that worked in
-                # every viewer from 2ea623f through dfae092. With DT=0.002s
-                # this gives 500 viewer frames per second and real-time playback.
+                # One sync per action step, then sleep the remainder of the
+                # action's wall-clock budget so playback tracks real time even
+                # when mj_step is heavy (e.g. branched tree contacts).
+                t0 = time.time()
                 for _ in range(PHYSICS_STEPS):
                     delta = np.clip(action - motor_pos, -substep_speed, substep_speed)
                     motor_pos += delta
                     data.ctrl[:] = 0.5 * (motor_pos + 1.0) * (jnt_hi - jnt_lo) + jnt_lo
                     mujoco.mj_step(model, data)
-                    viewer.sync()
-                    time.sleep(DT)
+                viewer.sync()
+                lag = DT * PHYSICS_STEPS - (time.time() - t0)
+                if lag > 0:
+                    time.sleep(lag)
 
                 step_i += 1
                 if data.qpos[3] < 0:  # flipped
