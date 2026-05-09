@@ -29,7 +29,9 @@ ACT_DIM   = 24
 # obs: torso z(1) + quat(4) + linvel(3) + angvel(3)
 #      + jpos(24) + jvel(24) + torques(24)
 #      + relative tree (dx, dy, dist) (3)
-OBS_DIM   = 86
+#      + gait phase (sin, cos) (2)  ← biological: spinal CPG-style clock
+OBS_DIM   = 88
+GAIT_PERIOD_STEPS = 25  # phase cycle length in env-action-steps; ~1Hz at PHYSICS_STEPS_PER_ACTION=16, dt=0.002 → period ≈ 0.8s
 
 PHYSICS_STEPS_PER_ACTION = int(_p.PHYSICS_STEPS_PER_ACTION)
 
@@ -64,6 +66,7 @@ def read_params():
         float(_p.W_ALIVE),
         float(getattr(_p, "ACTION_SMOOTH_ALPHA", 1.0)),
         float(getattr(_p, "W_FWD_VEL", 0.0)),
+        float(getattr(_p, "W_SYMMETRY", 0.0)),
     )
 
 
@@ -127,16 +130,17 @@ def reset(mx, jnt_lo, jnt_hi, tree_xy, rng):
 
     motor_pos   = jnp.zeros(ACT_DIM)
     prev_action = jnp.zeros(ACT_DIM)
-    obs = _get_obs(dx, tree_xy)
+    step_idx    = jnp.int32(0)
+    obs = _get_obs(dx, tree_xy, step_idx)
     prev_dist = jnp.linalg.norm(dx.qpos[0:2] - tree_xy)
-    return dx, obs, motor_pos, prev_action, prev_dist
+    return dx, obs, motor_pos, prev_action, prev_dist, step_idx
 
 
-def step(mx, jnt_lo, jnt_hi, tree_xy, dx, action, motor_pos, prev_action, prev_dist, rparams):
+def step(mx, jnt_lo, jnt_hi, tree_xy, dx, action, motor_pos, prev_action, prev_dist, step_idx, rparams):
     (target_z, target_tol, w_height, w_upright,
      w_progress, w_proximity_tree, success_dist, w_success,
      ground_clearance, w_ground, flip_penalty, motor_max_speed,
-     w_smooth, w_jvel, w_energy, w_alive, action_alpha, w_fwd_vel) = rparams
+     w_smooth, w_jvel, w_energy, w_alive, action_alpha, w_fwd_vel, w_symmetry) = rparams
 
     filt_action = action_alpha * action + (1.0 - action_alpha) * prev_action
     substep_speed = motor_max_speed / PHYSICS_STEPS_PER_ACTION
@@ -154,7 +158,8 @@ def step(mx, jnt_lo, jnt_hi, tree_xy, dx, action, motor_pos, prev_action, prev_d
         substep, (motor_pos, dx), None, length=PHYSICS_STEPS_PER_ACTION
     )
 
-    obs = _get_obs(dx, tree_xy)
+    step_idx = step_idx + 1
+    obs = _get_obs(dx, tree_xy, step_idx)
 
     torso_xy = dx.qpos[0:2]
     torso_z  = dx.qpos[2]
@@ -191,6 +196,16 @@ def step(mx, jnt_lo, jnt_hi, tree_xy, dx, action, motor_pos, prev_action, prev_d
     jvel_penalty   = w_jvel * jnp.sum(dx.qvel[6:6 + ACT_DIM] ** 2)
     energy_penalty = w_energy * jnp.sum(dx.ctrl ** 2)
 
+    # Bilateral symmetry: penalize lopsided torques across left/right limbs.
+    # Joints 0-5 = FL, 6-11 = FR, 12-17 = BL, 18-23 = BR. Mirror-pair the
+    # torque magnitudes — well-behaved gaits keep front-left and front-right
+    # similarly loaded over a stride. Biological prior: tetrapods evolved
+    # bilaterally symmetric locomotion; asymmetry usually = lameness or chaos.
+    torq = dx.qfrc_actuator[6:6 + ACT_DIM]
+    fl, fr = jnp.abs(torq[0:6]), jnp.abs(torq[6:12])
+    bl, br = jnp.abs(torq[12:18]), jnp.abs(torq[18:24])
+    symmetry_penalty = w_symmetry * (jnp.sum((fl - fr) ** 2) + jnp.sum((bl - br) ** 2))
+
     upside_down = w < 0
     on_ground   = torso_z < (ground_clearance * 0.5)
     success     = dist < success_dist
@@ -202,17 +217,24 @@ def step(mx, jnt_lo, jnt_hi, tree_xy, dx, action, motor_pos, prev_action, prev_d
               + fwd_vel_reward
               + alive_bonus + success_bonus
               - ground_penalty - smooth_penalty - jvel_penalty - energy_penalty
+              - symmetry_penalty
               - flip_penalty * upside_down)
 
     done = upside_down | on_ground | success
 
-    return dx, obs, reward, done, motor_pos, filt_action, dist
+    return dx, obs, reward, done, motor_pos, filt_action, dist, step_idx
 
 
-def _get_obs(dx, tree_xy):
+def _get_obs(dx, tree_xy, step_idx):
     torso_xy = dx.qpos[0:2]
     rel = tree_xy - torso_xy
     dist = jnp.linalg.norm(rel)
+    # Gait phase: a 2π/GAIT_PERIOD_STEPS clock. Biological CPG analog —
+    # gives the policy a ready phase signal so it can produce rhythmic output
+    # without having to internally track time. (Tetrapods inherit spinal CPGs
+    # from fish locomotion ~400Mya; quadruped gaits are phase patterns over
+    # this clock.)
+    phase = (2.0 * jnp.pi / GAIT_PERIOD_STEPS) * step_idx.astype(jnp.float32)
     return jnp.concatenate([
         dx.qpos[2:3],            # torso z
         dx.qpos[3:7],            # quat
@@ -223,4 +245,6 @@ def _get_obs(dx, tree_xy):
         dx.qfrc_actuator[6:30],  # joint torques
         rel,                     # relative tree xy
         dist[None],              # distance scalar
+        jnp.sin(phase)[None],    # gait phase clock
+        jnp.cos(phase)[None],
     ]).astype(jnp.float32)

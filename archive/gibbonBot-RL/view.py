@@ -38,7 +38,8 @@ SINCE = _args.since
 ENV   = _args.env
 BEST  = _args.best
 RUNS  = pathlib.Path("runs/ape_walk_mjx" if ENV == "walk" else "runs/ape_stand_mjx")
-OBS_DIM = 86 if ENV == "walk" else 83
+OBS_DIM = 88 if ENV == "walk" else 83
+GAIT_PERIOD_STEPS = 25
 
 
 def latest_checkpoint():
@@ -316,6 +317,9 @@ def main():
                         rel = tree_xy - data.qpos[0:2].astype(np.float32)
                         obs_parts.append(rel)
                         obs_parts.append(np.array([np.linalg.norm(rel)], dtype=np.float32))
+                        # gait phase clock (matches walk_env_mjx)
+                        ph = (2.0 * np.pi / GAIT_PERIOD_STEPS) * step_i
+                        obs_parts.append(np.array([np.sin(ph), np.cos(ph)], dtype=np.float32))
                     obs = np.concatenate(obs_parts).astype(np.float32)
                     action = predict(obs)
                 else:

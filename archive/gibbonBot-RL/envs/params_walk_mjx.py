@@ -29,6 +29,7 @@ FLIP_PENALTY = 80.0
 # ─── Smoothness ──────────────────────────────────────────────────────────────
 W_SMOOTH = 0.4      # 4× — penalize jerky motor commands more, smoother gait
 W_JVEL = 0.015      # 3× — penalize joint thrash
+W_SYMMETRY = 0.005  # bilateral symmetry penalty: torque(left) ~ torque(right) per pair (FL-FR, BL-BR). Encourages biological gaits.
 W_ENERGY = 0.005
 
 # ─── PPO ─────────────────────────────────────────────────────────────────────

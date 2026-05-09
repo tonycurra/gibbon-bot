@@ -226,7 +226,24 @@ def load_latest(train_state, force=False):
                 return train_state, 0, "branched"
     data = np.load(str(latest))
     flat = [jnp.asarray(data[k]) for k in data.files]
-    _, treedef = jax.tree_util.tree_flatten(train_state.params)
+    init_flat, treedef = jax.tree_util.tree_flatten(train_state.params)
+    # Shape check — if obs/act dim changed, we can't load the weights even
+    # with --resume. Auto-branch to _history/ and start fresh in that case.
+    shape_mismatch = any(a.shape != b.shape for a, b in zip(flat, init_flat))
+    if shape_mismatch:
+        print("[resume] SHAPE MISMATCH — checkpoint weights don't fit current network (probably OBS_DIM/ACT_DIM changed)", flush=True)
+        for i, (a, b) in enumerate(zip(flat, init_flat)):
+            if a.shape != b.shape:
+                print(f"  param {i}: ckpt {a.shape} vs net {b.shape}", flush=True)
+        short = (json.loads(fp_path.read_text()).get("hash") if fp_path.exists() else "shape")[:8]
+        stamp = time.strftime("%Y%m%d-%H%M%S")
+        archive_dir = RUNS / "_history" / f"{stamp}_{short}_shape"
+        archive_dir.mkdir(parents=True, exist_ok=True)
+        for f in list(RUNS.glob("mjx_*.npz")) + list(RUNS.glob("latest.fingerprint.json")):
+            if f.is_file():
+                f.rename(archive_dir / f.name)
+        print(f"[resume] archived old run → {archive_dir}, starting fresh", flush=True)
+        return train_state, 0, "shape_branched"
     new_params = jax.tree_util.tree_unflatten(treedef, flat)
     steps = int(latest.stem.split("_")[1])
     print(f"[resume] loaded {latest.name} ({steps:,} steps)", flush=True)
@@ -298,11 +315,11 @@ def main():
 
     v_reset = jax.jit(jax.vmap(lambda rng: reset(mx, jnt_lo, jnt_hi, tree_xy, rng)))
     v_step  = jax.jit(jax.vmap(
-        lambda dx, a, mp, pa, pd: step(mx, jnt_lo, jnt_hi, tree_xy, dx, a, mp, pa, pd, rparams)
+        lambda dx, a, mp, pa, pd, si: step(mx, jnt_lo, jnt_hi, tree_xy, dx, a, mp, pa, pd, si, rparams)
     ))
 
     env_rngs = jax.random.split(env_rng, N_ENVS)
-    dx_batch, obs_batch, motor_pos_batch, prev_action_batch, prev_dist_batch = v_reset(env_rngs)
+    dx_batch, obs_batch, motor_pos_batch, prev_action_batch, prev_dist_batch, step_idx_batch = v_reset(env_rngs)
     step_counts = jnp.zeros(N_ENVS, dtype=jnp.int32)
 
     inherited_from = (
@@ -393,8 +410,8 @@ def main():
             buf_val.append(values)
 
             (dx_batch, obs_batch, rewards, dones,
-             motor_pos_batch, prev_action_batch, prev_dist_batch) = v_step(
-                dx_batch, actions, motor_pos_batch, prev_action_batch, prev_dist_batch
+             motor_pos_batch, prev_action_batch, prev_dist_batch, step_idx_batch) = v_step(
+                dx_batch, actions, motor_pos_batch, prev_action_batch, prev_dist_batch, step_idx_batch
             )
             step_counts = step_counts + 1
             done_mask = dones | (step_counts >= MAX_STEPS)
@@ -402,7 +419,7 @@ def main():
             if jnp.any(done_mask):
                 rng, reset_rng = jax.random.split(rng)
                 reset_rngs = jax.random.split(reset_rng, N_ENVS)
-                new_dx, new_obs, new_mp, new_pa, new_pd = v_reset(reset_rngs)
+                new_dx, new_obs, new_mp, new_pa, new_pd, new_si = v_reset(reset_rngs)
                 dx_batch = jax.tree.map(
                     lambda n, o: jnp.where(done_mask.reshape(done_mask.shape + (1,) * (n.ndim - 1)), n, o) if n.ndim > 0 else n,
                     new_dx, dx_batch,
@@ -411,6 +428,7 @@ def main():
                 motor_pos_batch   = jnp.where(done_mask[:, None], new_mp, motor_pos_batch)
                 prev_action_batch = jnp.where(done_mask[:, None], new_pa, prev_action_batch)
                 prev_dist_batch   = jnp.where(done_mask, new_pd, prev_dist_batch)
+                step_idx_batch    = jnp.where(done_mask, new_si, step_idx_batch)
                 step_counts       = jnp.where(done_mask, 0, step_counts)
 
             buf_rew.append(rewards)
