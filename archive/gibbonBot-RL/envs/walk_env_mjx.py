@@ -63,6 +63,7 @@ def read_params():
         float(_p.W_ENERGY),
         float(_p.W_ALIVE),
         float(getattr(_p, "ACTION_SMOOTH_ALPHA", 1.0)),
+        float(getattr(_p, "W_FWD_VEL", 0.0)),
     )
 
 
@@ -135,7 +136,7 @@ def step(mx, jnt_lo, jnt_hi, tree_xy, dx, action, motor_pos, prev_action, prev_d
     (target_z, target_tol, w_height, w_upright,
      w_progress, w_proximity_tree, success_dist, w_success,
      ground_clearance, w_ground, flip_penalty, motor_max_speed,
-     w_smooth, w_jvel, w_energy, w_alive, action_alpha) = rparams
+     w_smooth, w_jvel, w_energy, w_alive, action_alpha, w_fwd_vel) = rparams
 
     filt_action = action_alpha * action + (1.0 - action_alpha) * prev_action
     substep_speed = motor_max_speed / PHYSICS_STEPS_PER_ACTION
@@ -161,6 +162,15 @@ def step(mx, jnt_lo, jnt_hi, tree_xy, dx, action, motor_pos, prev_action, prev_d
 
     dist = jnp.linalg.norm(torso_xy - tree_xy)
     progress = prev_dist - dist                             # +ve when approaching
+
+    # Forward velocity reward — directly rewards motion toward tree, even tiny
+    # initial movements before progress accumulates. Critical for bootstrapping
+    # exploration when standing still has good intrinsic reward.
+    to_tree_xy = tree_xy - torso_xy
+    to_tree_norm = jnp.maximum(jnp.linalg.norm(to_tree_xy), 1e-3)
+    to_tree_unit = to_tree_xy / to_tree_norm
+    fwd_vel = jnp.dot(dx.qvel[0:2], to_tree_unit)           # m/s toward tree
+    fwd_vel_reward = w_fwd_vel * jnp.maximum(fwd_vel, 0.0)  # only positive (no penalty for retreat)
 
     # Height shaping — torso must stay near target_z (off the ground).
     height_err    = (torso_z - target_z) / target_tol
@@ -189,6 +199,7 @@ def step(mx, jnt_lo, jnt_hi, tree_xy, dx, action, motor_pos, prev_action, prev_d
     success_bonus = jnp.where(success, w_success, 0.0)
 
     reward = (height_reward + upright_reward + progress_reward + prox_tree_reward
+              + fwd_vel_reward
               + alive_bonus + success_bonus
               - ground_penalty - smooth_penalty - jvel_penalty - energy_penalty
               - flip_penalty * upside_down)

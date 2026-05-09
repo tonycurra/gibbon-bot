@@ -19,14 +19,14 @@ RUN_DIR="$REPO/runs/ape_walk_mjx"
 ENVS=${ENVS:-16384}
 ROLLOUT_EVERY=${ROLLOUT_EVERY:-50}
 ROLLOUT_ENVS=${ROLLOUT_ENVS:-256}
-RESUME=${RESUME:-}     # set RESUME=1 to add --resume
+RESUME=${RESUME:-1}    # default ON: force-resume past fingerprint mismatch (so param edits keep weights). Set RESUME=0 to start fresh.
 
 cmd=${1:-help}
 
 case "$cmd" in
   start)
     resume_flag=""
-    [[ -n "$RESUME" ]] && resume_flag="--resume"
+    [[ "$RESUME" != "0" && -n "$RESUME" ]] && resume_flag="--resume"
     # python3 -u so crashes are flushed; keep stdbuf in case tee buffers; trap the
     # exit code so a crashed run leaves a visible footer in the log instead of
     # vanishing.
