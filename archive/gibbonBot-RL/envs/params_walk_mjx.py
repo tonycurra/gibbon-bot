@@ -27,8 +27,8 @@ W_ALIVE = 0.2
 FLIP_PENALTY = 80.0
 
 # ─── Smoothness ──────────────────────────────────────────────────────────────
-W_SMOOTH = 0.1
-W_JVEL = 0.005      # scaled down ~30× from the old (over-damped) motors
+W_SMOOTH = 0.4      # 4× — penalize jerky motor commands more, smoother gait
+W_JVEL = 0.015      # 3× — penalize joint thrash
 W_ENERGY = 0.005
 
 # ─── PPO ─────────────────────────────────────────────────────────────────────

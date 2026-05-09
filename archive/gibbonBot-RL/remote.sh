@@ -32,7 +32,9 @@ case "$cmd" in
     # vanishing.
     # In-process tee writes train.log line-buffered (shell tee buffered at 4KB).
     # We just truncate the file at start; python appends from there.
+    # XLA_PYTHON_CLIENT_MEM_FRACTION caps VRAM so a parallel stand job can fit on the same H100.
     train_cmd="cd $REPO && export JAX_COMPILATION_CACHE_DIR=~/.jax_cache PYTHONUNBUFFERED=1 \
+   XLA_PYTHON_CLIENT_MEM_FRACTION=0.75 \
 && mkdir -p $RUN_DIR && : > $RUN_DIR/train.log \
 && python3 -u train_walk_mjx.py --no-watch --envs $ENVS \
      --save-rollouts-every $ROLLOUT_EVERY --rollout-envs $ROLLOUT_ENVS $resume_flag; \
@@ -51,6 +53,26 @@ case "$cmd" in
 
   log)
     ssh "$REMOTE" "tail -f $RUN_DIR/train.log"
+    ;;
+
+  start_stand)
+    # Parallel training of stand task on the same GPU. 4096 envs ≈ 12-16GB VRAM.
+    STAND_ENVS=${STAND_ENVS:-4096}
+    STAND_DIR=$REPO/runs/ape_stand_mjx
+    stand_cmd="cd $REPO && export JAX_COMPILATION_CACHE_DIR=~/.jax_cache_stand PYTHONUNBUFFERED=1 \
+   XLA_PYTHON_CLIENT_MEM_FRACTION=0.20 \
+&& mkdir -p $STAND_DIR && : > $STAND_DIR/train.log \
+&& python3 -u archive/train_mjx.py --no-watch --envs $STAND_ENVS --resume; \
+   ec=\$?; echo \"[remote.sh] stand python exited with code \$ec\" >> $STAND_DIR/train.log"
+    ssh "$REMOTE" "tmux kill-session -t train_stand 2>/dev/null; \
+                   tmux new-session -d -s train_stand '$stand_cmd'"
+    echo "[remote.sh] stand training started in parallel tmux session 'train_stand' (envs=$STAND_ENVS, ~20% VRAM)"
+    echo "[remote.sh] WARNING: walk + stand share the GPU; both will be ~30% slower"
+    ;;
+
+  stop_stand)
+    ssh "$REMOTE" "tmux send-keys -t train_stand C-c 2>/dev/null"
+    echo "[remote.sh] sent Ctrl-C to train_stand"
     ;;
 
   health)
@@ -79,8 +101,8 @@ case "$cmd" in
     ;;
 
   kill)
-    ssh "$REMOTE" "tmux kill-session -t $SESSION 2>/dev/null; tmux kill-session -t monitor 2>/dev/null; true"
-    echo "[remote.sh] tmux sessions '$SESSION' and 'monitor' killed"
+    ssh "$REMOTE" "tmux kill-session -t $SESSION 2>/dev/null; tmux kill-session -t monitor 2>/dev/null; tmux kill-session -t train_stand 2>/dev/null; true"
+    echo "[remote.sh] tmux sessions '$SESSION', 'monitor', 'train_stand' killed"
     ;;
 
   gpu)
@@ -96,8 +118,9 @@ case "$cmd" in
     ;;
 
   *)
-    echo "usage: $0 {start|log|status|health|attach|stop|kill|gpu|sync}"
-    echo "  ENVS=N RESUME=1 ./remote.sh start    # override defaults"
+    echo "usage: $0 {start|start_stand|log|status|health|attach|stop|stop_stand|kill|gpu|sync}"
+    echo "  ENVS=N RESUME=1 ./remote.sh start          # walk task"
+    echo "  STAND_ENVS=N    ./remote.sh start_stand    # parallel stand task"
     exit 1
     ;;
 esac
