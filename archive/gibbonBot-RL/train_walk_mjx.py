@@ -497,7 +497,13 @@ def main():
             mean_z       = float(jnp.mean(torso_z))
             mean_upright = float(jnp.mean(uprightness))
             mean_jvel    = float(jnp.mean(jvel_norm))
-            print(f"{update_count:>8}  {total_steps:>12,}  {sps:>8,.0f}  rew={mean_rew:.2f}  d={mean_dist:.2f}  v={mean_speed:.2f}m/s  z={mean_z:.2f}  upr={mean_upright:.2f}  succ={success_frac*100:.1f}%  asym={asym:.1f}", flush=True)
+            # Gait-coherence score: how trot-like is the policy?
+            # +ve = diagonal pairs synced, -ve = pacing/chaos. See utils/gait_score.
+            from utils.gait_score import trot_coherence, stride_period
+            jvel_avg = np.asarray(jnp.mean(stacked_obs[..., 35:59], axis=1))  # (T, 24) avg over envs
+            gait_coh = float(trot_coherence(jvel_avg))
+            stride_s = float(stride_period(jvel_avg, dt_action=16 * 0.002))
+            print(f"{update_count:>8}  {total_steps:>12,}  {sps:>8,.0f}  rew={mean_rew:.2f}  d={mean_dist:.2f}  v={mean_speed:.2f}m/s  z={mean_z:.2f}  upr={mean_upright:.2f}  succ={success_frac*100:.1f}%  gait={gait_coh:+.2f}  stride={stride_s:.2f}s", flush=True)
             mlflow.log_metrics(
                 {"sps": sps, "mean_rew": mean_rew, "mean_dist": mean_dist,
                  "min_dist": min_dist, "max_dist": max_dist,
@@ -505,7 +511,8 @@ def main():
                  "success_frac": success_frac, "update": update_count,
                  "mean_speed": mean_speed, "max_speed": max_speed,
                  "mean_z": mean_z, "mean_upright": mean_upright,
-                 "mean_jvel": mean_jvel, "asym_torque": asym},
+                 "mean_jvel": mean_jvel, "asym_torque": asym,
+                 "gait_coherence": gait_coh, "stride_period_s": stride_s},
                 step=total_steps,
             )
 
