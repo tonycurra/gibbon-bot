@@ -470,12 +470,22 @@ def main():
 
         if update_count % LOG_EVERY == 0:
             sps = (total_steps - start_steps) / (time.time() - t0)
-            mean_rew = float(jnp.mean(jnp.stack(buf_rew)))
-            mean_dist = float(jnp.mean(jnp.stack(buf_dist)))
-            print(f"{update_count:>8}  {total_steps:>12,}  {sps:>8,.0f}  {mean_rew:>10.3f}  {mean_dist:>10.3f}", flush=True)
+            stacked_rew = jnp.stack(buf_rew)
+            stacked_dist = jnp.stack(buf_dist)
+            stacked_done = jnp.stack(buf_done)
+            mean_rew = float(jnp.mean(stacked_rew))
+            mean_dist = float(jnp.mean(stacked_dist))
+            min_dist = float(jnp.min(stacked_dist))            # closest approach this rollout
+            max_dist = float(jnp.max(stacked_dist))            # farthest drift
+            best_rew = float(jnp.max(stacked_rew))
+            done_frac = float(jnp.mean(stacked_done))           # fraction of (env,t) pairs that ended → episode turnover
+            success_frac = float(jnp.mean(stacked_dist < 0.6)) # fraction of (env,t) within success radius
+            print(f"{update_count:>8}  {total_steps:>12,}  {sps:>8,.0f}  {mean_rew:>10.3f}  {mean_dist:>10.3f}  min_d={min_dist:.2f}  succ={success_frac*100:.1f}%", flush=True)
             mlflow.log_metrics(
                 {"sps": sps, "mean_rew": mean_rew, "mean_dist": mean_dist,
-                 "update": update_count},
+                 "min_dist": min_dist, "max_dist": max_dist,
+                 "best_rew": best_rew, "done_frac": done_frac,
+                 "success_frac": success_frac, "update": update_count},
                 step=total_steps,
             )
 
