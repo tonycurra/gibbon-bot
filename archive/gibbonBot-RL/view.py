@@ -31,14 +31,27 @@ _parser.add_argument("--since", type=float, default=0.0,
                      help="ignore checkpoints saved before this unix timestamp")
 _parser.add_argument("--env", choices=["stand", "walk"], default="stand",
                      help="which env was trained (selects runs dir + obs format)")
+_parser.add_argument("--best", action="store_true",
+                     help="load the best-mean_rew checkpoint (per mlflow) instead of newest, no hot-swap")
 _args = _parser.parse_args()
 SINCE = _args.since
 ENV   = _args.env
+BEST  = _args.best
 RUNS  = pathlib.Path("runs/ape_walk_mjx" if ENV == "walk" else "runs/ape_stand_mjx")
 OBS_DIM = 86 if ENV == "walk" else 83
 
 
 def latest_checkpoint():
+    if BEST:
+        try:
+            from utils.best import find_best
+            results = find_best(task=ENV, top=1)
+            if results:
+                path, rew, step = results[0]
+                print(f"[view] best checkpoint: {path.name} (mean_rew={rew:.3f} at step {step:,})" if rew else f"[view] best (fallback): {path.name}")
+                return path
+        except Exception as e:
+            print(f"[view] --best failed ({e}), falling back to latest")
     ckpts = [c for c in sorted(RUNS.glob("mjx_*.npz")) if c.stat().st_mtime >= SINCE]
     return ckpts[-1] if ckpts else None
 
