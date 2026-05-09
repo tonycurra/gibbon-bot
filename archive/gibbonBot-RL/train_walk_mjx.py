@@ -26,6 +26,7 @@ from envs.walk_env_mjx import (
 )
 import envs.params_walk_mjx as P
 import utils.lineage as lineage_mod
+from utils.gait_score import trot_coherence, stride_period  # fail fast at import, not mid-training
 
 RUNS = pathlib.Path("runs/ape_walk_mjx")
 ROLLOUTS = RUNS / "rollouts"
@@ -499,7 +500,6 @@ def main():
             mean_jvel    = float(jnp.mean(jvel_norm))
             # Gait-coherence score: how trot-like is the policy?
             # +ve = diagonal pairs synced, -ve = pacing/chaos. See utils/gait_score.
-            from utils.gait_score import trot_coherence, stride_period
             jvel_avg = np.asarray(jnp.mean(stacked_obs[..., 35:59], axis=1))  # (T, 24) avg over envs
             gait_coh = float(trot_coherence(jvel_avg))
             stride_s = float(stride_period(jvel_avg, dt_action=16 * 0.002))
