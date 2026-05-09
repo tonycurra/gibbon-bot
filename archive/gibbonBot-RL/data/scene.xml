@@ -15,14 +15,14 @@
 
     <!-- TERRAIN-ASSETS-BEGIN -->
     <!-- size: half-x, half-y, max-height, base-thickness -->
-    <hfield name="terrain" file="terrain.png" size="5.0 5.0 0.1000 0.05" />
+    <hfield name="terrain" file="terrain.png" size="5.0 5.0 0.1200 0.05" />
     <mesh name="terrain_surface" file="terrain_surface.obj"/>
-    <texture name="skybox" type="skybox" builtin="gradient" rgb1="0.350 0.550 0.850" rgb2="0.700 0.833 0.960" width="256" height="256" />
-  
+    <texture name="skybox" type="skybox" builtin="gradient" rgb1="0.350 0.550 0.850" rgb2="0.713 0.842 0.962" width="256" height="256" />
     <!-- TERRAIN-ASSETS-END -->
 
     <!-- TREE-ASSETS-BEGIN -->
     <mesh name="tree_0_wood" file="trees/tree_0_wood.obj"/>
+    <mesh name="tree_0_leaves" file="trees/tree_0_leaves.obj"/>
     <!-- TREE-ASSETS-END -->
   </asset>
 
@@ -50,7 +50,7 @@
 
   <worldbody>
     <!-- TERRAIN-WORLDBODY-BEGIN -->
-    <light name="sun" directional="true" castshadow="true" pos="-3.536 3.536 8.660" dir="0.354 -0.354 -0.866" diffuse="0.950 0.920 0.850" specular="0.2 0.2 0.2" />
+    <light name="sun" directional="true" castshadow="true" pos="-3.687 4.394 8.192" dir="0.369 -0.439 -0.819" diffuse="0.950 0.920 0.850" specular="0.2 0.2 0.2" />
     <!-- Collision: flat plane at z=0 (cheap). Heightfield asset retained for
          visual reference + future terrain training; collision disabled. -->
     <geom name="floor" type="plane" size="20 20 0.1" pos="0 0 0" rgba="0 0 0 0" condim="4" friction="1.490 0.0715 0.01403" solimp="0.850 0.999 0.0125" solref="0.0110 1" contype="1" conaffinity="31" />
@@ -60,7 +60,7 @@
     <!-- TERRAIN-WORLDBODY-END -->
 
     <!-- ROBOT (hand-edited; spawn z on torso body patched by gen_terrain.py) -->
-    <body name="torso" pos="0 0 0.5620">
+    <body name="torso" pos="0 0 0.5777">
       <inertial pos="-0.0192447 0 -0.0101645" quat="0.439032 0.439032 -0.554303 0.554303" mass="1.02487" diaginertia="0.0402837 0.0351039 0.0308832" />
       <joint name="world_to_torso" type="free" />
       <geom size="0.15 0.15 0.05" type="box" rgba="0.3 0.3 0.3 1" class="robot" />
@@ -201,11 +201,9 @@
   
 
     <!-- TREE-WORLDBODY-BEGIN -->
-    <!-- tree 0: r=0.076 h=4.54 ground_z=0.052 -->
-    <geom name="t0_trunk" type="capsule" fromto="3.000 0.000 0.014 3.000 0.000 4.594" size="0.076" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31" friction="0.7 0.01 0.001"/>
-    <geom name="t0_b0" type="capsule" fromto="2.962 0.001 2.337 1.313 0.048 2.620" size="0.037" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31" friction="0.7 0.01 0.001"/>
-    <geom name="t0_b1" type="capsule" fromto="3.037 0.007 1.898 4.266 0.228 2.428" size="0.036" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31" friction="0.7 0.01 0.001"/>
-    <geom name="t0_b2" type="capsule" fromto="2.964 0.013 1.648 2.021 0.350 1.994" size="0.041" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31" friction="0.7 0.01 0.001"/>
+    <geom name="tree_0_trunk_col" type="capsule" fromto="2.500 0.000 0.011 2.735 -0.051 1.323" size="0.050" rgba="0 0 0 0" contype="1" conaffinity="31"/>
+    <geom name="tree_0_wood_visual" type="mesh" mesh="tree_0_wood" pos="2.500 0.000 0.011" rgba="0.48 0.42 0.34 1" contype="0" conaffinity="0"/>
+    <geom name="tree_0_leaves_visual" type="mesh" mesh="tree_0_leaves" pos="2.500 0.000 0.011" rgba="0.50 0.58 0.40 1" contype="0" conaffinity="0"/>
     <!-- TREE-WORLDBODY-END -->
   </worldbody>
 

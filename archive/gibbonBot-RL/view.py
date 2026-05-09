@@ -20,7 +20,7 @@ import mujoco
 import mujoco.viewer
 
 # ── config ────────────────────────────────────────────────────────────────────
-POLICY        = "latest"   # "zero" | "random" | "latest"
+POLICY        = "demo"     # "zero" | "random" | "latest" | "demo"
 SCENE         = pathlib.Path("data/scene.xml")
 PHYSICS_STEPS = 32         # physics sub-steps per action (matches training)
 MOTOR_SPEED   = 0.10       # max joint travel per action (matches training)
@@ -106,13 +106,18 @@ def main():
     jnt_hi  = np.array([model.jnt_range[i][1] for i in range(1, 1 + ACT_DIM)])
 
     tree_xy = None
-    if ENV == "walk":
+    tree_top_z = 2.5
+    for name in ("t0_trunk", "tree_0_trunk_col"):
         try:
-            gid = model.geom("t0_trunk").id
-            tree_xy = np.array(model.geom_pos[gid][:2], dtype=np.float32)
-            print(f"[view] walk env, tree at xy={tree_xy.tolist()}")
+            gid = model.geom(name).id
+            p1 = model.geom_pos[gid].copy()
+            # capsule fromto isn't directly stored; estimate top from size+pos.
+            tree_xy = np.array(p1[:2], dtype=np.float32)
+            tree_top_z = float(p1[2] + model.geom_size[gid][1] + model.geom_size[gid][0])
+            print(f"[view] tree '{name}' at xy={tree_xy.tolist()} top_z≈{tree_top_z:.2f}")
+            break
         except (KeyError, ValueError):
-            print("[view] WARNING: walk env but no t0_trunk geom — run gen_trees.py --inject")
+            continue
 
     predict     = None
     last_ckpt   = None
@@ -178,11 +183,113 @@ def main():
             step_i        = 0
             MAX_EP        = 2000
 
+            # ── scripted demo: mocap-style approach + climb ──
+            if POLICY == "demo":
+                # phases (in viewer-DT seconds, DT=0.002, sleep=DT each substep)
+                FPS         = 1.0 / DT
+                T_APPROACH  = 4.0
+                T_CLIMB     = 4.0
+                T_HOLD      = 1.5
+                T_TOTAL     = T_APPROACH + T_CLIMB + T_HOLD
+                start_xy    = np.array([0.0, 0.0], dtype=np.float32)
+                tx, ty      = (tree_xy if tree_xy is not None else np.array([2.5, 0.0]))
+                # stop short of trunk so robot is "at" the tree, not inside it
+                approach_xy = np.array([tx - 0.45, ty], dtype=np.float32)
+                ground_z    = float(model.body("torso").pos[2])
+                top_z       = max(tree_top_z - 0.3, ground_z + 1.5)
+                t_demo      = 0.0
+
+                while t_demo < T_TOTAL and viewer.is_running():
+                    # face tree
+                    yaw = float(np.arctan2(ty - data.qpos[1], tx - data.qpos[0]))
+                    if t_demo < T_APPROACH:
+                        u = t_demo / T_APPROACH
+                        u_smooth = 0.5 - 0.5 * np.cos(np.pi * u)  # ease in/out
+                        data.qpos[0:2] = start_xy + (approach_xy - start_xy) * u_smooth
+                        data.qpos[2]   = ground_z
+                        # trot gait
+                        ph = t_demo * 6.0
+                        s, c = np.sin(ph), np.cos(ph)
+                        joints = np.zeros(ACT_DIM, dtype=np.float32)
+                        joints[1]  =  0.6 * s;  joints[7]  = -0.6 * s
+                        joints[13] = -0.6 * s;  joints[19] =  0.6 * s
+                        joints[2]  = 0.5 + 0.4 * c;  joints[8]  = 0.5 - 0.4 * c
+                        joints[14] = 0.5 - 0.4 * c;  joints[20] = 0.5 + 0.4 * c
+                    elif t_demo < T_APPROACH + T_CLIMB:
+                        u = (t_demo - T_APPROACH) / T_CLIMB
+                        u_smooth = 0.5 - 0.5 * np.cos(np.pi * u)
+                        data.qpos[0:2] = approach_xy
+                        data.qpos[2]   = ground_z + (top_z - ground_z) * u_smooth
+                        # climbing: arms reach overhead, alternating; legs grip
+                        ph = (t_demo - T_APPROACH) * 5.0
+                        s, c = np.sin(ph), np.cos(ph)
+                        joints = np.zeros(ACT_DIM, dtype=np.float32)
+                        # front limbs reach up + alternate
+                        joints[1]  = -0.85 + 0.25 * s  # FL shoulder pitch (up)
+                        joints[7]  = -0.85 - 0.25 * s  # FR
+                        joints[2]  =  0.6 + 0.3 * c    # FL elbow
+                        joints[8]  =  0.6 - 0.3 * c
+                        # back legs hug trunk
+                        joints[13] =  0.6 + 0.2 * s
+                        joints[19] =  0.6 - 0.2 * s
+                        joints[14] =  0.9
+                        joints[20] =  0.9
+                        # torso pitched up against trunk
+                        pitch = -0.6 * u_smooth
+                    else:
+                        data.qpos[0:2] = approach_xy
+                        data.qpos[2]   = top_z
+                        joints = np.zeros(ACT_DIM, dtype=np.float32)
+                        joints[1]  = -0.9; joints[7]  = -0.9
+                        joints[2]  =  0.7; joints[8]  =  0.7
+                        joints[13] =  0.7; joints[19] =  0.7
+                        joints[14] =  0.9; joints[20] =  0.9
+
+                    # set torso orientation: yaw toward tree, pitch up while climbing
+                    pitch = -0.6 * np.clip((t_demo - T_APPROACH) / T_CLIMB, 0, 1) if t_demo > T_APPROACH else 0.0
+                    cy, sy = np.cos(yaw / 2), np.sin(yaw / 2)
+                    cp, sp = np.cos(pitch / 2), np.sin(pitch / 2)
+                    data.qpos[3] = cy * cp
+                    data.qpos[4] = cy * sp     # pitch
+                    data.qpos[5] = 0.0
+                    data.qpos[6] = sy * cp
+
+                    # joints: clip to [-1,1] then map to joint range
+                    joints = np.clip(joints, -1.0, 1.0)
+                    data.qpos[7:7 + ACT_DIM] = 0.5 * (joints + 1.0) * (jnt_hi - jnt_lo) + jnt_lo
+                    data.qvel[:] = 0.0
+                    mujoco.mj_forward(model, data)
+                    viewer.sync()
+                    time.sleep(DT * PHYSICS_STEPS)
+                    t_demo += DT * PHYSICS_STEPS
+                    step_i += 1
+
+                ep += 1
+                print(f"{ep:>4}  {'CLIMB':<8}  {top_z:>8.3f}m  {step_i:>6}  {1.0:>8.3f}")
+                continue
+
             while step_i < MAX_EP and viewer.is_running():
                 if POLICY == "zero":
                     action = np.zeros(ACT_DIM, dtype=np.float32)
                 elif POLICY == "random":
                     action = rng.uniform(-1, 1, size=ACT_DIM).astype(np.float32)
+                elif POLICY == "demo":
+                    # Trot-style gait: diagonal pairs (FL+BR vs FR+BL) swing
+                    # opposite phase. Indices match scene.xml actuator order.
+                    t = step_i * 0.06
+                    a = np.zeros(ACT_DIM, dtype=np.float32)
+                    s = np.sin(t); c = np.cos(t)
+                    # shoulder/hip pitch — alternating swing
+                    a[1]  =  0.55 * s   # FL shoulder pitch
+                    a[7]  = -0.55 * s   # FR
+                    a[13] = -0.55 * s   # BL hip pitch
+                    a[19] =  0.55 * s   # BR
+                    # elbow/knee — fold during swing-back
+                    a[2]  = 0.40 + 0.35 * c   # FL elbow
+                    a[8]  = 0.40 - 0.35 * c   # FR
+                    a[14] = 0.40 - 0.35 * c   # BL knee
+                    a[20] = 0.40 + 0.35 * c   # BR
+                    action = a
                 elif predict is not None:
                     # robot joints only — bound slices to ACT_DIM so grove
                     # DOFs (branches/olives) don't poison the observation.

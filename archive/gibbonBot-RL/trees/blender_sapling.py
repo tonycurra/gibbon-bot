@@ -139,28 +139,28 @@ VARIETIES = {
         # tall or wider, heavy gnarl, narrow lanceolate leaves. The character
         # lives in the trunk — push gnarl + ratio hard, keep canopy a cloud.
         scale=4.5,                    # ~4-5m tall
-        scale_v=0.5,                  # asymmetric — symmetry kills it
-        length=(0.40, 0.55, 0.40, 0.22),
-        length_v=(0.0, 0.30, 0.25, 0.15),  # uneven branch lengths
-        ratio=0.110,                  # ~0.5m radius trunk (1m diameter)
-        ratio_power=1.3,              # branches stay thick a long way out
-        taper=(1.5, 1.6, 1.5, 1.5),   # less taper → trunk holds thickness
-        branches=(0, 14, 36, 0),      # few primaries, dense secondaries
+        scale_v=0.2,
+        length=(0.30, 0.70, 0.55, 0.30),  # short trunk, LONG primaries → big canopy
+        length_v=(0.0, 0.30, 0.25, 0.15),
+        ratio=0.025,                  # slimmer trunk (~12cm radius base)
+        ratio_power=1.0,
+        taper=(1.4, 1.3, 1.3, 1.2),
+        branches=(0, 18, 60, 0),      # many primaries + dense canopy twigs
         levels=3,
-        base_size=0.25,               # primaries break at ~1-2m up
+        base_size=0.15,               # primaries break at ~70cm up
         base_splits=2,                # multi-trunk burly base
-        split_angle=(0, 60, 45, 30),  # wide spread → outward then up
-        split_angle_v=(0, 20, 15, 10),
-        attract_up=(0, 0.20, 0.45, 0.0),  # spread out, then secondaries lift
-        curve=(0, 50, 60, 0),
-        curve_v=(140, 160, 150, 0),   # extreme gnarl (esp. trunk: 140)
-        prune_ratio=0.85,
-        prune_width=1.30,             # canopy WIDER than tall
-        prune_width_peak=0.35,        # widest below middle = billowing
-        prune_height=0.40,            # squat rounded crown
-        leaf_count=380,               # dense but airy
-        leaf_scale=0.045,             # 4-5cm leaves
-        leaf_scale_x=0.22,            # narrow lanceolate
+        split_angle=(0, 45, 40, 30),
+        split_angle_v=(0, 18, 15, 10),
+        attract_up=(0, 0.8, 1.0, 0.0),  # branches sweep up = round cloud
+        curve=(0, 20, 30, 0),
+        curve_v=(80, 110, 110, 0),    # gnarl
+        prune_ratio=0.95,
+        prune_width=1.50,             # wide rounded canopy (wider than tall)
+        prune_width_peak=0.50,
+        prune_height=0.75,            # tall enough canopy
+        leaf_count=600,               # dense
+        leaf_scale=0.045,
+        leaf_scale_x=0.30,            # narrow lanceolate
     ),
 }
 

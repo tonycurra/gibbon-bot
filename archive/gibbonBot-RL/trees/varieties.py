@@ -35,4 +35,14 @@ VARIETIES = {
         fol_r=0.75,
         n_branches=6,
     ),
+    # olive: real Mediterranean olive — squat thick burly multi-trunk
+    "olive": dict(
+        height=4.5,
+        base_r=0.50,
+        top_r=0.20,
+        gnarl=0.80,
+        canopy=1.40,
+        fol_r=0.85,
+        n_branches=6,
+    ),
 }
