@@ -4,6 +4,31 @@ Step-by-step for renting a remote H100, training fast, and not wasting money. Te
 
 ---
 
+## Driving it from your laptop (recommended)
+
+`remote.sh` wraps the common ssh+tmux dance in single commands:
+
+```bash
+./remote.sh start     # kicks training in detached tmux on the H100
+                      # defaults: --envs 16384, --save-rollouts-every 50
+
+./remote.sh status    # last 30 log lines + nvidia-smi + tmux session list
+./remote.sh log       # live `tail -f` of train.log (Ctrl-C just stops the tail)
+./remote.sh attach    # ssh in and join the tmux session interactively
+./remote.sh stop      # Ctrl-C the training — fires graceful save handler
+./remote.sh kill      # nukes the tmux session (use after stop has saved)
+./remote.sh gpu       # one-shot nvidia-smi
+./remote.sh sync      # one tick of pull_checkpoints.sh
+```
+
+Override defaults via env vars: `ENVS=8192 ./remote.sh start`,
+`RESUME=1 ./remote.sh start`, etc. Edit the `REMOTE=` line at the top of
+`remote.sh` if the IP changes.
+
+Typical session: `./remote.sh start` → walk away → `./remote.sh status`
+periodically to confirm GPU util is pinned and reward is climbing →
+`./remote.sh stop` when done → destroy the instance in the Scaleway console.
+
 ## TL;DR
 
 You'll be training within 10 minutes. Two terminals: one ssh'd into the remote, one local for the viewer.
