@@ -30,6 +30,25 @@ import utils.lineage as lineage_mod
 RUNS = pathlib.Path("runs/ape_walk_mjx")
 ROLLOUTS = RUNS / "rollouts"
 
+import hashlib, json
+def _fingerprint():
+    """Hash of files that, if changed, would invalidate a resume.
+    Catches: reward shaping, env physics, scene geometry, network shape."""
+    files = [
+        pathlib.Path("envs/params_walk_mjx.py"),
+        pathlib.Path("envs/walk_env_mjx.py"),
+        pathlib.Path("data/scene.xml"),
+    ]
+    h = hashlib.sha256()
+    parts = {}
+    for f in files:
+        if f.exists():
+            b = f.read_bytes()
+            digest = hashlib.sha256(b).hexdigest()[:16]
+            parts[str(f)] = digest
+            h.update(b)
+    return {"hash": h.hexdigest()[:16], "parts": parts, "ts": time.strftime("%Y-%m-%dT%H:%M:%S")}
+
 N_STEPS     = 128
 EPOCHS      = 4
 MINIBATCHES = 8
@@ -159,32 +178,59 @@ def save(train_state, steps):
     path = RUNS / f"mjx_{steps:012d}.npz"
     flat, _ = jax.tree_util.tree_flatten(jax.device_get(train_state.params))
     np.savez(str(path), *flat)
-    print(f"[save] {path.name}")
+    fp = _fingerprint()
+    (RUNS / "latest.fingerprint.json").write_text(json.dumps(fp, indent=2))
+    print(f"[save] {path.name}", flush=True)
     if mlflow.active_run() is not None:
         mlflow.set_tag("latest_checkpoint", path.name)
         mlflow.log_metric("checkpoint_steps", steps, step=steps)
 
 
-def load_latest(train_state):
+def load_latest(train_state, force=False):
+    """Resume from the latest checkpoint.
+    Returns (train_state, start_steps, status) where status is:
+      'fresh'    — no checkpoint, starting from scratch
+      'resumed'  — loaded checkpoint and fingerprint matches
+      'mismatch' — checkpoint exists but training code/scene changed; only loaded if force=True
+    """
     ckpts = sorted(RUNS.glob("mjx_*.npz"))
     if not ckpts:
-        print("[resume] no checkpoint found — starting fresh.")
-        return train_state, 0
+        print("[resume] no checkpoint found — starting fresh.", flush=True)
+        return train_state, 0, "fresh"
     latest = ckpts[-1]
+    fp_path = RUNS / "latest.fingerprint.json"
+    cur = _fingerprint()
+    if fp_path.exists():
+        old = json.loads(fp_path.read_text())
+        if old.get("hash") != cur.get("hash"):
+            print(f"[resume] FINGERPRINT MISMATCH — training inputs changed since {latest.name}", flush=True)
+            for f, d in cur["parts"].items():
+                old_d = old.get("parts", {}).get(f, "(missing)")
+                marker = "  " if old_d == d else "≠ "
+                print(f"  {marker}{f}: was {old_d} now {d}", flush=True)
+            if not force:
+                print("[resume] refusing to auto-resume. Pass --resume to force-load anyway,", flush=True)
+                print("[resume] or move/delete runs/ape_walk_mjx/mjx_*.npz to start fresh.", flush=True)
+                sys.exit(2)
+            print("[resume] --resume given, loading anyway despite mismatch.", flush=True)
     data = np.load(str(latest))
     flat = [jnp.asarray(data[k]) for k in data.files]
     _, treedef = jax.tree_util.tree_flatten(train_state.params)
     new_params = jax.tree_util.tree_unflatten(treedef, flat)
     steps = int(latest.stem.split("_")[1])
-    print(f"[resume] loaded {latest.name} ({steps:,} steps)")
-    return train_state.replace(params=new_params), steps
+    print(f"[resume] loaded {latest.name} ({steps:,} steps)", flush=True)
+    return train_state.replace(params=new_params), steps, "resumed"
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--envs",     type=int, default=None)
-    parser.add_argument("--resume",   action="store_true")
+    parser.add_argument("--resume",   action="store_true",
+                        help="force-resume even if training inputs changed")
+    parser.add_argument("--no-resume", dest="auto_resume", action="store_false",
+                        help="ignore existing checkpoints, start fresh")
     parser.add_argument("--no-watch", dest="watch", action="store_false")
+    parser.set_defaults(auto_resume=True)
     parser.add_argument("--save-rollouts-every", type=int, default=0,
                         help="dump rollout buffer every N PPO updates (0=off)")
     parser.add_argument("--rollout-envs", type=int, default=256,
@@ -195,7 +241,9 @@ def main():
     args = parser.parse_args()
 
     N_ENVS = args.envs or _auto_envs()
-    save_every = max(1_000, min(250_000, N_ENVS * 250))
+    # Save aggressively: roughly every ~50 PPO updates so a crashed run loses
+    # at most ~1 minute of compute, even on H100.
+    save_every = max(1_000, min(100_000, N_ENVS * 50))
     RUNS.mkdir(parents=True, exist_ok=True)
 
     print(f"JAX devices: {jax.devices()}")
@@ -209,8 +257,9 @@ def main():
 
     train_state = make_train_state(init_rng, float(P.LEARNING_RATE))
     start_steps = 0
-    if args.resume:
-        train_state, start_steps = load_latest(train_state)
+    resume_status = "fresh"
+    if args.auto_resume:
+        train_state, start_steps, resume_status = load_latest(train_state, force=args.resume)
 
     rparams = tuple(jnp.float32(v) for v in read_params())
 
@@ -225,7 +274,7 @@ def main():
 
     inherited_from = (
         str(sorted(RUNS.glob("mjx_*.npz"))[-1])
-        if args.resume and list(RUNS.glob("mjx_*.npz")) else None
+        if resume_status in ("resumed",) and list(RUNS.glob("mjx_*.npz")) else None
     )
     lineage_mod.record(
         RUNS, "walk_mjx", N_ENVS, inherited_from,
@@ -256,7 +305,7 @@ def main():
     mlflow.set_tags({
         "task": "walk_mjx",
         "inherited_from": inherited_from or "scratch",
-        "resume": str(bool(args.resume)),
+        "resume": resume_status,
         "jax_backend": jax.default_backend(),
         "start_steps": str(start_steps),
     })
