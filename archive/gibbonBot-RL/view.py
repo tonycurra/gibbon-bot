@@ -42,6 +42,16 @@ OBS_DIM = 88 if ENV == "walk" else 83
 GAIT_PERIOD_STEPS = 25
 
 
+def _is_compatible(path):
+    """Check if .npz first param shape matches OBS_DIM."""
+    try:
+        d = np.load(str(path))
+        # Find the (?, 256) shape with first dim == OBS_DIM (Dense_0/kernel)
+        return any(d[k].shape == (OBS_DIM, 256) for k in d.files)
+    except Exception:
+        return False
+
+
 def latest_checkpoint():
     if BEST:
         try:
@@ -49,12 +59,19 @@ def latest_checkpoint():
             results = find_best(task=ENV, top=1)
             if results:
                 path, rew, step = results[0]
-                print(f"[view] best checkpoint: {path.name} (mean_rew={rew:.3f} at step {step:,})" if rew else f"[view] best (fallback): {path.name}")
-                return path
+                if _is_compatible(path):
+                    print(f"[view] best: {path.name}" + (f" mean_rew={rew:.3f}" if rew else ""))
+                    return path
         except Exception as e:
             print(f"[view] --best failed ({e}), falling back to latest")
     ckpts = [c for c in sorted(RUNS.glob("mjx_*.npz")) if c.stat().st_mtime >= SINCE]
-    return ckpts[-1] if ckpts else None
+    # Walk backwards; return newest *compatible* checkpoint
+    for c in reversed(ckpts):
+        if _is_compatible(c):
+            return c
+    if ckpts:
+        print(f"[view] WARNING: {len(ckpts)} checkpoints found but none match current OBS_DIM={OBS_DIM}")
+    return None
 
 
 def _build_net():
@@ -91,7 +108,10 @@ def load_predict(path, cached=[None]):
 
     data = np.load(str(path))
     flat = [jnp.asarray(data[k]) for k in data.files]
-    _, treedef = jax.tree_util.tree_flatten(init_params)
+    init_flat, treedef = jax.tree_util.tree_flatten(init_params)
+    # Shape-check: skip incompatible checkpoints (e.g. older OBS_DIM).
+    if any(a.shape != b.shape for a, b in zip(flat, init_flat)):
+        raise ValueError(f"shape mismatch in {path.name} (probably trained on different OBS_DIM)")
     params = jax.tree_util.tree_unflatten(treedef, flat)
 
     apply_jit = jax.jit(lambda obs, p=params: net.apply(p, obs)[0])

@@ -27,9 +27,9 @@ W_ALIVE = 0.2
 FLIP_PENALTY = 80.0
 
 # ─── Smoothness ──────────────────────────────────────────────────────────────
-W_SMOOTH = 0.4      # 4× — penalize jerky motor commands more, smoother gait
-W_JVEL = 0.015      # 3× — penalize joint thrash
-W_SYMMETRY = 0.005  # bilateral symmetry penalty: torque(left) ~ torque(right) per pair (FL-FR, BL-BR). Encourages biological gaits.
+W_SMOOTH = 0.05     # cut hard — polish, not bootstrap. Restore once walk emerges.
+W_JVEL = 0.003      # cut — random exploration was being clobbered
+W_SYMMETRY = 0.0    # off until policy walks. Then re-enable for polish.
 W_ENERGY = 0.005
 
 # ─── PPO ─────────────────────────────────────────────────────────────────────

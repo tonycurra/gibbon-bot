@@ -59,7 +59,7 @@ VF_COEF     = 0.5
 MAX_GRAD    = 0.5
 
 TOTAL_STEPS = 100_000_000
-LOG_EVERY   = 1
+LOG_EVERY   = 5    # metric block has ~10 host-device syncs; running every update was throttling GPU 5-10x
 
 
 def _auto_envs():
