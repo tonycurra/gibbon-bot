@@ -26,6 +26,9 @@ Things proposed in conversation that weren't implemented inline. Priority is my 
 
 ## P3 — physics engine alternatives (track, don't migrate yet)
 
+- **NVIDIA Isaac Lab / Isaac Sim / Omniverse** — full robotics platform with USD scenes, PhysX/Warp physics, photorealistic rendering, massively parallel RL. Heavy migration (3–6 weeks): rewrite scene as USD, redo envs in Isaac task format, lose calibrated CPG / motor profile, lock to RTX-only. Worth it ONLY if we add vision-based policies (cameras observing the tree / apples). Stay on MJX while observations are pure proprioception.
+
+
 - **`mujoco_warp`** ([github.com/google-deepmind/mujoco_warp](https://github.com/google-deepmind/mujoco_warp)) — MuJoCo physics on NVIDIA Warp instead of JAX/XLA. Promise: 2–5× faster kernel launches than MJX. Pre-1.0, incomplete MJX parity. Revisit when stable + benchmarked. Migration cost: ~1 week (touches every JAX call in `train_mjx.py`). Same scene.xml, same physics semantics — relatively cheap port once ready.
 - **NVIDIA Newton Physics** ([developer.nvidia.com/newton-physics](https://developer.nvidia.com/newton-physics)) — new Warp-based engine with rigid + articulated + soft + cloth + fluids. USD scene format, Isaac Lab integration. Pre-1.0. Revisit only if we need physics MJX can't do (soft soil, ropes for harvesting). Migration cost: 2–4 weeks (scene rewrite + new env layer). Concrete trigger: agricultural-soil deformation matters for the grove task.
 
