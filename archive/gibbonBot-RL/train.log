@@ -13,3 +13,5 @@ Training — 100,000,000 total steps.
  updates         steps       sps    mean_rew   mean_dist
 ------------------------------------------------------------
 [save] mjx_000001343488.npz
+[sync] pushed to origin: auto: training data 2026-05-10T13:30:15Z
+[save] mjx_000001376256.npz
