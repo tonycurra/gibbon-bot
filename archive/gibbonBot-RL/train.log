@@ -2,7 +2,7 @@ JAX devices: [CudaDevice(id=0)]
 512 envs  |  save every 25,600 steps
 Loading model...
 [walk_env] tree at xy=[3.0, 0.0]
-[lineage] recorded run #43 — inherited from: scratch
+[lineage] recorded run #45 — inherited from: scratch
 Training — 100,000,000 total steps.
  updates         steps       sps    mean_rew   mean_dist
 ------------------------------------------------------------
