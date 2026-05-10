@@ -1,0 +1,70 @@
+# docker-compose.yml — train + MLflow UI in one go.
+#
+# Bring up:    docker compose up trainer
+# Curriculum:  docker compose run --rm trainer python scripts/curriculum.py
+# Single task: docker compose run --rm trainer python train_mjx.py --task stand --no-resume
+# MLflow UI:   docker compose up -d mlflow_ui  →  http://localhost:5000
+#
+# All training data persists in ./runs, ./mlruns, ./mlflow.db (volumes mounted
+# from host). Stop and restart freely; checkpoints survive.
+
+services:
+  trainer:
+    build: .
+    image: gibbonbot:latest
+    container_name: gibbonbot-trainer
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    environment:
+      - TF_CPP_MIN_LOG_LEVEL=3
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./runs:/app/runs
+      - ./mlruns:/app/mlruns
+      - ./mlflow.db:/app/mlflow.db
+      - ./data:/app/data            # so scene.xml edits land without rebuild
+      - ./envs:/app/envs            # so env tweaks land without rebuild
+      - ./scripts:/app/scripts
+    # Default cmd inherited from Dockerfile. Override with `docker compose run`.
+
+  mlflow_ui:
+    image: gibbonbot:latest
+    container_name: gibbonbot-mlflow
+    command: mlflow ui --backend-store-uri sqlite:///mlflow.db --host 0.0.0.0 --port 5000
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./mlflow.db:/app/mlflow.db
+      - ./mlruns:/app/mlruns
+    depends_on:
+      - trainer
+
+  # Optional: viewer with X11 forwarding for local GPU machines that have a display.
+  # Won't work on cloud instances (no display). Comment out the deploy block to
+  # run on CPU-only hosts.
+  viewer:
+    image: gibbonbot:latest
+    container_name: gibbonbot-viewer
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    environment:
+      - DISPLAY=${DISPLAY}
+      - WAYLAND_DISPLAY=${WAYLAND_DISPLAY}
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - ./runs:/app/runs
+      - ./data:/app/data
+      - ./envs:/app/envs
+    command: python view.py --env walk
+    profiles:
+      - desktop  # only spin up via: docker compose --profile desktop up viewer

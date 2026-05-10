@@ -135,6 +135,7 @@ reproducibility unit.
 - **[docs/ROBOT_VS_APE.md](docs/ROBOT_VS_APE.md)** — joint-by-joint mapping from robot DOF to ape anatomy + what's missing
 - **[docs/BRAIN_CORE.md](docs/BRAIN_CORE.md)** — long-term vision for instinct + memory architecture (skill library, recurrent policy, world model)
 - **[docs/CURRICULUM.md](docs/CURRICULUM.md)** — multi-skill curriculum: stand → walk_forward → turn_left → turn_right
+- **[docs/CLOUD_DEPLOY.md](docs/CLOUD_DEPLOY.md)** — Dockerfile + docker-compose for local or cloud GPU training
 
 ## Tooling cheat sheet
 
