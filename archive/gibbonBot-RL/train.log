@@ -2,51 +2,8 @@ JAX devices: [CudaDevice(id=0)]
 512 envs  |  save every 25,600 steps
 Loading model...
 [walk_env] tree at xy=[3.0, 0.0]
-[lineage] recorded run #39 — inherited from: scratch
+[lineage] recorded run #42 — inherited from: scratch
 Training — 100,000,000 total steps.
  updates         steps       sps    mean_rew   mean_dist
 ------------------------------------------------------------
 [save] mjx_000000032768.npz
-remote: Create a new pull request for 'main':        
-remote:   https://codeberg.org/tony_olivabot/gibbonBot-RL/compare/sim/mujoco-setup...main        
-remote: 
-[sync] pushed: auto: training data 2026-05-10T11:40:17Z
-[save] mjx_000000065536.npz
-remote: Create a new pull request for 'main':        
-remote:   https://codeberg.org/tony_olivabot/gibbonBot-RL/compare/sim/mujoco-setup...main        
-remote: 
-[sync] pushed: auto: training data 2026-05-10T11:40:48Z
-       5        81,920       697  rew=3.21  d=3.01  v=0.14m/s  z=0.19  upr=0.97  succ=0.0%  gait=+0.71  stride=0.26s
-[save] mjx_000000098304.npz
-remote: Create a new pull request for 'main':        
-remote:   https://codeberg.org/tony_olivabot/gibbonBot-RL/compare/sim/mujoco-setup...main        
-remote: 
-[sync] pushed: auto: training data 2026-05-10T11:41:20Z
-[save] mjx_000000131072.npz
-remote: Create a new pull request for 'main':        
-remote:   https://codeberg.org/tony_olivabot/gibbonBot-RL/compare/sim/mujoco-setup...main        
-remote: 
-[sync] pushed: auto: training data 2026-05-10T11:41:53Z
-      10       163,840       828  rew=4.51  d=3.00  v=0.16m/s  z=0.19  upr=0.96  succ=0.0%  gait=+0.79  stride=0.26s
-[save] mjx_000000163840.npz
-remote: Create a new pull request for 'main':        
-remote:   https://codeberg.org/tony_olivabot/gibbonBot-RL/compare/sim/mujoco-setup...main        
-remote: 
-[sync] pushed: auto: training data 2026-05-10T11:42:25Z
-[save] mjx_000000196608.npz
-remote: Create a new pull request for 'main':        
-remote:   https://codeberg.org/tony_olivabot/gibbonBot-RL/compare/sim/mujoco-setup...main        
-remote: 
-[sync] pushed: auto: training data 2026-05-10T11:42:59Z
-[save] mjx_000000229376.npz
-remote: Create a new pull request for 'main':        
-remote:   https://codeberg.org/tony_olivabot/gibbonBot-RL/compare/sim/mujoco-setup...main        
-remote: 
-[sync] pushed: auto: training data 2026-05-10T11:43:32Z
-      15       245,760       874  rew=5.44  d=2.99  v=0.18m/s  z=0.19  upr=0.96  succ=0.0%  gait=+0.20  stride=1.02s
-[save] mjx_000000262144.npz
-remote: Create a new pull request for 'main':        
-remote:   https://codeberg.org/tony_olivabot/gibbonBot-RL/compare/sim/mujoco-setup...main        
-remote: 
-[sync] pushed: auto: training data 2026-05-10T11:44:03Z
-[save] mjx_000000294912.npz
