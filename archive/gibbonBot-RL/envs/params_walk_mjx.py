@@ -37,13 +37,13 @@ FLIP_PENALTY = 60.0       # bumped — stability matters now that gait baseline 
 
 # ─── Smoothness ──────────────────────────────────────────────────────────────
 W_SMOOTH = 0.40     # penalize jerky commands — encourages stable gait
-W_JVEL = 0.05       # damp joint thrashing
+W_JVEL = 0.15       # bumped 3x — strongly damp joint thrashing without progress
 W_SYMMETRY = 0.0    # off until policy walks. Then re-enable for polish.
-W_ENERGY = 0.005
+W_ENERGY = 0.10     # bumped 20x — strongly penalize torque without forward progress (must "earn" the energy spent)
 
 # ─── PPO ─────────────────────────────────────────────────────────────────────
 LEARNING_RATE = 0.00037
-ENT_COEF = 0.08           # CPG provides gait rhythm; policy can converge on stable corrections without high entropy
+ENT_COEF = 0.20           # high entropy — policy explores varied actions per trial (paired with strong energy penalty: thrashing only "pays" if it produces progress)
 CLIP_EPS = 0.15
 
 # ─── Physics (requires restart) ──────────────────────────────────────────────

@@ -137,9 +137,9 @@ def reset(mx, jnt_lo, jnt_hi, tree_xy, rng):
     # Spawn near origin facing roughly toward the tree. Yaw noise lets the
     # policy learn to orient — but bias toward the right direction.
     yaw_target = jnp.arctan2(tree_xy[1], tree_xy[0])
-    yaw_noise  = jax.random.uniform(k1, (), minval=-0.5, maxval=0.5)
+    yaw_noise  = jax.random.uniform(k1, (), minval=-jnp.pi, maxval=jnp.pi)  # full 360° randomization
     yaw        = yaw_target + yaw_noise
-    xy_noise   = jax.random.uniform(k2, (2,), minval=-0.1, maxval=0.1)
+    xy_noise   = jax.random.uniform(k2, (2,), minval=-0.3, maxval=0.3)        # bigger spawn jitter
 
     qpos = dx.qpos.at[0].set(xy_noise[0])
     qpos = qpos.at[1].set(xy_noise[1])
@@ -150,7 +150,7 @@ def reset(mx, jnt_lo, jnt_hi, tree_xy, rng):
     qpos = qpos.at[6].set(jnp.sin(yaw / 2))
 
     rng, knoise = jax.random.split(rng)
-    noise = jax.random.uniform(knoise, (24,), minval=-0.10, maxval=0.10)
+    noise = jax.random.uniform(knoise, (24,), minval=-0.30, maxval=0.30)  # 3x more joint randomization at spawn
     qpos = qpos.at[7:7 + ACT_DIM].set(noise)
 
     dx = dx.replace(qpos=qpos, qvel=jnp.zeros_like(dx.qvel), ctrl=jnp.zeros_like(dx.ctrl))
