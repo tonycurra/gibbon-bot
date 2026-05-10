@@ -1,8 +1,11 @@
 """Walk-to-tree training parameters. Edit values and restart training."""
 
 # ─── Motor & action shaping ──────────────────────────────────────────────────
-MOTOR_MAX_SPEED = 0.20      # slower per-step motor travel (still reaches full range over a few steps)
-ACTION_SMOOTH_ALPHA = 0.4   # EMA on actions: 1.0=raw (jittery), <1 lowpass-filters commands
+MOTOR_MAX_SPEED = 0.10      # legacy — unused; per-joint limits derived from data/motors.md at env load
+MOTOR_MAX_ACCEL = 0.025     # legacy — unused
+MOTOR_SPEED_FRAC = 1.0      # global scale on real motor max speed (1.0=realistic; <1=slower than reality)
+MOTOR_ACCEL_RATIO = 5.0     # max angular accel = SPEED × this/sec (reach max speed in 1/RATIO seconds)
+ACTION_SMOOTH_ALPHA = 0.45  # EMA on raw policy output
 MOTOR_KP = 8.0
 
 # ─── Goal: walk toward tree without dragging torso ───────────────────────────
@@ -34,7 +37,7 @@ W_ENERGY = 0.005
 
 # ─── PPO ─────────────────────────────────────────────────────────────────────
 LEARNING_RATE = 0.00037
-ENT_COEF = 0.1            # moderate entropy — lets policy adapt to new smoothing
+ENT_COEF = 0.2            # high entropy — encourages wide action exploration during learning
 CLIP_EPS = 0.15
 
 # ─── Physics (requires restart) ──────────────────────────────────────────────

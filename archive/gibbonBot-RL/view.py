@@ -23,8 +23,9 @@ import mujoco.viewer
 POLICY        = "latest"   # "zero" | "random" | "latest" | "demo"
 SCENE         = pathlib.Path("data/scene.xml")
 PHYSICS_STEPS = 16         # physics sub-steps per action (matches PHYSICS_STEPS_PER_ACTION in params)
-MOTOR_SPEED   = 0.20       # max joint travel per action — slower; full range reachable over a few steps
-ACTION_ALPHA  = 0.4        # EMA on policy output: 1.0=raw, lower=smoother (kills back-and-forth shake)
+MOTOR_SPEED   = 0.10       # slower than baseline; full range in ~10 action steps ≈ 0.32s
+MOTOR_ACCEL   = 0.025      # smooth ramps but not so gentle that random policy is invisible
+ACTION_ALPHA  = 0.45       # moderate lowpass
 # ─────────────────────────────────────────────────────────────────────────────
 
 _parser = argparse.ArgumentParser()
@@ -140,6 +141,18 @@ def main():
     jnt_lo  = np.array([model.jnt_range[i][0] for i in range(1, 1 + ACT_DIM)])
     jnt_hi  = np.array([model.jnt_range[i][1] for i in range(1, 1 + ACT_DIM)])
 
+    # Per-actuator motor speed / accel limits derived from real motor specs
+    # (see data/motors.md). Joint order per limb: yaw, pitch, elbow/knee, roll,
+    # wrist/ankle, gripper/foot.
+    PER_LIMB_MAX_RAD_PER_SEC = [4.71, 4.71, 4.71, 4.71, 4.71, 11.10]
+    motor_max_radps = np.array(PER_LIMB_MAX_RAD_PER_SEC * 4, dtype=np.float32)
+    SPEED_FRAC = 1.0
+    ACCEL_RATIO = 5.0
+    action_dt = DT * PHYSICS_STEPS
+    half_range = np.maximum(np.abs(jnt_hi), np.abs(jnt_lo))
+    motor_max_speed_arr = SPEED_FRAC * motor_max_radps * action_dt / half_range
+    motor_max_accel_arr = motor_max_speed_arr * ACCEL_RATIO * action_dt
+
     tree_xy = None
     tree_top_z = 2.5
     for name in ("t0_trunk", "tree_0_trunk_col"):
@@ -221,8 +234,11 @@ def main():
 
             do_reset()
             motor_pos     = np.zeros(ACT_DIM, dtype=np.float32)
+            motor_vel     = np.zeros(ACT_DIM, dtype=np.float32)
             filt_action   = np.zeros(ACT_DIM, dtype=np.float32)
-            substep_speed = MOTOR_SPEED / PHYSICS_STEPS
+            # Per-actuator velocity / accel limits (from motor specs).
+            substep_speed = motor_max_speed_arr / PHYSICS_STEPS
+            substep_accel = motor_max_accel_arr / PHYSICS_STEPS
             step_i        = 0
             MAX_EP        = 2000
 
@@ -380,10 +396,13 @@ def main():
                 # when mj_step is heavy (e.g. branched tree contacts).
                 t0 = time.time()
                 for _ in range(PHYSICS_STEPS):
-                    delta = np.clip(filt_action - motor_pos, -substep_speed, substep_speed)
-                    motor_pos += delta
-                    # Re-centered mapping: action=0 → joint=0 (extended/neutral),
-                    # action=±1 → jnt_hi/jnt_lo. Must match walk_env_mjx.step.
+                    err = filt_action - motor_pos
+                    desired_vel = np.clip(err, -substep_speed, substep_speed)
+                    motor_vel = np.clip(desired_vel,
+                                        motor_vel - substep_accel,
+                                        motor_vel + substep_accel)
+                    motor_vel = np.clip(motor_vel, -substep_speed, substep_speed)
+                    motor_pos += motor_vel
                     data.ctrl[:] = motor_pos * np.where(motor_pos >= 0, jnt_hi, -jnt_lo)
                     mujoco.mj_step(model, data)
                 viewer.sync()

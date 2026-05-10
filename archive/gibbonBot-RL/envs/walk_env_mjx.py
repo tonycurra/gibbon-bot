@@ -68,6 +68,7 @@ def read_params():
         float(getattr(_p, "W_FWD_VEL", 0.0)),
         float(getattr(_p, "W_SYMMETRY", 0.0)),
         float(getattr(_p, "W_HEADING", 0.0)),
+        float(getattr(_p, "MOTOR_MAX_ACCEL", 0.05)),
     )
 
 
@@ -100,7 +101,24 @@ def load_model():
     jnt_lo = jnp.array([mj_model.jnt_range[i][0] for i in range(1, mj_model.njnt)])
     jnt_hi = jnp.array([mj_model.jnt_range[i][1] for i in range(1, mj_model.njnt)])
     tree_xy_j = jnp.array(tree_xy)
-    return mx, jnt_lo, jnt_hi, tree_xy_j
+
+    # Per-actuator motor speed limits derived from data/motors.md.
+    # Joint order per limb: yaw, pitch, elbow/knee, roll, wrist/ankle, gripper/foot.
+    # ST3235 / ST3215: 45 RPM = 4.71 rad/s. ST3215-HS: 106 RPM = 11.10 rad/s.
+    PER_LIMB_MAX_RAD_PER_SEC = [4.71, 4.71, 4.71, 4.71, 4.71, 11.10]
+    motor_max_radps = jnp.array(PER_LIMB_MAX_RAD_PER_SEC * 4, dtype=jnp.float32)
+    speed_frac = float(getattr(_p, "MOTOR_SPEED_FRAC", 1.0))
+    accel_ratio = float(getattr(_p, "MOTOR_ACCEL_RATIO", 5.0))
+
+    action_dt = mj_model.opt.timestep * PHYSICS_STEPS_PER_ACTION
+    # Convert real angular velocity (rad/s) → max change in normalized motor_pos per
+    # action step. The asymmetric range (e.g. elbow [-57°, +169°]) is handled by
+    # using the larger half-range as the conservative bound — keeps motion
+    # well under the real motor's no-load speed in the wider direction.
+    half_range = jnp.maximum(jnp.abs(jnt_hi), jnp.abs(jnt_lo))
+    motor_max_speed_per_action = speed_frac * motor_max_radps * action_dt / half_range
+    motor_max_accel_per_action = motor_max_speed_per_action * accel_ratio * action_dt
+    return mx, jnt_lo, jnt_hi, tree_xy_j, motor_max_speed_per_action, motor_max_accel_per_action
 
 
 def reset(mx, jnt_lo, jnt_hi, tree_xy, rng):
@@ -130,37 +148,45 @@ def reset(mx, jnt_lo, jnt_hi, tree_xy, rng):
     dx = mjx.forward(mx, dx)
 
     motor_pos   = jnp.zeros(ACT_DIM)
+    motor_vel   = jnp.zeros(ACT_DIM)
     prev_action = jnp.zeros(ACT_DIM)
     step_idx    = jnp.int32(0)
     obs = _get_obs(dx, tree_xy, step_idx)
     prev_dist = jnp.linalg.norm(dx.qpos[0:2] - tree_xy)
-    return dx, obs, motor_pos, prev_action, prev_dist, step_idx
+    return dx, obs, motor_pos, motor_vel, prev_action, prev_dist, step_idx
 
 
-def step(mx, jnt_lo, jnt_hi, tree_xy, dx, action, motor_pos, prev_action, prev_dist, step_idx, rparams):
+def step(mx, jnt_lo, jnt_hi, motor_max_speed, motor_max_accel, tree_xy, dx, action, motor_pos, motor_vel, prev_action, prev_dist, step_idx, rparams):
     (target_z, target_tol, w_height, w_upright,
      w_progress, w_proximity_tree, success_dist, w_success,
-     ground_clearance, w_ground, flip_penalty, motor_max_speed,
+     ground_clearance, w_ground, flip_penalty, _legacy_speed,
      w_smooth, w_jvel, w_energy, w_alive, action_alpha, w_fwd_vel, w_symmetry,
-     w_heading) = rparams
+     w_heading, _legacy_accel) = rparams
 
     filt_action = action_alpha * action + (1.0 - action_alpha) * prev_action
+    # Per-actuator velocity / accel limits (arrays of shape [ACT_DIM]).
     substep_speed = motor_max_speed / PHYSICS_STEPS_PER_ACTION
+    substep_accel = motor_max_accel / PHYSICS_STEPS_PER_ACTION
 
     def substep(carry, _):
-        mpos, d = carry
-        delta = jnp.clip(filt_action - mpos, -substep_speed, substep_speed)
-        mpos  = mpos + delta
-        # Re-centered mapping: action=0 → joint=0 (extended/neutral),
-        # action=+1 → jnt_hi, action=-1 → jnt_lo. Asymmetric ranges no longer
-        # bias the rest pose toward "folded".
-        ctrl  = mpos * jnp.where(mpos >= 0, jnt_hi, -jnt_lo)
+        mpos, mvel, d = carry
+        # Trapezoidal motion profile: cap velocity AND change in velocity.
+        # 1) Desired velocity to reach target this substep, clipped to vmax.
+        err = filt_action - mpos
+        desired_vel = jnp.clip(err, -substep_speed, substep_speed)
+        # 2) Bound velocity change per substep — accel limit gives smooth ramps.
+        new_vel = jnp.clip(desired_vel, mvel - substep_accel, mvel + substep_accel)
+        new_vel = jnp.clip(new_vel, -substep_speed, substep_speed)
+        mpos = mpos + new_vel
+        # Re-centered mapping: action=0 → joint=0 (extended/neutral).
+        ctrl = mpos * jnp.where(mpos >= 0, jnt_hi, -jnt_lo)
         d = d.replace(ctrl=ctrl)
         d = mjx.step(mx, d)
-        return (mpos, d), None
+        return (mpos, new_vel, d), None
 
-    (motor_pos, dx), _ = jax.lax.scan(
-        substep, (motor_pos, dx), None, length=PHYSICS_STEPS_PER_ACTION
+    motor_vel_init = motor_vel
+    (motor_pos, motor_vel, dx), _ = jax.lax.scan(
+        substep, (motor_pos, motor_vel_init, dx), None, length=PHYSICS_STEPS_PER_ACTION
     )
 
     step_idx = step_idx + 1
@@ -242,7 +268,7 @@ def step(mx, jnt_lo, jnt_hi, tree_xy, dx, action, motor_pos, prev_action, prev_d
 
     done = upside_down | on_ground | success | stalled
 
-    return dx, obs, reward, done, motor_pos, filt_action, dist, step_idx
+    return dx, obs, reward, done, motor_pos, motor_vel, filt_action, dist, step_idx
 
 
 def _get_obs(dx, tree_xy, step_idx):

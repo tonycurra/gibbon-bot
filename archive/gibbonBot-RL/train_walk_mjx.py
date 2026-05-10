@@ -185,6 +185,11 @@ def save(train_state, steps):
     if mlflow.active_run() is not None:
         mlflow.set_tag("latest_checkpoint", path.name)
         mlflow.log_metric("checkpoint_steps", steps, step=steps)
+    if os.environ.get("AUTO_PUSH") == "1":
+        try:
+            subprocess.run(["scripts/sync.sh"], check=False, timeout=60)
+        except Exception as e:
+            print(f"[sync] failed: {e}", flush=True)
 
 
 def load_latest(train_state, force=False):
@@ -289,8 +294,14 @@ def main():
     parser.add_argument("--rollout-keep", type=int, default=50,
                         help="ring buffer: delete oldest rollouts beyond this count")
     parser.set_defaults(watch=True)
+    parser.add_argument("--label", type=str, default="",
+                        help="short note logged as MLflow tag (e.g. 'trapezoidal motors + heading reward')")
+    parser.add_argument("--auto-push", action="store_true",
+                        help="git add/commit/push runs+mlruns+train.log on every checkpoint save")
     args = parser.parse_args()
 
+    if args.auto_push:
+        os.environ["AUTO_PUSH"] = "1"
     N_ENVS = args.envs or _auto_envs()
     # Save aggressively: roughly every ~50 PPO updates so a crashed run loses
     # at most ~1 minute of compute, even on H100.
@@ -301,7 +312,7 @@ def main():
     print(f"{N_ENVS} envs  |  save every {save_every:,} steps")
     print(f"Loading model...")
 
-    mx, jnt_lo, jnt_hi, tree_xy = load_model()
+    mx, jnt_lo, jnt_hi, tree_xy, motor_max_speed, motor_max_accel = load_model()
 
     rng = jax.random.PRNGKey(42)
     rng, init_rng, env_rng = jax.random.split(rng, 3)
@@ -316,11 +327,13 @@ def main():
 
     v_reset = jax.jit(jax.vmap(lambda rng: reset(mx, jnt_lo, jnt_hi, tree_xy, rng)))
     v_step  = jax.jit(jax.vmap(
-        lambda dx, a, mp, pa, pd, si: step(mx, jnt_lo, jnt_hi, tree_xy, dx, a, mp, pa, pd, si, rparams)
+        lambda dx, a, mp, mv, pa, pd, si: step(
+            mx, jnt_lo, jnt_hi, motor_max_speed, motor_max_accel, tree_xy,
+            dx, a, mp, mv, pa, pd, si, rparams)
     ))
 
     env_rngs = jax.random.split(env_rng, N_ENVS)
-    dx_batch, obs_batch, motor_pos_batch, prev_action_batch, prev_dist_batch, step_idx_batch = v_reset(env_rngs)
+    dx_batch, obs_batch, motor_pos_batch, motor_vel_batch, prev_action_batch, prev_dist_batch, step_idx_batch = v_reset(env_rngs)
     step_counts = jnp.zeros(N_ENVS, dtype=jnp.int32)
 
     inherited_from = (
@@ -359,6 +372,7 @@ def main():
         "resume": resume_status,
         "jax_backend": jax.default_backend(),
         "start_steps": str(start_steps),
+        "label": args.label or "(unlabeled)",
     })
 
     total_steps  = start_steps
@@ -411,8 +425,8 @@ def main():
             buf_val.append(values)
 
             (dx_batch, obs_batch, rewards, dones,
-             motor_pos_batch, prev_action_batch, prev_dist_batch, step_idx_batch) = v_step(
-                dx_batch, actions, motor_pos_batch, prev_action_batch, prev_dist_batch, step_idx_batch
+             motor_pos_batch, motor_vel_batch, prev_action_batch, prev_dist_batch, step_idx_batch) = v_step(
+                dx_batch, actions, motor_pos_batch, motor_vel_batch, prev_action_batch, prev_dist_batch, step_idx_batch
             )
             step_counts = step_counts + 1
             done_mask = dones | (step_counts >= MAX_STEPS)
@@ -420,13 +434,14 @@ def main():
             if jnp.any(done_mask):
                 rng, reset_rng = jax.random.split(rng)
                 reset_rngs = jax.random.split(reset_rng, N_ENVS)
-                new_dx, new_obs, new_mp, new_pa, new_pd, new_si = v_reset(reset_rngs)
+                new_dx, new_obs, new_mp, new_mv, new_pa, new_pd, new_si = v_reset(reset_rngs)
                 dx_batch = jax.tree.map(
                     lambda n, o: jnp.where(done_mask.reshape(done_mask.shape + (1,) * (n.ndim - 1)), n, o) if n.ndim > 0 else n,
                     new_dx, dx_batch,
                 )
                 obs_batch         = jnp.where(done_mask[:, None], new_obs, obs_batch)
                 motor_pos_batch   = jnp.where(done_mask[:, None], new_mp, motor_pos_batch)
+                motor_vel_batch   = jnp.where(done_mask[:, None], new_mv, motor_vel_batch)
                 prev_action_batch = jnp.where(done_mask[:, None], new_pa, prev_action_batch)
                 prev_dist_batch   = jnp.where(done_mask, new_pd, prev_dist_batch)
                 step_idx_batch    = jnp.where(done_mask, new_si, step_idx_batch)

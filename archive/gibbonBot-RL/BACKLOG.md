@@ -4,7 +4,17 @@ Things proposed in conversation that weren't implemented inline. Priority is my 
 
 ## P1 — high value, low cost
 
+- **Auto-push training data to Codeberg.** Add a `scripts/sync.sh` that does `git add runs mlruns train.log && git commit -m "auto: $(date)" && git push`. Hook into the trainer's SIGTERM save path and/or a 30-min cron. Cost: ~15 lines.
 - **Dev pipeline audit.** Walk through `scripts/`, `utils/eval.py`, `utils/autopilot.py`, `keepers/` promotion, MLflow tracking, lineage.json — write up gaps and a recommended end-to-end flow (idea → param tweak → train → eval → promote → view). Cost: ~30 min reading + a doc.
+
+## P2 — durability / off-machine archive
+
+- **Cloud object store for runs/ archive (EU).** Hetzner Object Storage (~€5/mo/TB) or Backblaze B2 EU. Run `scripts/archive_runs.sh` on a schedule to push tarballs. Only worth doing once total artifact size approaches 1GB or you're worried about Codeberg outages. Currently 96MB → years of free-tier coverage.
+- **Postgres-backed MLflow.** Only needed if multiple machines (laptop + remote H100) log to the same MLflow concurrently. With sqlite + git-push workflow you don't need this.
+
+## P2 — curriculum / training strategy
+
+- **Per-limb curriculum.** Train with one limb actuated at a time (others frozen at neutral), let the policy learn isolated arm/leg dynamics, then unfreeze and combine. Requires an actuator-mask hook in `walk_env_mjx.py` that zeros `ctrl[mask]` and a curriculum schedule in `train_walk_mjx.py`. User asked for this 2026-05-10; deferred because trapezoidal-motor + reward changes were higher-leverage first.
 
 ## P2 — bigger lifts, do if motivation/PPO progress demands
 
