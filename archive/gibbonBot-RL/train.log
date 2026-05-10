@@ -19,3 +19,5 @@ Training — 100,000,000 total steps.
 [save] mjx_000000163840.npz
 [sync] pushed to origin: auto: training data 2026-05-10T12:58:15Z
 [save] mjx_000000196608.npz
+[sync] pushed to origin: auto: training data 2026-05-10T12:58:44Z
+[save] mjx_000000229376.npz
