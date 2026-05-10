@@ -333,7 +333,7 @@ def main():
         pathlib.Path("envs/walk_env_mjx.py"),
     )
 
-    mlflow.set_tracking_uri("file:./mlruns")
+    mlflow.set_tracking_uri("sqlite:///mlflow.db")
     mlflow.set_experiment("ape_walk_mjx")
     mlflow.start_run(run_name=time.strftime("%Y%m%d-%H%M%S"))
     p_params = {k: getattr(P, k) for k in dir(P) if k.isupper() and not k.startswith("_")}

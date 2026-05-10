@@ -67,6 +67,7 @@ def read_params():
         float(getattr(_p, "ACTION_SMOOTH_ALPHA", 1.0)),
         float(getattr(_p, "W_FWD_VEL", 0.0)),
         float(getattr(_p, "W_SYMMETRY", 0.0)),
+        float(getattr(_p, "W_HEADING", 0.0)),
     )
 
 
@@ -140,7 +141,8 @@ def step(mx, jnt_lo, jnt_hi, tree_xy, dx, action, motor_pos, prev_action, prev_d
     (target_z, target_tol, w_height, w_upright,
      w_progress, w_proximity_tree, success_dist, w_success,
      ground_clearance, w_ground, flip_penalty, motor_max_speed,
-     w_smooth, w_jvel, w_energy, w_alive, action_alpha, w_fwd_vel, w_symmetry) = rparams
+     w_smooth, w_jvel, w_energy, w_alive, action_alpha, w_fwd_vel, w_symmetry,
+     w_heading) = rparams
 
     filt_action = action_alpha * action + (1.0 - action_alpha) * prev_action
     substep_speed = motor_max_speed / PHYSICS_STEPS_PER_ACTION
@@ -149,7 +151,10 @@ def step(mx, jnt_lo, jnt_hi, tree_xy, dx, action, motor_pos, prev_action, prev_d
         mpos, d = carry
         delta = jnp.clip(filt_action - mpos, -substep_speed, substep_speed)
         mpos  = mpos + delta
-        ctrl  = 0.5 * (mpos + 1.0) * (jnt_hi - jnt_lo) + jnt_lo
+        # Re-centered mapping: action=0 → joint=0 (extended/neutral),
+        # action=+1 → jnt_hi, action=-1 → jnt_lo. Asymmetric ranges no longer
+        # bias the rest pose toward "folded".
+        ctrl  = mpos * jnp.where(mpos >= 0, jnt_hi, -jnt_lo)
         d = d.replace(ctrl=ctrl)
         d = mjx.step(mx, d)
         return (mpos, d), None
@@ -176,6 +181,15 @@ def step(mx, jnt_lo, jnt_hi, tree_xy, dx, action, motor_pos, prev_action, prev_d
     to_tree_unit = to_tree_xy / to_tree_norm
     fwd_vel = jnp.dot(dx.qvel[0:2], to_tree_unit)           # m/s toward tree
     fwd_vel_reward = w_fwd_vel * jnp.maximum(fwd_vel, 0.0)  # only positive (no penalty for retreat)
+
+    # Heading reward: torso forward axis (body +x rotated by torso quat)
+    # projected onto xy and aligned with to_tree_unit. Stops squirm/turn-in-place.
+    qw, qx, qy, qz = dx.qpos[3], dx.qpos[4], dx.qpos[5], dx.qpos[6]
+    fwd_x = 1.0 - 2.0 * (qy * qy + qz * qz)
+    fwd_y = 2.0 * (qx * qy + qw * qz)
+    fwd_norm = jnp.maximum(jnp.sqrt(fwd_x * fwd_x + fwd_y * fwd_y), 1e-3)
+    heading_dot = (fwd_x * to_tree_unit[0] + fwd_y * to_tree_unit[1]) / fwd_norm
+    heading_reward = w_heading * heading_dot   # +w when facing tree, -w when facing away
 
     # Height shaping — torso must stay near target_z (off the ground).
     height_err    = (torso_z - target_z) / target_tol
@@ -220,7 +234,7 @@ def step(mx, jnt_lo, jnt_hi, tree_xy, dx, action, motor_pos, prev_action, prev_d
     success_bonus = jnp.where(success, w_success, 0.0)
 
     reward = (height_reward + upright_reward + progress_reward + prox_tree_reward
-              + fwd_vel_reward
+              + fwd_vel_reward + heading_reward
               + alive_bonus + success_bonus
               - ground_penalty - smooth_penalty - jvel_penalty - energy_penalty
               - symmetry_penalty

@@ -22,8 +22,9 @@ import mujoco.viewer
 # ── config ────────────────────────────────────────────────────────────────────
 POLICY        = "latest"   # "zero" | "random" | "latest" | "demo"
 SCENE         = pathlib.Path("data/scene.xml")
-PHYSICS_STEPS = 32         # physics sub-steps per action (matches training)
-MOTOR_SPEED   = 0.10       # max joint travel per action (matches training)
+PHYSICS_STEPS = 16         # physics sub-steps per action (matches PHYSICS_STEPS_PER_ACTION in params)
+MOTOR_SPEED   = 0.20       # max joint travel per action — slower; full range reachable over a few steps
+ACTION_ALPHA  = 0.4        # EMA on policy output: 1.0=raw, lower=smoother (kills back-and-forth shake)
 # ─────────────────────────────────────────────────────────────────────────────
 
 _parser = argparse.ArgumentParser()
@@ -220,9 +221,28 @@ def main():
 
             do_reset()
             motor_pos     = np.zeros(ACT_DIM, dtype=np.float32)
+            filt_action   = np.zeros(ACT_DIM, dtype=np.float32)
             substep_speed = MOTOR_SPEED / PHYSICS_STEPS
             step_i        = 0
             MAX_EP        = 2000
+
+            # Settle on the ground before the policy takes over.
+            settle_seconds = 2.0
+            settle_ctrl = motor_pos * np.where(motor_pos >= 0, jnt_hi, -jnt_lo)
+            settle_steps = int(settle_seconds / DT)
+            t_settle = time.time()
+            for k in range(settle_steps):
+                data.ctrl[:] = settle_ctrl
+                mujoco.mj_step(model, data)
+                if k % PHYSICS_STEPS == 0:
+                    if not viewer.is_running():
+                        break
+                    viewer.sync()
+                    lag = (k + PHYSICS_STEPS) * DT - (time.time() - t_settle)
+                    if lag > 0:
+                        time.sleep(lag)
+            if not viewer.is_running():
+                break
 
             # ── scripted demo: mocap-style approach + climb ──
             if POLICY == "demo":
@@ -352,14 +372,19 @@ def main():
                 else:
                     action = rng.uniform(-1, 1, size=ACT_DIM).astype(np.float32)
 
+                # EMA lowpass on policy output — kills micro-oscillations.
+                filt_action = ACTION_ALPHA * action + (1.0 - ACTION_ALPHA) * filt_action
+
                 # One sync per action step, then sleep the remainder of the
                 # action's wall-clock budget so playback tracks real time even
                 # when mj_step is heavy (e.g. branched tree contacts).
                 t0 = time.time()
                 for _ in range(PHYSICS_STEPS):
-                    delta = np.clip(action - motor_pos, -substep_speed, substep_speed)
+                    delta = np.clip(filt_action - motor_pos, -substep_speed, substep_speed)
                     motor_pos += delta
-                    data.ctrl[:] = 0.5 * (motor_pos + 1.0) * (jnt_hi - jnt_lo) + jnt_lo
+                    # Re-centered mapping: action=0 → joint=0 (extended/neutral),
+                    # action=±1 → jnt_hi/jnt_lo. Must match walk_env_mjx.step.
+                    data.ctrl[:] = motor_pos * np.where(motor_pos >= 0, jnt_hi, -jnt_lo)
                     mujoco.mj_step(model, data)
                 viewer.sync()
                 lag = DT * PHYSICS_STEPS - (time.time() - t0)
