@@ -18,3 +18,5 @@ Training — 100,000,000 total steps.
 [sync] pushed to origin: auto: training data 2026-05-10T13:33:26Z
        5     1,392,640       161  rew=3.93  d=2.99  v=0.16m/s  z=0.20  upr=0.91  succ=0.0%  gait=+0.02  stride=0.20s
 [save] mjx_000001409024.npz
+[sync] pushed to origin: auto: training data 2026-05-10T13:36:59Z
+[save] mjx_000001441792.npz
