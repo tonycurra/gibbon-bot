@@ -2,13 +2,8 @@ JAX devices: [CudaDevice(id=0)]
 512 envs  |  save every 25,600 steps
 Loading model...
 [walk_env] tree at xy=[3.0, 0.0]
-[lineage] recorded run #38 — inherited from: scratch
+[lineage] recorded run #39 — inherited from: scratch
 Training — 100,000,000 total steps.
  updates         steps       sps    mean_rew   mean_dist
 ------------------------------------------------------------
 [save] mjx_000000032768.npz
-remote: Create a new pull request for 'main':        
-remote:   https://codeberg.org/tony_olivabot/gibbonBot-RL/compare/sim/mujoco-setup...main        
-remote: 
-[sync] pushed: auto: training data 2026-05-10T11:37:12Z
-[save] mjx_000000065536.npz
