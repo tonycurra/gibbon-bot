@@ -2,10 +2,9 @@ JAX devices: [CudaDevice(id=0)]
 512 envs  |  save every 25,600 steps
 Loading model...
 [walk_env] tree at xy=[3.0, 0.0]
-[lineage] recorded run #30 — inherited from: scratch
-/home/tony/gibbonBot-RL/.venv/lib/python3.12/site-packages/mlflow/tracking/_tracking_service/utils.py:184: FutureWarning: The filesystem tracking backend (e.g., './mlruns') is deprecated as of February 2026. Consider transitioning to a database backend (e.g., 'sqlite:///mlflow.db') to take advantage of the latest MLflow features. See https://mlflow.org/docs/latest/self-hosting/migrate-from-file-store for migration guidance.
-  return FileStore(store_uri, store_uri)
-[watch] spawning viewer: /home/tony/gibbonBot-RL/.venv/bin/python view.py --env walk --since 1778408059.6751497
+[lineage] recorded run #32 — inherited from: scratch
+[watch] spawning viewer: /home/tony/gibbonBot-RL/.venv/bin/python view.py --env walk --since 1778408727.22759
 Training — 100,000,000 total steps.
  updates         steps       sps    mean_rew   mean_dist
 ------------------------------------------------------------
+[save] mjx_000000032768.npz
