@@ -127,7 +127,9 @@ def load_model():
     half_range = jnp.maximum(jnp.abs(jnt_hi - rest_pose), jnp.abs(rest_pose - jnt_lo))
     motor_max_speed_per_action = speed_frac * motor_max_radps * action_dt / half_range
     motor_max_accel_per_action = motor_max_speed_per_action * accel_ratio * action_dt
-    return mx, jnt_lo, jnt_hi, tree_xy_j, motor_max_speed_per_action, motor_max_accel_per_action, rest_pose
+    # Return order: (mx, jnt_lo, jnt_hi, motor_max_speed, motor_max_accel, rest_pose, target_xy)
+    # — target last, matching the multi-task contract used by train_mjx.py.
+    return mx, jnt_lo, jnt_hi, motor_max_speed_per_action, motor_max_accel_per_action, rest_pose, tree_xy_j
 
 
 def reset(mx, jnt_lo, jnt_hi, tree_xy, rng):
@@ -137,7 +139,7 @@ def reset(mx, jnt_lo, jnt_hi, tree_xy, rng):
     # Spawn near origin facing roughly toward the tree. Yaw noise lets the
     # policy learn to orient — but bias toward the right direction.
     yaw_target = jnp.arctan2(tree_xy[1], tree_xy[0])
-    yaw_noise  = jax.random.uniform(k1, (), minval=-jnp.pi, maxval=jnp.pi)  # full 360° randomization
+    yaw_noise  = jax.random.uniform(k1, (), minval=-jnp.pi/2, maxval=jnp.pi/2)  # ±90° — robot still has to orient but tree is in front hemisphere
     yaw        = yaw_target + yaw_noise
     xy_noise   = jax.random.uniform(k2, (2,), minval=-0.3, maxval=0.3)        # bigger spawn jitter
 
@@ -316,6 +318,15 @@ def step(mx, jnt_lo, jnt_hi, motor_max_speed, motor_max_accel, rest_pose, tree_x
     done = upside_down | on_ground | success | stalled
 
     return dx, obs, reward, done, motor_pos, motor_vel, filt_action, dist, step_idx
+
+
+def is_keeper(metrics):
+    """Promote a checkpoint when robot got within 1.5m of tree or 5%+ success."""
+    min_dist = metrics.get("min_dist", 999.0)
+    success_frac = metrics.get("success_frac", 0.0)
+    if min_dist < 1.5 or success_frac > 0.05:
+        return True, f"min_d{min_dist:.2f}_succ{success_frac:.2f}"
+    return False, ""
 
 
 def _get_obs(dx, tree_xy, step_idx):

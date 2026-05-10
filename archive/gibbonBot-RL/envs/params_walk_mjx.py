@@ -36,14 +36,14 @@ W_ALIVE = 0.2
 FLIP_PENALTY = 60.0       # bumped — stability matters now that gait baseline exists
 
 # ─── Smoothness ──────────────────────────────────────────────────────────────
-W_SMOOTH = 0.40     # penalize jerky commands — encourages stable gait
-W_JVEL = 0.15       # bumped 3x — strongly damp joint thrashing without progress
+W_SMOOTH = 0.30     # penalize jerky commands — encourages stable gait
+W_JVEL = 0.05       # mild joint thrashing penalty (0.15 was crushing exploration)
 W_SYMMETRY = 0.0    # off until policy walks. Then re-enable for polish.
-W_ENERGY = 0.10     # bumped 20x — strongly penalize torque without forward progress (must "earn" the energy spent)
+W_ENERGY = 0.02     # dialed back from 0.10 — enough to prefer cheaper actions without preventing exploration
 
 # ─── PPO ─────────────────────────────────────────────────────────────────────
 LEARNING_RATE = 0.00037
-ENT_COEF = 0.20           # high entropy — policy explores varied actions per trial (paired with strong energy penalty: thrashing only "pays" if it produces progress)
+ENT_COEF = 0.05           # low entropy — policy commits to its best strategy instead of randomly probing (was 0.20, too noisy at this stage)
 CLIP_EPS = 0.15
 
 # ─── Physics (requires restart) ──────────────────────────────────────────────

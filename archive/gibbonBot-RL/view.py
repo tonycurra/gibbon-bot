@@ -31,16 +31,18 @@ PHYSICS_STEPS = 16         # physics sub-steps per action (matches PHYSICS_STEPS
 _parser = argparse.ArgumentParser()
 _parser.add_argument("--since", type=float, default=0.0,
                      help="ignore checkpoints saved before this unix timestamp")
-_parser.add_argument("--env", choices=["stand", "walk"], default="stand",
-                     help="which env was trained (selects runs dir + obs format)")
+_parser.add_argument("--env", default="walk",
+                     help="which task was trained (walk, stand, walk_forward, turn_left, turn_right). "
+                          "Selects runs/ape_<env>_mjx/ as the checkpoint dir.")
 _parser.add_argument("--best", action="store_true",
                      help="load the best-mean_rew checkpoint (per mlflow) instead of newest, no hot-swap")
 _args = _parser.parse_args()
 SINCE = _args.since
 ENV   = _args.env
 BEST  = _args.best
-RUNS  = pathlib.Path("runs/ape_walk_mjx" if ENV == "walk" else "runs/ape_stand_mjx")
-OBS_DIM = 88 if ENV == "walk" else 83
+RUNS  = pathlib.Path(f"runs/ape_{ENV}_mjx")
+# All current tasks share the 88-dim obs contract (envs/_shared_obs.py).
+OBS_DIM = 88
 GAIT_PERIOD_STEPS = 25
 
 

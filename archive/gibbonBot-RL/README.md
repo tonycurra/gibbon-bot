@@ -6,13 +6,22 @@ Currently learning to walk to a tree on flat ground.
 ## Quickstart
 
 ```bash
-# train locally on GPU (everyday flow)
-python train_walk_mjx.py --no-resume \
-    --auto-push \
-    --label "what changed this run"
-# --auto-push: scripts/sync.sh fires after every checkpoint save → commits
-#              runs/, mlruns/, mlflow.db, train.log and pushes to Codeberg.
-# --label    : free-form note attached to the MLflow run as a tag.
+# train a multi-skill curriculum (everyday flow)
+python scripts/curriculum.py
+# Trains stand → walk_forward → turn_left → turn_right in sequence,
+# each task transferring policy weights from the previous. See docs/CURRICULUM.md.
+
+# train one task manually
+python train_mjx.py --task stand --no-resume --auto-push --label "what changed"
+python train_mjx.py --task walk --resume \
+    --resume-from runs/ape_stand_mjx/keepers/auto_*.npz   # cross-task transfer
+# --task        : walk, stand, walk_forward, turn_left, turn_right
+# --auto-push   : scripts/sync.sh fires after every checkpoint save → pushes to Codeberg
+# --label       : free-form note attached to the MLflow run as a tag
+# --resume-from : explicit checkpoint, even from a different task
+
+# legacy entry point (back-compat shim that calls train_mjx.py --task walk)
+python train_walk_mjx.py --auto-push --label "..."
 
 # train remote
 scripts/remote.sh start         # H100, walk task, autopilot, watchdog, all in one
@@ -125,6 +134,7 @@ reproducibility unit.
 - **[LESSONS.md](LESSONS.md)** — cumulative training insights (prose; numbers in MLflow)
 - **[docs/ROBOT_VS_APE.md](docs/ROBOT_VS_APE.md)** — joint-by-joint mapping from robot DOF to ape anatomy + what's missing
 - **[docs/BRAIN_CORE.md](docs/BRAIN_CORE.md)** — long-term vision for instinct + memory architecture (skill library, recurrent policy, world model)
+- **[docs/CURRICULUM.md](docs/CURRICULUM.md)** — multi-skill curriculum: stand → walk_forward → turn_left → turn_right
 
 ## Tooling cheat sheet
 
