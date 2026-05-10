@@ -4,6 +4,7 @@ Things proposed in conversation that weren't implemented inline. Priority is my 
 
 ## P1 — high value, low cost
 
+- **Brain-core: skill library + meta-policy.** First concrete step in `docs/BRAIN_CORE.md`. Add `envs/climb_env_mjx.py`, train a climb policy, hand-rolled meta-policy that switches walk → climb based on distance to tree. Validates the multi-skill architecture without committing to hierarchical RL. Cost: ~1 week.
 - **Auto-push training data to Codeberg.** Add a `scripts/sync.sh` that does `git add runs mlruns train.log && git commit -m "auto: $(date)" && git push`. Hook into the trainer's SIGTERM save path and/or a 30-min cron. Cost: ~15 lines.
 - **Dev pipeline audit.** Walk through `scripts/`, `utils/eval.py`, `utils/autopilot.py`, `keepers/` promotion, MLflow tracking, lineage.json — write up gaps and a recommended end-to-end flow (idea → param tweak → train → eval → promote → view). Cost: ~30 min reading + a doc.
 

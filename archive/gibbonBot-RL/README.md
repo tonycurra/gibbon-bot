@@ -33,6 +33,10 @@ mlflow ui --backend-store-uri sqlite:///mlflow.db   # http://localhost:5000
 # attach a free-form note to the latest MLflow run
 python scripts/note.py "rew jumped at update 200 — heading reward dominates"
 
+# compare metrics across recent training runs side-by-side
+python scripts/compare_runs.py --top 10
+python scripts/compare_runs.py --label CPG --plot cpg_runs.png
+
 # inspect the policy via offscreen renderer (works without GUI)
 python scripts/snapshot.py --frames 6 --gap 1.0 --policy latest
 # writes 5 views (side_L, side_R, front, back, top) per frame to _snapshots/,
@@ -115,6 +119,7 @@ reproducibility unit.
 - **[BACKLOG.md](BACKLOG.md)** — prioritized list of unimplemented ideas
 - **[LESSONS.md](LESSONS.md)** — cumulative training insights (prose; numbers in MLflow)
 - **[docs/ROBOT_VS_APE.md](docs/ROBOT_VS_APE.md)** — joint-by-joint mapping from robot DOF to ape anatomy + what's missing
+- **[docs/BRAIN_CORE.md](docs/BRAIN_CORE.md)** — long-term vision for instinct + memory architecture (skill library, recurrent policy, world model)
 
 ## Motor model
 
