@@ -2,20 +2,9 @@ JAX devices: [CudaDevice(id=0)]
 512 envs  |  save every 25,600 steps
 Loading model...
 [walk_env] tree at xy=[3.0, 0.0]
-[lineage] recorded run #34 — inherited from: scratch
-[watch] spawning viewer: /home/tony/gibbonBot-RL/.venv/bin/python view.py --env walk --since 1778410241.6931012
+[lineage] recorded run #35 — inherited from: scratch
+[watch] spawning viewer: /home/tony/gibbonBot-RL/.venv/bin/python view.py --env walk --since 1778410568.4948766
 Training — 100,000,000 total steps.
  updates         steps       sps    mean_rew   mean_dist
 ------------------------------------------------------------
 [save] mjx_000000032768.npz
-remote: Create a new pull request for 'main':        
-remote:   https://codeberg.org/tony_olivabot/gibbonBot-RL/compare/sim/mujoco-setup...main        
-remote: 
-[sync] pushed: auto: training data 2026-05-10T10:51:55Z
-[save] mjx_000000065536.npz
-remote: Create a new pull request for 'main':        
-remote:   https://codeberg.org/tony_olivabot/gibbonBot-RL/compare/sim/mujoco-setup...main        
-remote: 
-[sync] pushed: auto: training data 2026-05-10T10:52:29Z
-       5        81,920       654  rew=8.21  d=3.00  v=0.08m/s  z=0.22  upr=0.99  succ=0.0%  gait=-0.39  stride=0.34s
-[save] mjx_000000098304.npz
