@@ -9,6 +9,7 @@ Things proposed in conversation that weren't implemented inline. Priority is my 
 
 ## P2 — durability / off-machine archive
 
+- **Body-lift bootstrap reward.** CPG-only zero-policy motion doesn't translate the body forward; legs lift but stance phase doesn't generate friction because torso is on the ground. Add a strong reward for `torso_z > 0.20` so PPO discovers body lift earlier. Should accelerate locomotion emergence.
 - **Cloud object store for runs/ archive (EU).** Hetzner Object Storage (~€5/mo/TB) or Backblaze B2 EU. Run `scripts/archive_runs.sh` on a schedule to push tarballs. Only worth doing once total artifact size approaches 1GB or you're worried about Codeberg outages. Currently 96MB → years of free-tier coverage.
 - **Postgres-backed MLflow.** Only needed if multiple machines (laptop + remote H100) log to the same MLflow concurrently. With sqlite + git-push workflow you don't need this.
 

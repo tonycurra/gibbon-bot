@@ -23,9 +23,9 @@ import mujoco.viewer
 POLICY        = "latest"   # "zero" | "random" | "latest" | "demo"
 SCENE         = pathlib.Path("data/scene.xml")
 PHYSICS_STEPS = 16         # physics sub-steps per action (matches PHYSICS_STEPS_PER_ACTION in params)
-MOTOR_SPEED   = 0.10       # slower than baseline; full range in ~10 action steps ≈ 0.32s
-MOTOR_ACCEL   = 0.025      # smooth ramps but not so gentle that random policy is invisible
-ACTION_ALPHA  = 0.45       # moderate lowpass
+# MOTOR speed/accel and ACTION_ALPHA are read per-episode from envs/params_walk_mjx.py.
+# Edit the file → next episode reset (~few seconds) picks up the new values.
+# No need to restart the viewer or the trainer for motor-feel tweaks.
 # ─────────────────────────────────────────────────────────────────────────────
 
 _parser = argparse.ArgumentParser()
@@ -66,8 +66,11 @@ def latest_checkpoint():
                     return path
         except Exception as e:
             print(f"[view] --best failed ({e}), falling back to latest")
-    ckpts = [c for c in sorted(RUNS.glob("mjx_*.npz")) if c.stat().st_mtime >= SINCE]
-    # Walk backwards; return newest *compatible* checkpoint
+    # Sort by MTIME (write time), not filename. Otherwise old runs with higher
+    # step numbers shadow new fresh runs starting from step 0.
+    ckpts = [c for c in sorted(RUNS.glob("mjx_*.npz"), key=lambda p: p.stat().st_mtime)
+             if c.stat().st_mtime >= SINCE]
+    # Walk backwards (newest first); return newest *compatible* checkpoint
     for c in reversed(ckpts):
         if _is_compatible(c):
             return c
@@ -109,7 +112,10 @@ def load_predict(path, cached=[None]):
     net, init_params, jax, jnp = cached[0]
 
     data = np.load(str(path))
-    flat = [jnp.asarray(data[k]) for k in data.files]
+    # data.files is sorted ALPHABETICALLY (arr_0, arr_1, arr_10, arr_2, ...) — broken
+    # for nets with >10 params. Sort numerically by suffix.
+    keys = sorted(data.files, key=lambda k: int(k.split("_")[-1]))
+    flat = [jnp.asarray(data[k]) for k in keys]
     init_flat, treedef = jax.tree_util.tree_flatten(init_params)
     # Shape-check: skip incompatible checkpoints (e.g. older OBS_DIM).
     if any(a.shape != b.shape for a, b in zip(flat, init_flat)):
@@ -141,17 +147,50 @@ def main():
     jnt_lo  = np.array([model.jnt_range[i][0] for i in range(1, 1 + ACT_DIM)])
     jnt_hi  = np.array([model.jnt_range[i][1] for i in range(1, 1 + ACT_DIM)])
 
-    # Per-actuator motor speed / accel limits derived from real motor specs
-    # (see data/motors.md). Joint order per limb: yaw, pitch, elbow/knee, roll,
-    # wrist/ankle, gripper/foot.
+    # Per-actuator motor speed / accel limits — re-read each episode from
+    # envs/params_walk_mjx.py so motor-feel tweaks land within seconds.
     PER_LIMB_MAX_RAD_PER_SEC = [4.71, 4.71, 4.71, 4.71, 4.71, 11.10]
     motor_max_radps = np.array(PER_LIMB_MAX_RAD_PER_SEC * 4, dtype=np.float32)
-    SPEED_FRAC = 1.0
-    ACCEL_RATIO = 5.0
     action_dt = DT * PHYSICS_STEPS
-    half_range = np.maximum(np.abs(jnt_hi), np.abs(jnt_lo))
-    motor_max_speed_arr = SPEED_FRAC * motor_max_radps * action_dt / half_range
-    motor_max_accel_arr = motor_max_speed_arr * ACCEL_RATIO * action_dt
+    # Standing rest pose (action=0 → these joint angles, in radians).
+    # Per limb: yaw, pitch, elbow/knee, roll, wrist/ankle, gripper/foot.
+    DEG = np.pi / 180.0
+    rest_pose = np.tile(np.array([0.0, 0.0, 30.0*DEG, 0.0, 0.0, 0.0]), 4).astype(np.float32)
+    half_range = np.maximum(np.abs(jnt_hi - rest_pose), np.abs(rest_pose - jnt_lo))
+
+    _params_mod = [None]  # cached module + last mtime
+    _params_mtime = [0.0]
+    _params_path = pathlib.Path(__file__).parent / "envs" / "params_walk_mjx.py"
+
+    def reload_motor_params():
+        """Returns (motor_max_speed_arr, motor_max_accel_arr, action_alpha).
+        Re-imports envs.params_walk_mjx if its file has changed on disk."""
+        try:
+            import envs.params_walk_mjx as _p
+            mtime = _params_path.stat().st_mtime
+            if _params_mod[0] is None or mtime != _params_mtime[0]:
+                import importlib
+                importlib.reload(_p)
+                _params_mod[0] = _p
+                _params_mtime[0] = mtime
+                speed_frac = float(getattr(_p, "MOTOR_SPEED_FRAC", 1.0))
+                accel_ratio = float(getattr(_p, "MOTOR_ACCEL_RATIO", 5.0))
+                alpha = float(getattr(_p, "ACTION_SMOOTH_ALPHA", 1.0))
+                print(f"[view] reloaded motor params: SPEED_FRAC={speed_frac} "
+                      f"ACCEL_RATIO={accel_ratio} ACTION_ALPHA={alpha}", flush=True)
+            else:
+                _p = _params_mod[0]
+                speed_frac = float(getattr(_p, "MOTOR_SPEED_FRAC", 1.0))
+                accel_ratio = float(getattr(_p, "MOTOR_ACCEL_RATIO", 5.0))
+                alpha = float(getattr(_p, "ACTION_SMOOTH_ALPHA", 1.0))
+        except Exception as e:
+            print(f"[view] params reload failed, using defaults: {e}", flush=True)
+            speed_frac, accel_ratio, alpha = 1.0, 5.0, 0.45
+        speed_arr = speed_frac * motor_max_radps * action_dt / half_range
+        accel_arr = speed_arr * accel_ratio * action_dt
+        return speed_arr, accel_arr, alpha
+
+    motor_max_speed_arr, motor_max_accel_arr, ACTION_ALPHA = reload_motor_params()
 
     tree_xy = None
     tree_top_z = 2.5
@@ -236,15 +275,18 @@ def main():
             motor_pos     = np.zeros(ACT_DIM, dtype=np.float32)
             motor_vel     = np.zeros(ACT_DIM, dtype=np.float32)
             filt_action   = np.zeros(ACT_DIM, dtype=np.float32)
-            # Per-actuator velocity / accel limits (from motor specs).
+            # Hot-reload motor params from envs/params_walk_mjx.py — picks up edits
+            # within ~one episode (no viewer/trainer restart needed).
+            motor_max_speed_arr, motor_max_accel_arr, ACTION_ALPHA = reload_motor_params()
             substep_speed = motor_max_speed_arr / PHYSICS_STEPS
             substep_accel = motor_max_accel_arr / PHYSICS_STEPS
             step_i        = 0
-            MAX_EP        = 2000
+            MAX_EP        = 250    # ~8s per episode — enough to see motion, short enough to keep cycling
 
             # Settle on the ground before the policy takes over.
+            # Drive ctrl to rest_pose so the robot stands rather than starfishes.
             settle_seconds = 2.0
-            settle_ctrl = motor_pos * np.where(motor_pos >= 0, jnt_hi, -jnt_lo)
+            settle_ctrl = rest_pose.copy()
             settle_steps = int(settle_seconds / DT)
             t_settle = time.time()
             for k in range(settle_steps):
@@ -391,19 +433,46 @@ def main():
                 # EMA lowpass on policy output — kills micro-oscillations.
                 filt_action = ACTION_ALPHA * action + (1.0 - ACTION_ALPHA) * filt_action
 
+                # CPG calibrated trot (mirrors envs/walk_env_mjx.py).
+                try:
+                    import envs.params_walk_mjx as _p_view
+                    w_cpg_pitch = float(getattr(_p_view, "W_CPG_PITCH", 0.0))
+                    w_cpg_elbow = float(getattr(_p_view, "W_CPG_ELBOW", 0.0))
+                    GAIT_PERIOD = 40.0
+                except Exception:
+                    w_cpg_pitch = w_cpg_elbow = 0.0
+                    GAIT_PERIOD = 40.0
+                LIMB_PHASE = np.array([0.0, np.pi, 0.0, np.pi])  # pace: left in phase, right in phase
+                phase = 2.0 * np.pi * step_i / GAIT_PERIOD + LIMB_PHASE
+                sin_p = np.sin(phase)
+                cpg = np.zeros(ACT_DIM, dtype=np.float32)
+                cpg[0]  = -w_cpg_pitch * sin_p[0]                       # FL_yaw
+                cpg[1]  = -w_cpg_elbow * max(sin_p[0], 0.0)             # FL_pitch (lift)
+                cpg[6]  = +w_cpg_pitch * sin_p[1]                       # FR_yaw
+                cpg[7]  = -w_cpg_elbow * max(sin_p[1], 0.0)             # FR_pitch (lift)
+                cpg[13] = +w_cpg_pitch * sin_p[2]                       # BL_pitch
+                cpg[14] = +w_cpg_elbow * max(sin_p[2], 0.0)             # BL_knee (lift)
+                cpg[19] = +w_cpg_pitch * sin_p[3]                       # BR_pitch
+                cpg[20] = +w_cpg_elbow * max(sin_p[3], 0.0)             # BR_knee (lift)
+                filt_action_with_cpg = filt_action + cpg
+
                 # One sync per action step, then sleep the remainder of the
                 # action's wall-clock budget so playback tracks real time even
                 # when mj_step is heavy (e.g. branched tree contacts).
                 t0 = time.time()
                 for _ in range(PHYSICS_STEPS):
-                    err = filt_action - motor_pos
+                    err = filt_action_with_cpg - motor_pos
                     desired_vel = np.clip(err, -substep_speed, substep_speed)
                     motor_vel = np.clip(desired_vel,
                                         motor_vel - substep_accel,
                                         motor_vel + substep_accel)
                     motor_vel = np.clip(motor_vel, -substep_speed, substep_speed)
                     motor_pos += motor_vel
-                    data.ctrl[:] = motor_pos * np.where(motor_pos >= 0, jnt_hi, -jnt_lo)
+                    data.ctrl[:] = np.where(
+                        motor_pos >= 0,
+                        rest_pose + motor_pos * (jnt_hi - rest_pose),
+                        rest_pose + motor_pos * (rest_pose - jnt_lo),
+                    )
                     mujoco.mj_step(model, data)
                 viewer.sync()
                 lag = DT * PHYSICS_STEPS - (time.time() - t0)

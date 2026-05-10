@@ -5,7 +5,13 @@ MOTOR_MAX_SPEED = 0.10      # legacy — unused; per-joint limits derived from d
 MOTOR_MAX_ACCEL = 0.025     # legacy — unused
 MOTOR_SPEED_FRAC = 1.0      # global scale on real motor max speed (1.0=realistic; <1=slower than reality)
 MOTOR_ACCEL_RATIO = 5.0     # max angular accel = SPEED × this/sec (reach max speed in 1/RATIO seconds)
-ACTION_SMOOTH_ALPHA = 0.45  # EMA on raw policy output
+ACTION_SMOOTH_ALPHA = 0.15  # heavy lowpass — kills micro-shake from policy entropy / random-init flicker
+
+# Central Pattern Generator baseline — built-in trot rhythm added to policy
+# output before motor mapping. Lets policy learn corrections to a working gait
+# instead of inventing gait from scratch. 0.0 disables.
+W_CPG_PITCH = 0.18          # propulsive sweep amplitude (pace gait is more stable than trot)
+W_CPG_ELBOW = 0.10          # foot lift during swing — moderate so it crawls, not flails
 MOTOR_KP = 8.0
 
 # ─── Goal: walk toward tree without dragging torso ───────────────────────────
@@ -27,17 +33,17 @@ W_GROUND = 25.0           # quadratic penalty for dipping below
 
 # ─── Survival ────────────────────────────────────────────────────────────────
 W_ALIVE = 0.2
-FLIP_PENALTY = 30.0       # cut — falling is fine, exploration matters more
+FLIP_PENALTY = 60.0       # bumped — stability matters now that gait baseline exists
 
 # ─── Smoothness ──────────────────────────────────────────────────────────────
-W_SMOOTH = 0.15     # gentle penalty on jerky commands (heavy values crash reward)
-W_JVEL = 0.02       # gentle damping on joint thrashing
+W_SMOOTH = 0.40     # penalize jerky commands — encourages stable gait
+W_JVEL = 0.05       # damp joint thrashing
 W_SYMMETRY = 0.0    # off until policy walks. Then re-enable for polish.
 W_ENERGY = 0.005
 
 # ─── PPO ─────────────────────────────────────────────────────────────────────
 LEARNING_RATE = 0.00037
-ENT_COEF = 0.2            # high entropy — encourages wide action exploration during learning
+ENT_COEF = 0.08           # CPG provides gait rhythm; policy can converge on stable corrections without high entropy
 CLIP_EPS = 0.15
 
 # ─── Physics (requires restart) ──────────────────────────────────────────────

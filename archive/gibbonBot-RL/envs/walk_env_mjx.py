@@ -24,14 +24,14 @@ _ROOT        = pathlib.Path(__file__).parent.parent
 SCENE        = _ROOT / "data" / "scene.xml"
 _PARAMS_FILE = pathlib.Path(__file__).parent / "params_walk_mjx.py"
 
-MAX_STEPS = 60    # ~1.9s sim time. Make-or-break: commit and reach tree, or episode ends.
+MAX_STEPS = 200   # ~6.4s sim time. Long enough to walk 3m to tree at sustainable speed.
 ACT_DIM   = 24
 # obs: torso z(1) + quat(4) + linvel(3) + angvel(3)
 #      + jpos(24) + jvel(24) + torques(24)
 #      + relative tree (dx, dy, dist) (3)
 #      + gait phase (sin, cos) (2)  ← biological: spinal CPG-style clock
 OBS_DIM   = 88
-GAIT_PERIOD_STEPS = 25  # phase cycle length in env-action-steps; ~1Hz at PHYSICS_STEPS_PER_ACTION=16, dt=0.002 → period ≈ 0.8s
+GAIT_PERIOD_STEPS = 40  # 1.28s cycle — slower trot, easier to balance than 0.8s
 
 PHYSICS_STEPS_PER_ACTION = int(_p.PHYSICS_STEPS_PER_ACTION)
 
@@ -69,6 +69,8 @@ def read_params():
         float(getattr(_p, "W_SYMMETRY", 0.0)),
         float(getattr(_p, "W_HEADING", 0.0)),
         float(getattr(_p, "MOTOR_MAX_ACCEL", 0.05)),
+        float(getattr(_p, "W_CPG_PITCH", 0.0)),
+        float(getattr(_p, "W_CPG_ELBOW", 0.0)),
     )
 
 
@@ -107,18 +109,25 @@ def load_model():
     # ST3235 / ST3215: 45 RPM = 4.71 rad/s. ST3215-HS: 106 RPM = 11.10 rad/s.
     PER_LIMB_MAX_RAD_PER_SEC = [4.71, 4.71, 4.71, 4.71, 4.71, 11.10]
     motor_max_radps = jnp.array(PER_LIMB_MAX_RAD_PER_SEC * 4, dtype=jnp.float32)
+
+    # Rest pose (action=0 → these joint angles). Designed for a stable
+    # standing posture: limbs angled down, knees/elbows slightly bent so
+    # weight is borne, not flailed sideways.
+    # Per limb: yaw, pitch, elbow/knee, roll, wrist/ankle, gripper/foot.
+    DEG = jnp.pi / 180.0
+    PER_LIMB_REST = jnp.array([0.0, 0.0, 30.0 * DEG, 0.0, 0.0, 0.0])  # only elbow/knee bent for weight-bearing
+    rest_pose = jnp.tile(PER_LIMB_REST, 4)
     speed_frac = float(getattr(_p, "MOTOR_SPEED_FRAC", 1.0))
     accel_ratio = float(getattr(_p, "MOTOR_ACCEL_RATIO", 5.0))
 
     action_dt = mj_model.opt.timestep * PHYSICS_STEPS_PER_ACTION
     # Convert real angular velocity (rad/s) → max change in normalized motor_pos per
-    # action step. The asymmetric range (e.g. elbow [-57°, +169°]) is handled by
-    # using the larger half-range as the conservative bound — keeps motion
-    # well under the real motor's no-load speed in the wider direction.
-    half_range = jnp.maximum(jnp.abs(jnt_hi), jnp.abs(jnt_lo))
+    # action step. With rest pose offset, half-range is now the larger of
+    # (jnt_hi - rest) and (rest - jnt_lo) so action=±1 still reaches a limit.
+    half_range = jnp.maximum(jnp.abs(jnt_hi - rest_pose), jnp.abs(rest_pose - jnt_lo))
     motor_max_speed_per_action = speed_frac * motor_max_radps * action_dt / half_range
     motor_max_accel_per_action = motor_max_speed_per_action * accel_ratio * action_dt
-    return mx, jnt_lo, jnt_hi, tree_xy_j, motor_max_speed_per_action, motor_max_accel_per_action
+    return mx, jnt_lo, jnt_hi, tree_xy_j, motor_max_speed_per_action, motor_max_accel_per_action, rest_pose
 
 
 def reset(mx, jnt_lo, jnt_hi, tree_xy, rng):
@@ -156,14 +165,47 @@ def reset(mx, jnt_lo, jnt_hi, tree_xy, rng):
     return dx, obs, motor_pos, motor_vel, prev_action, prev_dist, step_idx
 
 
-def step(mx, jnt_lo, jnt_hi, motor_max_speed, motor_max_accel, tree_xy, dx, action, motor_pos, motor_vel, prev_action, prev_dist, step_idx, rparams):
+def step(mx, jnt_lo, jnt_hi, motor_max_speed, motor_max_accel, rest_pose, tree_xy, dx, action, motor_pos, motor_vel, prev_action, prev_dist, step_idx, rparams):
     (target_z, target_tol, w_height, w_upright,
      w_progress, w_proximity_tree, success_dist, w_success,
      ground_clearance, w_ground, flip_penalty, _legacy_speed,
      w_smooth, w_jvel, w_energy, w_alive, action_alpha, w_fwd_vel, w_symmetry,
-     w_heading, _legacy_accel) = rparams
+     w_heading, _legacy_accel, w_cpg_pitch, w_cpg_elbow) = rparams
 
     filt_action = action_alpha * action + (1.0 - action_alpha) * prev_action
+
+    # Central Pattern Generator — PACE gait. Same-side pairs in phase
+    # (FL+BL together = left side, FR+BR together = right side). Body sways
+    # side-to-side as left limbs swing then right limbs swing. Stable for
+    # slow crawling on bent limbs (wrists/ankles or elbows/knees).
+    # Per-limb sign table from scripts/calibrate_cpg.py.
+    # Limb idx: FL=0, FR=1, BL=2, BR=3. Joint within limb: 0=yaw,1=pitch,2=elbow/knee.
+    LIMB_PHASE = jnp.array([0.0, jnp.pi, 0.0, jnp.pi])  # pace: left side phase 0, right side phase π
+    phase = 2.0 * jnp.pi * step_idx / GAIT_PERIOD_STEPS + LIMB_PHASE
+    sin_p = jnp.sin(phase)  # sweep signal (positive = limb forward)
+
+    # FRONT (FL, FR): forward propulsion via yaw with mirrored signs.
+    # FL_yaw +action → -x, so forward = -sin. FR_yaw +action → +x, so forward = +sin.
+    fl_yaw =  -w_cpg_pitch * sin_p[0]
+    fr_yaw =  +w_cpg_pitch * sin_p[1]
+    # Lift during swing (sin>0): pitch in negative direction lifts hand.
+    fl_pitch = -w_cpg_elbow * jnp.maximum(sin_p[0], 0.0)
+    fr_pitch = -w_cpg_elbow * jnp.maximum(sin_p[1], 0.0)
+
+    # BACK (BL, BR): forward propulsion via pitch (+action → +x for both).
+    bl_pitch = +w_cpg_pitch * sin_p[2]
+    br_pitch = +w_cpg_pitch * sin_p[3]
+    # Knee bend lifts foot during swing.
+    bl_knee = +w_cpg_elbow * jnp.maximum(sin_p[2], 0.0)
+    br_knee = +w_cpg_elbow * jnp.maximum(sin_p[3], 0.0)
+
+    cpg_offset = jnp.zeros(ACT_DIM)
+    # FL: idx 0..5
+    cpg_offset = cpg_offset.at[0].set(fl_yaw).at[1].set(fl_pitch)
+    cpg_offset = cpg_offset.at[6].set(fr_yaw).at[7].set(fr_pitch)
+    cpg_offset = cpg_offset.at[13].set(bl_pitch).at[14].set(bl_knee)
+    cpg_offset = cpg_offset.at[19].set(br_pitch).at[20].set(br_knee)
+    filt_action = filt_action + cpg_offset
     # Per-actuator velocity / accel limits (arrays of shape [ACT_DIM]).
     substep_speed = motor_max_speed / PHYSICS_STEPS_PER_ACTION
     substep_accel = motor_max_accel / PHYSICS_STEPS_PER_ACTION
@@ -178,8 +220,13 @@ def step(mx, jnt_lo, jnt_hi, motor_max_speed, motor_max_accel, tree_xy, dx, acti
         new_vel = jnp.clip(desired_vel, mvel - substep_accel, mvel + substep_accel)
         new_vel = jnp.clip(new_vel, -substep_speed, substep_speed)
         mpos = mpos + new_vel
-        # Re-centered mapping: action=0 → joint=0 (extended/neutral).
-        ctrl = mpos * jnp.where(mpos >= 0, jnt_hi, -jnt_lo)
+        # Mapping: action=0 → ctrl=rest_pose (standing posture).
+        # action=+1 → jnt_hi (full extension). action=-1 → jnt_lo (full curl).
+        ctrl = jnp.where(
+            mpos >= 0,
+            rest_pose + mpos * (jnt_hi - rest_pose),
+            rest_pose + mpos * (rest_pose - jnt_lo),
+        )
         d = d.replace(ctrl=ctrl)
         d = mjx.step(mx, d)
         return (mpos, new_vel, d), None

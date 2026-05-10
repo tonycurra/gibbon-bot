@@ -6,6 +6,49 @@ Use MLflow UI (`mlflow ui --backend-store-uri sqlite:///mlflow.db`) for the metr
 
 ---
 
+## 2026-05-10 — calibrated CPG + pace gait
+
+**Run label**: `PACE gait (left-pair right-pair), calibrated CPG, crawl-friendly`
+
+**Goal**: get visible forward locomotion. User feedback: "robot moves at the start then enters a weird loop."
+
+**What we found via `scripts/calibrate_cpg.py`** (probes each joint with ±0.5 to see how the limb tip moves):
+- The robot's URDF has **mirrored quaternions per limb** (FL vs FR, BL vs BR), so the same joint angle on FL vs FR moves the limb in opposite world directions.
+- **Front limbs propel via `yaw` (joint 0)**, not `pitch` (joint 1). Pitch on FL/FR moves the hand laterally across the body, which is useless for forward locomotion.
+- **Back limbs propel via `pitch` (joint 1)**, with strong vertical lift on the positive direction.
+- Joint range asymmetry means `+amplitude` and `-amplitude` produce wildly different motions for elbow/knee.
+
+**CPG rewrite**:
+- Asymmetric per-limb signal: front uses yaw with mirrored signs (FL `-`, FR `+`), back uses pitch with same sign (BL/BR `+`).
+- Lift signal (`-pitch` for front, `+knee` for back) gated by `max(sin, 0)` so legs only lift during swing, never push down.
+- Phase pattern switched to **pace** (`[0, π, 0, π]` — same-side pairs) per user request: simpler, more left-right balanced, OK to crawl on bent limbs.
+
+**Outstanding limitation**: CPG-only motion at zero policy still doesn't translate the body forward — the legs lift but stance phase doesn't push back. Body needs to be lifted off the ground first (z=0.12 → 0.25+) before the legs can plant and push. PPO must learn this body-lift behavior.
+
+**Outcome**: TBD.
+
+---
+
+## 2026-05-10 — serious A→B run with CPG trot baseline
+
+**Run label**: `serious training: CPG trot + heading + 200-step episodes, smoother+stable`
+
+**Goal**: actual locomotion from spawn to tree (3 m), stable + smooth gait.
+
+**Key architectural change**: added a Central Pattern Generator (CPG) trot baseline in `envs/walk_env_mjx.py`. Sinusoidal pitch + elbow/knee oscillation with diagonal-pair phase offset (FL+BR vs FR+BL, π apart) at GAIT_PERIOD_STEPS=25 (≈0.8 s per cycle). Even with a zero policy, the robot now bobs up/down and side-shifts at ~1 Hz — verified via snapshot. Policy learns *corrections* to the CPG, not gait from scratch.
+
+**Why this was needed**: prior runs showed the policy outputs converge to a *single static target pose* — joints reach it, no further motion. PPO + reward shaping alone is too slow to discover rhythmic locomotion from random init. CPG injects the rhythm; PPO refines amplitude/phase/balance/direction.
+
+**Other changes vs prior baseline**:
+- `MAX_STEPS = 60 → 200` (1.9 s → 6.4 s) — success bonus (W_SUCCESS=200) was unreachable at 60 steps; now achievable.
+- `ENT_COEF = 0.4 → 0.08` — CPG provides exploration; policy can converge.
+- `W_SMOOTH = 0.15 → 0.40`, `W_JVEL = 0.02 → 0.05` — stability matters now that locomotion exists.
+- `FLIP_PENALTY = 30 → 60` — falling is no longer "fine for exploration".
+
+**Outcome**: TBD.
+
+---
+
 ## 2026-05-10 — trapezoidal motors + heading + recentered actions
 
 **Run label**: `trapezoidal motors + heading + recentered actions`

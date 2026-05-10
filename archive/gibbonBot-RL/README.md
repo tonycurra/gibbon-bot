@@ -33,6 +33,16 @@ mlflow ui --backend-store-uri sqlite:///mlflow.db   # http://localhost:5000
 # attach a free-form note to the latest MLflow run
 python scripts/note.py "rew jumped at update 200 — heading reward dominates"
 
+# inspect the policy via offscreen renderer (works without GUI)
+python scripts/snapshot.py --frames 6 --gap 1.0 --policy latest
+# writes 5 views (side_L, side_R, front, back, top) per frame to _snapshots/,
+# plus _snapshots/landmarks.json with 3D xyz of 13 keypoints (torso + 4 limbs ×
+# shoulder/elbow/hand). Use to compare gait against ape pose datasets.
+
+# probe each joint to see which world direction +action moves the limb tip
+python scripts/calibrate_cpg.py
+# critical for tuning the CPG when the URDF has mirrored quaternions per limb.
+
 # back up before destroying instance
 scripts/archive_runs.sh
 ```
@@ -95,6 +105,7 @@ reproducibility unit.
 - **[docs/GROVE_MASTERPLAN.md](docs/GROVE_MASTERPLAN.md)** — olive-grove environment
 - **[BACKLOG.md](BACKLOG.md)** — prioritized list of unimplemented ideas
 - **[LESSONS.md](LESSONS.md)** — cumulative training insights (prose; numbers in MLflow)
+- **[docs/ROBOT_VS_APE.md](docs/ROBOT_VS_APE.md)** — joint-by-joint mapping from robot DOF to ape anatomy + what's missing
 
 ## Motor model
 
@@ -109,3 +120,29 @@ smooth start *and* stop. Tunable in `envs/params_walk_mjx.py`:
 
 - `MOTOR_SPEED_FRAC` (default 1.0) — global scale; <1 = slower than reality
 - `MOTOR_ACCEL_RATIO` (default 5.0/s) — how quickly joints reach max speed
+
+## CPG (Central Pattern Generator)
+
+`envs/walk_env_mjx.py` injects a sinusoidal gait baseline into every action,
+so the policy learns *corrections* to a working gait instead of inventing one
+from scratch. Currently configured for **pace** (left + right pairs alternate;
+camel/giraffe-style), tuned via per-limb sign correction from
+`scripts/calibrate_cpg.py`.
+
+Knobs in `envs/params_walk_mjx.py`:
+- `W_CPG_PITCH` — propulsive sweep amplitude (front yaw + back pitch)
+- `W_CPG_ELBOW` — foot-lift amplitude during swing
+- `GAIT_PERIOD_STEPS` (in `walk_env_mjx.py`) — full stride period in env steps
+
+Phase pattern (`LIMB_PHASE` in `walk_env_mjx.py`):
+- Pace (current): `[0, π, 0, π]` — same-side limbs in phase
+- Trot (alternative): `[0, π, π, 0]` — diagonal pairs in phase
+
+## Action mapping (rest pose)
+
+Action `0` does not map to joint angle 0. Instead it maps to a configurable
+**rest pose** (knees/elbows pre-bent at 30° in the standing direction). This
+prevents the "dead spider" failure where joint=0 means all limbs splayed
+horizontally. `action=±1` reaches the joint limits relative to that rest pose.
+
+See `envs/walk_env_mjx.py:load_model()` (`PER_LIMB_REST` array).

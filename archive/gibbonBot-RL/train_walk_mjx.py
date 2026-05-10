@@ -312,7 +312,7 @@ def main():
     print(f"{N_ENVS} envs  |  save every {save_every:,} steps")
     print(f"Loading model...")
 
-    mx, jnt_lo, jnt_hi, tree_xy, motor_max_speed, motor_max_accel = load_model()
+    mx, jnt_lo, jnt_hi, tree_xy, motor_max_speed, motor_max_accel, rest_pose = load_model()
 
     rng = jax.random.PRNGKey(42)
     rng, init_rng, env_rng = jax.random.split(rng, 3)
@@ -328,7 +328,7 @@ def main():
     v_reset = jax.jit(jax.vmap(lambda rng: reset(mx, jnt_lo, jnt_hi, tree_xy, rng)))
     v_step  = jax.jit(jax.vmap(
         lambda dx, a, mp, mv, pa, pd, si: step(
-            mx, jnt_lo, jnt_hi, motor_max_speed, motor_max_accel, tree_xy,
+            mx, jnt_lo, jnt_hi, motor_max_speed, motor_max_accel, rest_pose, tree_xy,
             dx, a, mp, mv, pa, pd, si, rparams)
     ))
 
