@@ -55,3 +55,5 @@ Training — 100,000,000 total steps.
 [save] mjx_000000655360.npz
 [sync] FAILED to push to origin: and the repository exists.
 [save] mjx_000000688128.npz
+[sync] pushed to origin: auto: training data 2026-05-10T13:15:33Z
+[save] mjx_000000720896.npz
