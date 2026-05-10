@@ -24,6 +24,11 @@ Things proposed in conversation that weren't implemented inline. Priority is my 
 - **`mujoco.Renderer` snapshot script.** A small `scripts/snapshot.py` that loads a checkpoint, runs N steps in a single env, dumps frames to PNG. Lets me read frames via image-read tool to spot pose bugs without needing live screen access. Cost: ~30 lines.
 - **OpenApePose / DeepLabCut dataset combine for a reference dataset.** Run pose estimation on real-ape video, build a 3D keypoint dataset for retargeting (prereq for the AMP item above). Cost: multi-week.
 
+## P3 — physics engine alternatives (track, don't migrate yet)
+
+- **`mujoco_warp`** ([github.com/google-deepmind/mujoco_warp](https://github.com/google-deepmind/mujoco_warp)) — MuJoCo physics on NVIDIA Warp instead of JAX/XLA. Promise: 2–5× faster kernel launches than MJX. Pre-1.0, incomplete MJX parity. Revisit when stable + benchmarked. Migration cost: ~1 week (touches every JAX call in `train_mjx.py`). Same scene.xml, same physics semantics — relatively cheap port once ready.
+- **NVIDIA Newton Physics** ([developer.nvidia.com/newton-physics](https://developer.nvidia.com/newton-physics)) — new Warp-based engine with rigid + articulated + soft + cloth + fluids. USD scene format, Isaac Lab integration. Pre-1.0. Revisit only if we need physics MJX can't do (soft soil, ropes for harvesting). Migration cost: 2–4 weeks (scene rewrite + new env layer). Concrete trigger: agricultural-soil deformation matters for the grove task.
+
 ## P3 — speculative
 
 - **Real-time CV comparison of MuJoCo viewer vs. real-ape video.** Attempted earlier; declined because pose estimators trained on real animals don't transfer to low-poly schematic robots. Re-evaluate only if we render a textured high-fidelity robot.
