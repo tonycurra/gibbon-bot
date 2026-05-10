@@ -13,3 +13,17 @@ remote:   https://codeberg.org/tony_olivabot/gibbonBot-RL/compare/sim/mujoco-set
 remote: 
 [sync] pushed: auto: training data 2026-05-10T10:57:18Z
 [save] mjx_000000065536.npz
+remote: Create a new pull request for 'main':        
+remote:   https://codeberg.org/tony_olivabot/gibbonBot-RL/compare/sim/mujoco-setup...main        
+remote: 
+[sync] pushed: auto: training data 2026-05-10T10:57:53Z
+       5        81,920       588  rew=8.02  d=3.00  v=0.07m/s  z=0.22  upr=0.99  succ=0.0%  gait=-0.31  stride=0.07s
+[view] tree 't0_trunk' at xy=[3.0, 0.0] top_z≈2.26
+[view] no checkpoint yet — using random policy, will hot-swap when one appears
+[view] PHYSICS_STEPS=16, action=32ms sim time, policy=latest
+  ep  status     torso_z   steps   upright
+   1  FLIPPED      0.143m    1604    -0.011
+   2  TIMEOUT      0.115m    2000     0.873
+[view] >>> NEW POLICY: mjx_000000065536.npz <<<
+[view] closed.
+[save] mjx_000000098304.npz
