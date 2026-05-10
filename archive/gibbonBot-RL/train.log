@@ -2,43 +2,10 @@ JAX devices: [CudaDevice(id=0)]
 512 envs  |  save every 25,600 steps
 Loading model...
 [walk_env] tree at xy=[3.0, 0.0]
-[lineage] recorded run #35 — inherited from: scratch
-[watch] spawning viewer: /home/tony/gibbonBot-RL/.venv/bin/python view.py --env walk --since 1778410568.4948766
+[lineage] recorded run #36 — inherited from: scratch
+[watch] spawning viewer: /home/tony/gibbonBot-RL/.venv/bin/python view.py --env walk --since 1778412094.503655
 Training — 100,000,000 total steps.
  updates         steps       sps    mean_rew   mean_dist
 ------------------------------------------------------------
+[view] reloaded motor params: SPEED_FRAC=1.0 ACCEL_RATIO=5.0 ACTION_ALPHA=0.15
 [save] mjx_000000032768.npz
-remote: Create a new pull request for 'main':        
-remote:   https://codeberg.org/tony_olivabot/gibbonBot-RL/compare/sim/mujoco-setup...main        
-remote: 
-[sync] pushed: auto: training data 2026-05-10T10:57:18Z
-[save] mjx_000000065536.npz
-remote: Create a new pull request for 'main':        
-remote:   https://codeberg.org/tony_olivabot/gibbonBot-RL/compare/sim/mujoco-setup...main        
-remote: 
-[sync] pushed: auto: training data 2026-05-10T10:57:53Z
-       5        81,920       588  rew=8.02  d=3.00  v=0.07m/s  z=0.22  upr=0.99  succ=0.0%  gait=-0.31  stride=0.07s
-[view] tree 't0_trunk' at xy=[3.0, 0.0] top_z≈2.26
-[view] no checkpoint yet — using random policy, will hot-swap when one appears
-[view] PHYSICS_STEPS=16, action=32ms sim time, policy=latest
-  ep  status     torso_z   steps   upright
-   1  FLIPPED      0.143m    1604    -0.011
-   2  TIMEOUT      0.115m    2000     0.873
-[view] >>> NEW POLICY: mjx_000000065536.npz <<<
-[view] closed.
-[save] mjx_000000098304.npz
-remote: Create a new pull request for 'main':        
-remote:   https://codeberg.org/tony_olivabot/gibbonBot-RL/compare/sim/mujoco-setup...main        
-remote: 
-[sync] pushed: auto: training data 2026-05-10T10:59:13Z
-[save] mjx_000000131072.npz
-remote: Create a new pull request for 'main':        
-remote:   https://codeberg.org/tony_olivabot/gibbonBot-RL/compare/sim/mujoco-setup...main        
-remote: 
-[sync] pushed: auto: training data 2026-05-10T10:59:45Z
-      10       163,840       659  rew=8.27  d=3.00  v=0.08m/s  z=0.21  upr=0.99  succ=0.0%  gait=-0.85  stride=0.51s
-[save] mjx_000000163840.npz
-remote: Create a new pull request for 'main':        
-remote:   https://codeberg.org/tony_olivabot/gibbonBot-RL/compare/sim/mujoco-setup...main        
-remote: 
-[sync] pushed: auto: training data 2026-05-10T11:00:17Z
