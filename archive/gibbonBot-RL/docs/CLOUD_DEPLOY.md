@@ -6,7 +6,7 @@ instance (RunPod, Lambda, Hetzner, AWS p3/g5, GCP A100, etc.).
 
 ## What's in the container
 
-- CUDA 12.6 + cuDNN runtime (NVIDIA base image)
+- CUDA 12.2 + cuDNN runtime (NVIDIA base image — matches WSL2 driver 537+; works on cloud driver 535+ too)
 - Python 3.12, JAX-cuda 0.10.0, JAXlib 0.10.0
 - mujoco 3.8.0, mujoco-mjx 3.8.0
 - flax, optax, numpy, mlflow, imageio
@@ -27,6 +27,35 @@ Three host directories are mounted as volumes:
 
 Plus `./data/`, `./envs/`, `./scripts/` are bind-mounted so you can edit
 locally and the container picks up changes (no rebuild).
+
+## Prerequisites (host — local or cloud)
+
+You need three things on whatever machine builds/runs the container:
+
+1. **NVIDIA driver** ≥ 535 (CUDA 12.0+ capable). Check: `nvidia-smi`.
+2. **Docker** ≥ 24.0 with **compose v2 plugin**. On Ubuntu 24.04:
+   ```bash
+   sudo apt install docker.io docker-compose-v2
+   ```
+3. **nvidia-container-toolkit** for `--gpus all` passthrough. On Ubuntu:
+   ```bash
+   curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | \
+       sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit.gpg
+   curl -fsSL https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
+       sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit.gpg] https://#' | \
+       sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list >/dev/null
+   sudo apt update && sudo apt install -y nvidia-container-toolkit
+   sudo nvidia-ctk runtime configure --runtime=docker
+   sudo systemctl restart docker
+   ```
+
+   Verify everything works:
+   ```bash
+   docker compose version              # → "Docker Compose version v2..."
+   docker run --rm --gpus all nvidia/cuda:12.2.2-base-ubuntu22.04 nvidia-smi
+   ```
+
+   Both should print clean output before you build the gibbonbot image.
 
 ## Local run (RTX 4070, WSL2 + nvidia-docker)
 

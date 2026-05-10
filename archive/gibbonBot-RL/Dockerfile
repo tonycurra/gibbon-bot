@@ -16,7 +16,10 @@
 # Image size ~5GB (mostly cuDNN + JAX-cuda wheels). Headless only — no GUI viewer
 # (use scripts/snapshot.py to inspect via PNG dumps when running in cloud).
 
-FROM nvidia/cuda:12.6.1-cudnn-runtime-ubuntu22.04
+# CUDA 12.2 base — matches WSL2 driver passthrough on the user's RTX 4070
+# (driver 537.28 → CUDA 12.2). JAX-cuda 0.10.0 wheels are forward-compatible
+# with newer drivers, so cloud H100 hosts on driver 535+ also work.
+FROM nvidia/cuda:12.2.2-cudnn8-runtime-ubuntu22.04
 
 ARG DEBIAN_FRONTEND=noninteractive
 
