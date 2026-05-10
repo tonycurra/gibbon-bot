@@ -85,8 +85,17 @@ scripts/archive_runs.sh
 
 **Auto-push**: when `--auto-push` is passed to `train_walk_mjx.py`, `scripts/sync.sh`
 runs after every checkpoint save (~every 32K env steps, ~30 s on the 4070). It
-commits the data paths above and pushes to Codeberg. Idempotent — bails if
-nothing changed. Worst-case data loss: ~30 s of training compute.
+commits the data paths above and pushes to **every configured git remote**.
+Idempotent — bails if nothing changed. Worst-case data loss: ~30 s of training
+compute.
+
+**Adding a backup remote** (recommended — survives a single remote outage):
+```bash
+git remote add backup git@gitlab.com:USER/gibbonBot-RL.git
+# from now on, scripts/sync.sh pushes to both origin and backup automatically
+```
+Free EU options for the second remote: GitLab.com (EU regions), self-hosted
+Gitea on a Hetzner VPS (~€5/mo). Free non-EU: GitHub.
 
 A keeper is auto-saved every PPO update where `min_dist < 1.5 m` OR
 `success_frac > 5 %` is achieved. Each keeper carries a sidecar JSON with
