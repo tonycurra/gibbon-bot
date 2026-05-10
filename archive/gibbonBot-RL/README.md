@@ -47,6 +47,11 @@ python scripts/snapshot.py --frames 6 --gap 1.0 --policy latest
 python scripts/calibrate_cpg.py
 # critical for tuning the CPG when the URDF has mirrored quaternions per limb.
 
+# audit physics + motors against data/motors.md
+python scripts/verify_dynamics.py
+# checks masses, damping, stall torque, floor friction, solref/solimp.
+# Run after any scene.xml change to catch drift.
+
 # back up before destroying instance
 scripts/archive_runs.sh
 ```
@@ -120,6 +125,20 @@ reproducibility unit.
 - **[LESSONS.md](LESSONS.md)** — cumulative training insights (prose; numbers in MLflow)
 - **[docs/ROBOT_VS_APE.md](docs/ROBOT_VS_APE.md)** — joint-by-joint mapping from robot DOF to ape anatomy + what's missing
 - **[docs/BRAIN_CORE.md](docs/BRAIN_CORE.md)** — long-term vision for instinct + memory architecture (skill library, recurrent policy, world model)
+
+## Tooling cheat sheet
+
+| Script | Purpose |
+|---|---|
+| `train_walk_mjx.py --auto-push --label "..."` | Train walk-to-tree policy, push every save |
+| `view.py --env walk` | Live MuJoCo viewer (hot-swaps to newest checkpoint) |
+| `view.py --env walk --best` | View best-mean_rew checkpoint per MLflow |
+| `scripts/snapshot.py` | 5-view PNGs + 13-keypoint 3D landmarks JSON |
+| `scripts/calibrate_cpg.py` | Probe each joint, output direction-of-effect table |
+| `scripts/verify_dynamics.py` | Audit physics + motors against motors.md |
+| `scripts/compare_runs.py` | MLflow cross-run metric comparison |
+| `scripts/note.py "..."` | Attach prose note to current MLflow run |
+| `scripts/sync.sh` | One-shot push to all configured git remotes |
 
 ## Motor model
 
