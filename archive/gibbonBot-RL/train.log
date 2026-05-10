@@ -55,3 +55,8 @@ remote:
 [sync] pushed: auto: training data 2026-05-10T11:27:51Z
       15       245,760       624  rew=8.96  d=3.01  v=0.14m/s  z=0.20  upr=0.98  succ=0.0%  gait=-0.18  stride=0.20s
 [save] mjx_000000262144.npz
+remote: Create a new pull request for 'main':        
+remote:   https://codeberg.org/tony_olivabot/gibbonBot-RL/compare/sim/mujoco-setup...main        
+remote: 
+[sync] pushed: auto: training data 2026-05-10T11:28:20Z
+[save] mjx_000000294912.npz
