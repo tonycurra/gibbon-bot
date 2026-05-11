@@ -2,9 +2,9 @@
 
 # ─── Motor & action shaping (shared with all tasks) ──────────────────────────
 MOTOR_KP = 8.0
-MOTOR_SPEED_FRAC = 1.0
-MOTOR_ACCEL_RATIO = 5.0
-ACTION_SMOOTH_ALPHA = 0.40  # moderate lowpass
+MOTOR_SPEED_FRAC = 0.8
+MOTOR_ACCEL_RATIO = 2.0
+ACTION_SMOOTH_ALPHA = 0.20  # stronger lowpass for smoother movement
 
 # ─── Reward shaping (minimal — one signal: stay upright at target height) ────
 TARGET_Z = 0.30
