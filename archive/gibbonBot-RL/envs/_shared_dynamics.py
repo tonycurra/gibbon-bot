@@ -3,7 +3,8 @@ substep loop. Used by every task env so a fix lands in one place."""
 
 import jax
 import jax.numpy as jnp
-import mujoco.mjx as mjx
+
+from envs._shared_physics_backend import mjx
 
 # =============================================================================
 # CPG GAIT PATTERNS

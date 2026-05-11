@@ -11,12 +11,12 @@ import pathlib
 
 import jax
 import jax.numpy as jnp
-import mujoco.mjx as mjx
 
 import envs.params_walk_forward_mjx as _p
 from envs._shared_dynamics import apply_action, cpg_gait_offset, cpg_pace_offset
 from envs._shared_load_model import base_load_model
 from envs._shared_obs import assemble_obs
+from envs._shared_physics_backend import mjx
 
 _ROOT = pathlib.Path(__file__).parent.parent
 SCENE = _ROOT / "data" / "scene.xml"

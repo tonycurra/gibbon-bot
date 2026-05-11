@@ -16,10 +16,10 @@ import pathlib
 import jax
 import jax.numpy as jnp
 import mujoco
-import mujoco.mjx as mjx
 import numpy as np
 
 import envs.params_walk_mjx as _p
+from envs._shared_physics_backend import MjModel, mj_id2name, mjx
 
 _ROOT = pathlib.Path(__file__).parent.parent
 SCENE = _ROOT / "data" / "scene.xml"
@@ -76,14 +76,14 @@ def read_params():
 
 
 def load_model():
-    mj_model = mujoco.MjModel.from_xml_path(str(SCENE))
+    mj_model = MjModel().from_xml_path(str(SCENE))
     mj_model.opt.timestep = 0.002
 
     # Collision filtering: move all robot geoms to group 2 (contype=2, conaffinity=1).
     # This prevents robot self-collisions (legs crossing, arms hitting torso, etc.)
     # while maintaining collisions with the floor and trees (which stay in group 1).
     for i in range(mj_model.ngeom):
-        geom_name = mujoco.mj_id2name(mj_model, mujoco.mjtObj.mjOBJ_GEOM, i)
+        geom_name = mj_id2name(mj_model, mujoco.mjtObj.mjOBJ_GEOM, i)
         # Keep floor geom in group 1 (for collision with robot)
         if geom_name and "floor" in geom_name:
             continue

@@ -5,6 +5,7 @@
 stable-baselines3==2.8.0
 mujoco==3.8.0
 mujoco-mjx==3.8.0
+mujoco-warp>=3.8.0  # Optional: GPU-accelerated MJX backend via NVIDIA Warp
 gymnasium==1.2.3
 
 # GPU/ML Acceleration

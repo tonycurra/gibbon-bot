@@ -49,6 +49,7 @@ RUN pip install --no-cache-dir \
         numpy==2.4.4 \
         mujoco==3.8.0 \
         mujoco-mjx==3.8.0 \
+        mujoco-warp>=3.8.0 \
         mlflow==3.12.0 \
         imageio==2.37.3 \
         pandas \

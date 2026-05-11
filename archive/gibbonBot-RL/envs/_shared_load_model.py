@@ -4,7 +4,8 @@ URDF, motor calibration, and rest pose."""
 
 import jax.numpy as jnp
 import mujoco
-import mujoco.mjx as mjx
+
+from envs._shared_physics_backend import MjModel, mj_id2name, mjx
 
 # Per-limb joint order: yaw, pitch, elbow/knee, roll, wrist/ankle, gripper/foot.
 # ST3235 / ST3215: 45 RPM = 4.71 rad/s. ST3215-HS (gripper/foot): 106 RPM = 11.10 rad/s.
@@ -23,7 +24,7 @@ def base_load_model(scene_path, params_module, physics_steps_per_action=16):
 
     Tasks that need extras (e.g. tree position) wrap this and add to the tuple.
     """
-    mj_model = mujoco.MjModel.from_xml_path(str(scene_path))
+    mj_model = MjModel().from_xml_path(str(scene_path))
     mj_model.opt.timestep = 0.002
 
     # Collision filtering: move all robot geoms to group 2 (contype=2, conaffinity=1).
@@ -35,7 +36,7 @@ def base_load_model(scene_path, params_module, physics_steps_per_action=16):
     # Robot vs Robot: (2 & 1) = 0 → no collision ✓
     # Robot vs Tree: (2 & 31) != 0 and (1 & 1) != 0 → collide ✓
     for i in range(mj_model.ngeom):
-        geom_name = mujoco.mj_id2name(mj_model, mujoco.mjtObj.mjOBJ_GEOM, i)
+        geom_name = mj_id2name(mj_model, mujoco.mjtObj.mjOBJ_GEOM, i)
         # Keep floor geom in group 1 (for collision with robot)
         if geom_name and "floor" in geom_name:
             continue
