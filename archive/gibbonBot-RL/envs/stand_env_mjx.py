@@ -1,11 +1,14 @@
-"""MJX environment — stand. Hold body upright at target height, no locomotion.
+"""MJX environment — stand. Hold body upright at target height on ankles, no locomotion.
 
-Reward = upright + height_gaussian + alive + stable_z + action_efficiency − flip_penalty.
+Reward = upright + height_gaussian + alive + stable_z + action_efficiency + foot_contact - knee_contact - symmetry − flip_penalty.
   - upright: qw^2 (torso z-axis aligned with world up)
-  - height_gaussian: exp(-0.5*((z-target_z)/tol)^2) around 0.30m
+  - height_gaussian: exp(-0.5*((z-target_z)/tol)^2) around 0.45m
   - alive: per-step survival bonus
   - stable_z: -|torso_vertical_velocity| (penalizes up/down oscillation)
   - action_efficiency: -mean(|action|) (penalizes motor effort)
+  - foot_contact: reward for feet/hands near ground (encourages standing on ankles)
+  - knee_contact: penalty for knees near ground (discourages kneeling)
+  - symmetry: -|qx| - |qy| (penalizes torso roll/pitch, promotes upright symmetry)
   - flip_penalty: large one-shot penalty when upside down
 
 88-dim obs contract (envs/_shared_obs.py): proprio(83) + target_slot(3, zeros
@@ -60,6 +63,9 @@ def read_params():
         float(_p.W_STABLE_Z),
         float(_p.W_ACTION),
         float(_p.FRACTAL_OFFSET),
+        float(_p.W_FOOT_CONTACT),
+        float(_p.W_KNEE_PENALTY),
+        float(_p.W_SYMMETRY),
     )
 
 
@@ -136,6 +142,9 @@ def step(
         w_stable_z,
         w_action,
         fractal_offset,
+        w_foot_contact,
+        w_knee_penalty,
+        w_symmetry,
     ) = rparams
 
     filt_action = action_alpha * action + (1.0 - action_alpha) * prev_action
@@ -170,6 +179,8 @@ def step(
 
     torso_z = dx.qpos[2]
     qw = dx.qpos[3]
+    qx = dx.qpos[4]  # torso roll (x-axis rotation)
+    qy = dx.qpos[5]  # torso pitch (y-axis rotation)
 
     # Reward — height + upright + alive + stability + action_efficiency
     height_err = (torso_z - target_z) / target_tol
@@ -185,12 +196,53 @@ def step(
     # Efficiency: penalize motor effort
     action_penalty = -w_action * jnp.mean(jnp.abs(filt_action))
 
+    # Contact rewards: penalize knee contact, reward foot/ankle contact
+    # Use dx.xpos to get world positions of all bodies (JAX-compatible)
+    # Body layout in mx.body_pos (offset from parent):
+    #   0: torso (free joint, pos in qpos[0:3])
+    #   Then children in order: fl_link1, fl_link2, fl_link3, fl_link4, fl_link5, fl_gripper_link,
+    #   fr_link1, fr_link2, fr_link3, fr_link4, fr_link5, fr_gripper_link,
+    #   bl_link1, bl_link2, bl_link3, bl_link4, bl_link5, bl_gripper_link,
+    #   br_link1, br_link2, br_link3, br_link4, br_link5, br_gripper_link
+    # dx.xpos gives absolute world positions for all bodies
+
+    # Get z positions of key bodies from dx.xpos
+    # Body indices: torso=1, fl_link5=6, fl_gripper=7, fr_link5=12, fr_gripper=13,
+    #               bl_link3=16, bl_link5=18, bl_gripper=19, br_link3=22, br_link5=24, br_gripper=25
+    bl_foot_z = dx.xpos[19, 2]  # bl_gripper_link z
+    br_foot_z = dx.xpos[25, 2]  # br_gripper_link z
+    bl_knee_z = dx.xpos[16, 2]  # bl_link3 (knee) z
+    br_knee_z = dx.xpos[22, 2]  # br_link3 (knee) z
+    fl_hand_z = dx.xpos[7, 2]  # fl_gripper_link (hand) z
+    fr_hand_z = dx.xpos[13, 2]  # fr_gripper_link (hand) z
+
+    # Foot/hand contact reward: reward when feet or hands are near ground (z < 0.05)
+    # Count all 4 limbs that have ground contact
+    foot_hand_contact_reward = w_foot_contact * (
+        (bl_foot_z < 0.05).astype(jnp.float32)
+        + (br_foot_z < 0.05).astype(jnp.float32)
+        + (fl_hand_z < 0.05).astype(jnp.float32)
+        + (fr_hand_z < 0.05).astype(jnp.float32)
+    )
+
+    # Knee penalty: penalize when knees are near ground (z < 0.1)
+    knee_penalty = -w_knee_penalty * (
+        (bl_knee_z < 0.1).astype(jnp.float32) + (br_knee_z < 0.1).astype(jnp.float32)
+    )
+
+    # Symmetry: penalize torso roll (x-axis) and pitch (y-axis) deviation from upright
+    # qw should be close to 1, qx and qy should be close to 0 for perfectly upright
+    symmetry_penalty = -w_symmetry * (jnp.abs(qx) + jnp.abs(qy))
+
     reward = (
         height_reward
         + upright_reward
         + alive_bonus
         + stable_reward
         + action_penalty
+        + foot_hand_contact_reward
+        + knee_penalty
+        + symmetry_penalty
         - flip_penalty * upside_down.astype(jnp.float32)
     )
 

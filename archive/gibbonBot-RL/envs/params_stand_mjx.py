@@ -1,4 +1,4 @@
-"""Stand task hyperparameters. Task = hold body upright at z≈0.30m."""
+"""Stand task hyperparameters. Task = hold body upright at z≈0.45m on ankles."""
 
 # ─── Motor & action shaping (shared with all tasks) ──────────────────────────
 MOTOR_KP = 8.0
@@ -6,15 +6,22 @@ MOTOR_SPEED_FRAC = 0.8
 MOTOR_ACCEL_RATIO = 2.0
 ACTION_SMOOTH_ALPHA = 0.20  # stronger lowpass for smoother movement
 
-# ─── Reward shaping (minimal — one signal: stay upright at target height) ────
-TARGET_Z = 0.30
-TARGET_TOL = 0.03  # σ on height Gaussian (narrow: precise height targeting)
+# ─── Reward shaping ────────────────────────────────────────────────────────
+TARGET_Z = 0.45
+TARGET_TOL = 0.08  # tighter tolerance for higher standing
 W_UPRIGHT = 5.0  # primary signal: torso z-axis aligned with world up
-W_HEIGHT = 2.0  # secondary: stay near 0.30m
+W_HEIGHT = 2.0  # secondary: stay near 0.45m
 W_ALIVE = 0.5  # per-step survival
 FLIP_PENALTY = 60.0  # one-shot at flip
 W_STABLE_Z = 1.0  # penalty on |torso vertical velocity| (stops oscillation)
 W_ACTION = 0.01  # penalty on action magnitude (minimal motor effort)
+
+# ─── Contact rewards (stand on ankles/feet, NOT knees) ──────────────────────
+W_FOOT_CONTACT = 3.0  # reward for foot/ankle ground contact
+W_KNEE_PENALTY = 5.0  # penalty for knee ground contact (force standing on ankles)
+
+# ─── Symmetry rewards ──────────────────────────────────────────────────────
+W_SYMMETRY = 2.0  # penalty for lateral lean (torso roll) - promotes upright symmetry
 
 # CPG for standing — enables rhythmic limb movement for stability
 # Gait types: "pace", "trot", "walk", "alt_arm_leg", "mirror_arm_leg"
