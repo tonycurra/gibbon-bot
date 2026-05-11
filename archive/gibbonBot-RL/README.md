@@ -73,7 +73,7 @@ scripts/archive_runs.sh
 ├── view.py              live MuJoCo viewer (hot-swaps to newest checkpoint)
 ├── README.md            this file
 ├── requirements.txt
-├── brain/               Bioinspired neural architecture (Neurotransmitters, Brainstem, Basal Ganglia)
+├── brain/               Bioinspired neural architecture (Neurotransmitters, Brainstem, Basal Ganglia, Cerebellum, Amygdala, Hippocampus, Prefrontal Cortex, Motor Cortex, ApeBrain integrator, Quantum-ready interface)
 ├── envs/                MJX environments + their hyperparams
 ├── data/                scene.xml, robot meshes, motor specs, terrain
 ├── trees/               olive-tree generation pipeline
