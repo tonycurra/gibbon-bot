@@ -19,8 +19,8 @@ W_ACTION = 0.01  # penalty on action magnitude (minimal motor effort)
 # CPG for standing — enables rhythmic limb movement for stability
 # Gait types: "pace", "trot", "walk", "alt_arm_leg", "mirror_arm_leg"
 # Set GAIT_TYPE in env to change pattern
-W_CPG_PITCH = 0.3  # pitch/yaw amplitude for limb oscillation
-W_CPG_ELBOW = 0.2  # elbow/knee lift amplitude
+W_CPG_PITCH = 0.0  # DISABLED - pitch/yaw amplitude for limb oscillation
+W_CPG_ELBOW = 0.0  # DISABLED - elbow/knee lift amplitude
 GAIT_TYPE = "alt_arm_leg"  # Alternating: FL arm → FR arm → BL leg → BR leg
 FRACTAL_OFFSET = 0.0  # Phase offset (0.0 to 1.0) for additional variation
 
