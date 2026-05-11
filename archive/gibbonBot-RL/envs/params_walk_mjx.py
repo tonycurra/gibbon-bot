@@ -14,8 +14,8 @@ ACTION_SMOOTH_ALPHA = 0.10  # stronger lowpass — smoother movement, less shake
 # Central Pattern Generator baseline — built-in trot rhythm added to policy
 # output before motor mapping. Lets policy learn corrections to a working gait
 # instead of inventing gait from scratch. 0.0 disables.
-W_CPG_PITCH = 0.18  # propulsive sweep amplitude (pace gait is more stable than trot)
-W_CPG_ELBOW = 0.10  # foot lift during swing — moderate so it crawls, not flails
+W_CPG_PITCH = 0.0  # DISABLED - propulsive sweep amplitude
+W_CPG_ELBOW = 0.0  # DISABLED - foot lift during swing
 GAIT_TYPE = "pace"  # Gait pattern: pace, trot, walk, alt_arm_leg, mirror_arm_leg
 FRACTAL_OFFSET = 0.0  # Phase offset (0.0 to 1.0) for additional variation
 MOTOR_KP = 8.0

@@ -1,0 +1,72 @@
+JAX devices: [CudaDevice(id=0)]
+Task: stand  |  512 envs  |  save every 25,600 steps
+Loading model...
+[stand_env] loading scene
+[resume] loaded mjx_000000163840.npz (163,840 steps)
+[lineage] recorded run #41 — inherited from: runs/ape_stand_mjx/mjx_000000163840.npz
+[watch] spawning viewer: /home/tony/gibbonBot-RL/.venv/bin/python view.py --env stand --since 1778476343.281158
+Training — 100,000,000 total steps.
+ updates         steps       sps    mean_rew  metrics
+------------------------------------------------------------
+[view] reloaded motor params: SPEED_FRAC=0.8 ACCEL_RATIO=2.0 ACTION_ALPHA=0.1
+[save] mjx_000000196608.npz
+[view] tree 't0_trunk' at xy=[3.0, 0.0] top_z≈2.26
+[view] no checkpoint yet — using random policy, will hot-swap when one appears
+[view] PHYSICS_STEPS=16, action=32ms sim time, policy=latest
+  ep  status     torso_z   steps   upright
+   1  TIMEOUT      0.128m     250     0.782
+   2  TIMEOUT      0.123m     250     0.998
+   3  TIMEOUT      0.121m     250     0.744
+   4  FLIPPED      0.172m      21    -0.000
+   5  FLIPPED      0.136m     174    -0.001
+   6  TIMEOUT      0.114m     250     0.979
+   7  TIMEOUT      0.171m     250     0.794
+   8  FLIPPED      0.127m      84    -0.001
+   9  TIMEOUT      0.121m     250     0.999
+  10  TIMEOUT      0.105m     250     0.185
+  11  TIMEOUT      0.189m     250     0.980
+[view] >>> NEW POLICY: mjx_000000196608.npz <<<
+  12  FLIPPED      0.133m      94    -0.004
+  13  TIMEOUT      0.139m     250     0.603
+  14  TIMEOUT      0.138m     250     0.278
+  15  TIMEOUT      0.139m     250     0.991
+  16  TIMEOUT      0.138m     250     0.648
+  17  TIMEOUT      0.139m     250     0.951
+  18  TIMEOUT      0.139m     250     0.709
+  19  FLIPPED      0.140m       9    -0.012
+  20  TIMEOUT      0.138m     250     0.792
+  21  TIMEOUT      0.138m     250     0.647
+  22  TIMEOUT      0.138m     250     0.717
+  23  TIMEOUT      0.139m     250     0.992
+  24  TIMEOUT      0.138m     250     0.989
+  25  TIMEOUT      0.139m     250     0.920
+  26  FLIPPED      0.136m      51    -0.002
+  27  TIMEOUT      0.139m     250     0.975
+  28  TIMEOUT      0.138m     250     0.212
+  29  TIMEOUT      0.138m     250     0.691
+  30  TIMEOUT      0.139m     250     0.706
+[view] reloaded motor params: SPEED_FRAC=0.8 ACCEL_RATIO=2.0 ACTION_ALPHA=0.1
+  31  TIMEOUT      0.145m     250     0.664
+  32  FLIPPED      0.144m      50    -0.000
+  33  TIMEOUT      0.145m     250     0.230
+[view] closed.
+[save] mjx_000000229376.npz
+       5       245,760       229  rew=+2.91  d=0.68  vx=+0.00  z=0.14  upr=0.68  ωz=-0.04
+[save] mjx_000000262144.npz
+[save] mjx_000000294912.npz
+      10       327,680       390  rew=+2.80  d=0.65  vx=-0.00  z=0.15  upr=0.66  ωz=-0.02
+[save] mjx_000000327680.npz
+[save] mjx_000000360448.npz
+[save] mjx_000000393216.npz
+      15       409,600       511  rew=+2.89  d=0.67  vx=-0.00  z=0.16  upr=0.67  ωz=+0.01
+[save] mjx_000000425984.npz
+[save] mjx_000000458752.npz
+      20       491,520       605  rew=+2.93  d=0.67  vx=-0.00  z=0.16  upr=0.68  ωz=+0.02
+[save] mjx_000000491520.npz
+[save] mjx_000000524288.npz
+[save] mjx_000000557056.npz
+      25       573,440       682  rew=+2.71  d=0.64  vx=+0.00  z=0.14  upr=0.65  ωz=-0.01
+[save] mjx_000000589824.npz
+[save] mjx_000000622592.npz
+      30       655,360       743  rew=+2.88  d=0.67  vx=+0.00  z=0.16  upr=0.67  ωz=+0.08
+[save] mjx_000000655360.npz

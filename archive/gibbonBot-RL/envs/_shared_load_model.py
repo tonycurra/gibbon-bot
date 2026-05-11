@@ -1,10 +1,10 @@
 """Shared model loader for all tasks. Tasks wrap this with task-specific extras
 (e.g. tree position lookup for walk_to_tree). All tasks share the same robot
 URDF, motor calibration, and rest pose."""
+
 import jax.numpy as jnp
 import mujoco
 import mujoco.mjx as mjx
-
 
 # Per-limb joint order: yaw, pitch, elbow/knee, roll, wrist/ankle, gripper/foot.
 # ST3235 / ST3215: 45 RPM = 4.71 rad/s. ST3215-HS (gripper/foot): 106 RPM = 11.10 rad/s.
@@ -26,11 +26,29 @@ def base_load_model(scene_path, params_module, physics_steps_per_action=16):
     mj_model = mujoco.MjModel.from_xml_path(str(scene_path))
     mj_model.opt.timestep = 0.002
 
-    # Mesh self-collision is the O(n²) cost. Disable for MJX.
+    # Collision filtering: move all robot geoms to group 2 (contype=2, conaffinity=1).
+    # This prevents robot self-collisions (legs crossing, arms hitting torso, etc.)
+    # while maintaining collisions with the floor and trees (which stay in group 1).
+    # Group 2 geoms: contype=2, conaffinity=1
+    # Group 1 geoms (floor, trees): contype=1, conaffinity=31
+    # Robot vs Floor: (2 & 31) != 0 and (1 & 1) != 0 → collide ✓
+    # Robot vs Robot: (2 & 1) = 0 → no collision ✓
+    # Robot vs Tree: (2 & 31) != 0 and (1 & 1) != 0 → collide ✓
     for i in range(mj_model.ngeom):
-        if mj_model.geom_type[i] == mujoco.mjtGeom.mjGEOM_MESH:
-            mj_model.geom_contype[i] = 0
-            mj_model.geom_conaffinity[i] = 0
+        geom_name = mujoco.mj_id2name(mj_model, mujoco.mjtObj.mjOBJ_GEOM, i)
+        # Keep floor geom in group 1 (for collision with robot)
+        if geom_name and "floor" in geom_name:
+            continue
+        # Keep tree geoms (t0_*, t1_*, etc.) in group 1 so robot collides with them
+        if (
+            geom_name
+            and geom_name.startswith("t")
+            and geom_name[1:].split("_")[0].isdigit()
+        ):
+            continue
+        # Move all other geoms (robot parts, terrain visuals) to group 2
+        mj_model.geom_contype[i] = 2
+        mj_model.geom_conaffinity[i] = 1
 
     kp = float(getattr(params_module, "MOTOR_KP", 8.0))
     mj_model.actuator_gainprm[:, 0] = kp

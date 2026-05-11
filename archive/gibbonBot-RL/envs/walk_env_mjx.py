@@ -9,6 +9,7 @@ read from the model at load time (geom name `t0_trunk`, injected via
 Mirrors the structure of stand_env_mjx.py so train_walk_mjx.py is a
 near-clone of train_mjx.py.
 """
+
 import importlib
 import pathlib
 
@@ -20,17 +21,17 @@ import numpy as np
 
 import envs.params_walk_mjx as _p
 
-_ROOT        = pathlib.Path(__file__).parent.parent
-SCENE        = _ROOT / "data" / "scene.xml"
+_ROOT = pathlib.Path(__file__).parent.parent
+SCENE = _ROOT / "data" / "scene.xml"
 _PARAMS_FILE = pathlib.Path(__file__).parent / "params_walk_mjx.py"
 
-MAX_STEPS = 200   # ~6.4s sim time. Long enough to walk 3m to tree at sustainable speed.
-ACT_DIM   = 24
+MAX_STEPS = 200  # ~6.4s sim time. Long enough to walk 3m to tree at sustainable speed.
+ACT_DIM = 24
 # obs: torso z(1) + quat(4) + linvel(3) + angvel(3)
 #      + jpos(24) + jvel(24) + torques(24)
 #      + relative tree (dx, dy, dist) (3)
 #      + gait phase (sin, cos) (2)  ← biological: spinal CPG-style clock
-OBS_DIM   = 88
+OBS_DIM = 88
 GAIT_PERIOD_STEPS = 40  # 1.28s cycle — slower trot, easier to balance than 0.8s
 
 PHYSICS_STEPS_PER_ACTION = int(_p.PHYSICS_STEPS_PER_ACTION)
@@ -78,11 +79,24 @@ def load_model():
     mj_model = mujoco.MjModel.from_xml_path(str(SCENE))
     mj_model.opt.timestep = 0.002
 
-    # Mesh geoms cause combinatorial JIT explosion in MJX — disable their collision.
+    # Collision filtering: move all robot geoms to group 2 (contype=2, conaffinity=1).
+    # This prevents robot self-collisions (legs crossing, arms hitting torso, etc.)
+    # while maintaining collisions with the floor and trees (which stay in group 1).
     for i in range(mj_model.ngeom):
-        if mj_model.geom_type[i] == mujoco.mjtGeom.mjGEOM_MESH:
-            mj_model.geom_contype[i] = 0
-            mj_model.geom_conaffinity[i] = 0
+        geom_name = mujoco.mj_id2name(mj_model, mujoco.mjtObj.mjOBJ_GEOM, i)
+        # Keep floor geom in group 1 (for collision with robot)
+        if geom_name and "floor" in geom_name:
+            continue
+        # Keep tree geoms (t0_*, t1_*, etc.) in group 1 so robot collides with them
+        if (
+            geom_name
+            and geom_name.startswith("t")
+            and geom_name[1:].split("_")[0].isdigit()
+        ):
+            continue
+        # Move all other geoms (robot parts, terrain visuals) to group 2
+        mj_model.geom_contype[i] = 2
+        mj_model.geom_conaffinity[i] = 1
 
     kp = float(getattr(_p, "MOTOR_KP", 8.0))
     mj_model.actuator_gainprm[:, 0] = kp
@@ -115,7 +129,9 @@ def load_model():
     # weight is borne, not flailed sideways.
     # Per limb: yaw, pitch, elbow/knee, roll, wrist/ankle, gripper/foot.
     DEG = jnp.pi / 180.0
-    PER_LIMB_REST = jnp.array([0.0, 0.0, 30.0 * DEG, 0.0, 0.0, 0.0])  # only elbow/knee bent for weight-bearing
+    PER_LIMB_REST = jnp.array(
+        [0.0, 0.0, 30.0 * DEG, 0.0, 0.0, 0.0]
+    )  # only elbow/knee bent for weight-bearing
     rest_pose = jnp.tile(PER_LIMB_REST, 4)
     speed_frac = float(getattr(_p, "MOTOR_SPEED_FRAC", 1.0))
     accel_ratio = float(getattr(_p, "MOTOR_ACCEL_RATIO", 5.0))
@@ -129,7 +145,15 @@ def load_model():
     motor_max_accel_per_action = motor_max_speed_per_action * accel_ratio * action_dt
     # Return order: (mx, jnt_lo, jnt_hi, motor_max_speed, motor_max_accel, rest_pose, target_xy)
     # — target last, matching the multi-task contract used by train_mjx.py.
-    return mx, jnt_lo, jnt_hi, motor_max_speed_per_action, motor_max_accel_per_action, rest_pose, tree_xy_j
+    return (
+        mx,
+        jnt_lo,
+        jnt_hi,
+        motor_max_speed_per_action,
+        motor_max_accel_per_action,
+        rest_pose,
+        tree_xy_j,
+    )
 
 
 def reset(mx, jnt_lo, jnt_hi, tree_xy, rng):
@@ -139,40 +163,84 @@ def reset(mx, jnt_lo, jnt_hi, tree_xy, rng):
     # Spawn near origin facing roughly toward the tree. Yaw noise lets the
     # policy learn to orient — but bias toward the right direction.
     yaw_target = jnp.arctan2(tree_xy[1], tree_xy[0])
-    yaw_noise  = jax.random.uniform(k1, (), minval=-jnp.pi/2, maxval=jnp.pi/2)  # ±90° — robot still has to orient but tree is in front hemisphere
-    yaw        = yaw_target + yaw_noise
-    xy_noise   = jax.random.uniform(k2, (2,), minval=-0.3, maxval=0.3)        # bigger spawn jitter
+    yaw_noise = jax.random.uniform(
+        k1, (), minval=-jnp.pi / 2, maxval=jnp.pi / 2
+    )  # ±90° — robot still has to orient but tree is in front hemisphere
+    yaw = yaw_target + yaw_noise
+    xy_noise = jax.random.uniform(
+        k2, (2,), minval=-0.3, maxval=0.3
+    )  # bigger spawn jitter
 
     qpos = dx.qpos.at[0].set(xy_noise[0])
     qpos = qpos.at[1].set(xy_noise[1])
-    qpos = qpos.at[2].set(0.30)               # spawn already standing-ish
+    qpos = qpos.at[2].set(0.30)  # spawn already standing-ish
     qpos = qpos.at[3].set(jnp.cos(yaw / 2))
     qpos = qpos.at[4].set(0.0)
     qpos = qpos.at[5].set(0.0)
     qpos = qpos.at[6].set(jnp.sin(yaw / 2))
 
     rng, knoise = jax.random.split(rng)
-    noise = jax.random.uniform(knoise, (24,), minval=-0.30, maxval=0.30)  # 3x more joint randomization at spawn
-    qpos = qpos.at[7:7 + ACT_DIM].set(noise)
+    noise = jax.random.uniform(
+        knoise, (24,), minval=-0.30, maxval=0.30
+    )  # 3x more joint randomization at spawn
+    qpos = qpos.at[7 : 7 + ACT_DIM].set(noise)
 
-    dx = dx.replace(qpos=qpos, qvel=jnp.zeros_like(dx.qvel), ctrl=jnp.zeros_like(dx.ctrl))
+    dx = dx.replace(
+        qpos=qpos, qvel=jnp.zeros_like(dx.qvel), ctrl=jnp.zeros_like(dx.ctrl)
+    )
     dx = mjx.forward(mx, dx)
 
-    motor_pos   = jnp.zeros(ACT_DIM)
-    motor_vel   = jnp.zeros(ACT_DIM)
+    motor_pos = jnp.zeros(ACT_DIM)
+    motor_vel = jnp.zeros(ACT_DIM)
     prev_action = jnp.zeros(ACT_DIM)
-    step_idx    = jnp.int32(0)
+    step_idx = jnp.int32(0)
     obs = _get_obs(dx, tree_xy, step_idx)
     prev_dist = jnp.linalg.norm(dx.qpos[0:2] - tree_xy)
     return dx, obs, motor_pos, motor_vel, prev_action, prev_dist, step_idx
 
 
-def step(mx, jnt_lo, jnt_hi, motor_max_speed, motor_max_accel, rest_pose, tree_xy, dx, action, motor_pos, motor_vel, prev_action, prev_dist, step_idx, rparams):
-    (target_z, target_tol, w_height, w_upright,
-     w_progress, w_proximity_tree, success_dist, w_success,
-     ground_clearance, w_ground, flip_penalty, _legacy_speed,
-     w_smooth, w_jvel, w_energy, w_alive, action_alpha, w_fwd_vel, w_symmetry,
-     w_heading, _legacy_accel, w_cpg_pitch, w_cpg_elbow) = rparams
+def step(
+    mx,
+    jnt_lo,
+    jnt_hi,
+    motor_max_speed,
+    motor_max_accel,
+    rest_pose,
+    tree_xy,
+    dx,
+    action,
+    motor_pos,
+    motor_vel,
+    prev_action,
+    prev_dist,
+    step_idx,
+    rparams,
+):
+    (
+        target_z,
+        target_tol,
+        w_height,
+        w_upright,
+        w_progress,
+        w_proximity_tree,
+        success_dist,
+        w_success,
+        ground_clearance,
+        w_ground,
+        flip_penalty,
+        _legacy_speed,
+        w_smooth,
+        w_jvel,
+        w_energy,
+        w_alive,
+        action_alpha,
+        w_fwd_vel,
+        w_symmetry,
+        w_heading,
+        _legacy_accel,
+        w_cpg_pitch,
+        w_cpg_elbow,
+    ) = rparams
 
     filt_action = action_alpha * action + (1.0 - action_alpha) * prev_action
 
@@ -182,14 +250,16 @@ def step(mx, jnt_lo, jnt_hi, motor_max_speed, motor_max_accel, rest_pose, tree_x
     # slow crawling on bent limbs (wrists/ankles or elbows/knees).
     # Per-limb sign table from scripts/calibrate_cpg.py.
     # Limb idx: FL=0, FR=1, BL=2, BR=3. Joint within limb: 0=yaw,1=pitch,2=elbow/knee.
-    LIMB_PHASE = jnp.array([0.0, jnp.pi, 0.0, jnp.pi])  # pace: left side phase 0, right side phase π
+    LIMB_PHASE = jnp.array(
+        [0.0, jnp.pi, 0.0, jnp.pi]
+    )  # pace: left side phase 0, right side phase π
     phase = 2.0 * jnp.pi * step_idx / GAIT_PERIOD_STEPS + LIMB_PHASE
     sin_p = jnp.sin(phase)  # sweep signal (positive = limb forward)
 
     # FRONT (FL, FR): forward propulsion via yaw with mirrored signs.
     # FL_yaw +action → -x, so forward = -sin. FR_yaw +action → +x, so forward = +sin.
-    fl_yaw =  -w_cpg_pitch * sin_p[0]
-    fr_yaw =  +w_cpg_pitch * sin_p[1]
+    fl_yaw = -w_cpg_pitch * sin_p[0]
+    fr_yaw = +w_cpg_pitch * sin_p[1]
     # Lift during swing (sin>0): pitch in negative direction lifts hand.
     fl_pitch = -w_cpg_elbow * jnp.maximum(sin_p[0], 0.0)
     fr_pitch = -w_cpg_elbow * jnp.maximum(sin_p[1], 0.0)
@@ -242,11 +312,11 @@ def step(mx, jnt_lo, jnt_hi, motor_max_speed, motor_max_accel, rest_pose, tree_x
     obs = _get_obs(dx, tree_xy, step_idx)
 
     torso_xy = dx.qpos[0:2]
-    torso_z  = dx.qpos[2]
-    w        = dx.qpos[3]
+    torso_z = dx.qpos[2]
+    w = dx.qpos[3]
 
     dist = jnp.linalg.norm(torso_xy - tree_xy)
-    progress = prev_dist - dist                             # +ve when approaching
+    progress = prev_dist - dist  # +ve when approaching
 
     # Forward velocity reward — directly rewards motion toward tree, even tiny
     # initial movements before progress accumulates. Critical for bootstrapping
@@ -254,8 +324,10 @@ def step(mx, jnt_lo, jnt_hi, motor_max_speed, motor_max_accel, rest_pose, tree_x
     to_tree_xy = tree_xy - torso_xy
     to_tree_norm = jnp.maximum(jnp.linalg.norm(to_tree_xy), 1e-3)
     to_tree_unit = to_tree_xy / to_tree_norm
-    fwd_vel = jnp.dot(dx.qvel[0:2], to_tree_unit)           # m/s toward tree
-    fwd_vel_reward = w_fwd_vel * jnp.maximum(fwd_vel, 0.0)  # only positive (no penalty for retreat)
+    fwd_vel = jnp.dot(dx.qvel[0:2], to_tree_unit)  # m/s toward tree
+    fwd_vel_reward = w_fwd_vel * jnp.maximum(
+        fwd_vel, 0.0
+    )  # only positive (no penalty for retreat)
 
     # Heading reward: torso forward axis (body +x rotated by torso quat)
     # projected onto xy and aligned with to_tree_unit. Stops squirm/turn-in-place.
@@ -264,40 +336,42 @@ def step(mx, jnt_lo, jnt_hi, motor_max_speed, motor_max_accel, rest_pose, tree_x
     fwd_y = 2.0 * (qx * qy + qw * qz)
     fwd_norm = jnp.maximum(jnp.sqrt(fwd_x * fwd_x + fwd_y * fwd_y), 1e-3)
     heading_dot = (fwd_x * to_tree_unit[0] + fwd_y * to_tree_unit[1]) / fwd_norm
-    heading_reward = w_heading * heading_dot   # +w when facing tree, -w when facing away
+    heading_reward = w_heading * heading_dot  # +w when facing tree, -w when facing away
 
     # Height shaping — torso must stay near target_z (off the ground).
-    height_err    = (torso_z - target_z) / target_tol
-    height_reward = w_height * jnp.exp(-0.5 * height_err ** 2)
+    height_err = (torso_z - target_z) / target_tol
+    height_reward = w_height * jnp.exp(-0.5 * height_err**2)
 
     upright_reward = jnp.where(w > 0, w_upright * w * w, 0.0)
     progress_reward = w_progress * progress
 
     # Penalty grows when torso dips below ground_clearance.
     ground_violation = jnp.maximum(ground_clearance - torso_z, 0.0)
-    ground_penalty   = w_ground * ground_violation ** 2
+    ground_penalty = w_ground * ground_violation**2
 
     # Smooth proximity reward — extra signal near goal so the policy learns
     # to stop, not just orbit.
-    prox_tree_reward = w_proximity_tree * jnp.exp(-dist / jnp.maximum(success_dist, 1e-3))
+    prox_tree_reward = w_proximity_tree * jnp.exp(
+        -dist / jnp.maximum(success_dist, 1e-3)
+    )
 
     smooth_penalty = w_smooth * jnp.sum((filt_action - prev_action) ** 2)
-    jvel_penalty   = w_jvel * jnp.sum(dx.qvel[6:6 + ACT_DIM] ** 2)
-    energy_penalty = w_energy * jnp.sum(dx.ctrl ** 2)
+    jvel_penalty = w_jvel * jnp.sum(dx.qvel[6 : 6 + ACT_DIM] ** 2)
+    energy_penalty = w_energy * jnp.sum(dx.ctrl**2)
 
     # Bilateral symmetry: penalize lopsided torques across left/right limbs.
     # Joints 0-5 = FL, 6-11 = FR, 12-17 = BL, 18-23 = BR. Mirror-pair the
     # torque magnitudes — well-behaved gaits keep front-left and front-right
     # similarly loaded over a stride. Biological prior: tetrapods evolved
     # bilaterally symmetric locomotion; asymmetry usually = lameness or chaos.
-    torq = dx.qfrc_actuator[6:6 + ACT_DIM]
+    torq = dx.qfrc_actuator[6 : 6 + ACT_DIM]
     fl, fr = jnp.abs(torq[0:6]), jnp.abs(torq[6:12])
     bl, br = jnp.abs(torq[12:18]), jnp.abs(torq[18:24])
     symmetry_penalty = w_symmetry * (jnp.sum((fl - fr) ** 2) + jnp.sum((bl - br) ** 2))
 
     upside_down = w < 0
-    on_ground   = torso_z < (ground_clearance * 0.5)
-    success     = dist < success_dist
+    on_ground = torso_z < (ground_clearance * 0.5)
+    success = dist < success_dist
     # Make-or-break: after a short grace period, if the robot isn't moving
     # toward the tree at a meaningful pace, kill the episode and reset. No
     # reward for standing still — get on with it.
@@ -308,12 +382,22 @@ def step(mx, jnt_lo, jnt_hi, motor_max_speed, motor_max_accel, rest_pose, tree_x
     alive_bonus = w_alive * (1.0 - upside_down.astype(jnp.float32))
     success_bonus = jnp.where(success, w_success, 0.0)
 
-    reward = (height_reward + upright_reward + progress_reward + prox_tree_reward
-              + fwd_vel_reward + heading_reward
-              + alive_bonus + success_bonus
-              - ground_penalty - smooth_penalty - jvel_penalty - energy_penalty
-              - symmetry_penalty
-              - flip_penalty * upside_down)
+    reward = (
+        height_reward
+        + upright_reward
+        + progress_reward
+        + prox_tree_reward
+        + fwd_vel_reward
+        + heading_reward
+        + alive_bonus
+        + success_bonus
+        - ground_penalty
+        - smooth_penalty
+        - jvel_penalty
+        - energy_penalty
+        - symmetry_penalty
+        - flip_penalty * upside_down
+    )
 
     done = upside_down | on_ground | success | stalled
 
@@ -339,16 +423,18 @@ def _get_obs(dx, tree_xy, step_idx):
     # from fish locomotion ~400Mya; quadruped gaits are phase patterns over
     # this clock.)
     phase = (2.0 * jnp.pi / GAIT_PERIOD_STEPS) * step_idx.astype(jnp.float32)
-    return jnp.concatenate([
-        dx.qpos[2:3],            # torso z
-        dx.qpos[3:7],            # quat
-        dx.qvel[0:3],            # linvel
-        dx.qvel[3:6],            # angvel
-        dx.qpos[7:7 + ACT_DIM],  # joint pos
-        dx.qvel[6:6 + ACT_DIM],  # joint vel
-        dx.qfrc_actuator[6:30],  # joint torques
-        rel,                     # relative tree xy
-        dist[None],              # distance scalar
-        jnp.sin(phase)[None],    # gait phase clock
-        jnp.cos(phase)[None],
-    ]).astype(jnp.float32)
+    return jnp.concatenate(
+        [
+            dx.qpos[2:3],  # torso z
+            dx.qpos[3:7],  # quat
+            dx.qvel[0:3],  # linvel
+            dx.qvel[3:6],  # angvel
+            dx.qpos[7 : 7 + ACT_DIM],  # joint pos
+            dx.qvel[6 : 6 + ACT_DIM],  # joint vel
+            dx.qfrc_actuator[6:30],  # joint torques
+            rel,  # relative tree xy
+            dist[None],  # distance scalar
+            jnp.sin(phase)[None],  # gait phase clock
+            jnp.cos(phase)[None],
+        ]
+    ).astype(jnp.float32)

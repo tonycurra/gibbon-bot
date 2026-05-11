@@ -159,12 +159,28 @@ def load_predict(path, cached=[None]):
 
 def main():
     model = mujoco.MjModel.from_xml_path(str(SCENE))
-    # Mesh-mesh self-collision is the O(n²) cost that makes the CPU viewer crawl.
-    # Move mesh geoms to group 2 so they only collide with the floor (group 1, conaffinity=31).
+    # Collision filtering: move all robot geoms (except floor and terrain) to
+    # group 2 (contype=2, conaffinity=1). This prevents robot self-collisions
+    # (legs crossing, arms hitting torso, etc.) while maintaining collisions
+    # with the floor and trees (which stay in group 1 with conaffinity=31).
+    # Tree geoms (t0_trunk, t0_b0, etc.) stay in group 1.
+    # Terrain floor geom stays in group 1.
+    # Terrain visual meshes: move to group 2 (original viewer behavior).
     for i in range(model.ngeom):
-        if model.geom_type[i] == mujoco.mjtGeom.mjGEOM_MESH:
-            model.geom_contype[i] = 2
-            model.geom_conaffinity[i] = 1
+        geom_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, i)
+        # Keep floor in group 1
+        if geom_name and "floor" in geom_name:
+            continue
+        # Keep tree geoms (t0_*, t1_*, etc.) in group 1
+        if (
+            geom_name
+            and geom_name.startswith("t")
+            and geom_name[1:].split("_")[0].isdigit()
+        ):
+            continue
+        # Move all other geoms to group 2 (including terrain_visual, terrain_hfield_visual)
+        model.geom_contype[i] = 2
+        model.geom_conaffinity[i] = 1
 
     data = mujoco.MjData(model)
     ACT_DIM = model.nu
