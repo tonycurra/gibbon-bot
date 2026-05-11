@@ -1,0 +1,17 @@
+Failed to import warp: No module named 'warp'
+Failed to import mujoco_warp: No module named 'warp'
+JAX devices: [CudaDevice(id=0)]
+Task: stand  |  512 envs  |  save every 25,600 steps
+Loading model...
+[stand_env] loading scene
+/usr/local/lib/python3.12/dist-packages/mujoco/mjx/_src/mesh.py:141: UserWarning: Mesh "link5" has a coplanar face with more than 20 vertices. This may lead to performance issues and inaccuracies in collision detection. Consider decimating the mesh.
+  warnings.warn(
+/usr/local/lib/python3.12/dist-packages/mujoco/mjx/_src/mesh.py:141: UserWarning: Mesh "gripper_link" has a coplanar face with more than 20 vertices. This may lead to performance issues and inaccuracies in collision detection. Consider decimating the mesh.
+  warnings.warn(
+[resume] loaded mjx_000001048576.npz (1,048,576 steps)
+[lineage] recorded run #47 — inherited from: runs/ape_stand_mjx/mjx_000001048576.npz
+Training — 100,000,000 total steps.
+ updates         steps       sps    mean_rew  metrics
+------------------------------------------------------------
+[save] mjx_000001081344.npz
+[save] mjx_000001114112.npz

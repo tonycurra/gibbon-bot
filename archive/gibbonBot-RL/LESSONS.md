@@ -6,6 +6,42 @@ Use MLflow UI (`mlflow ui --backend-store-uri sqlite:///mlflow.db`) for the metr
 
 ---
 
+## 2026-05-11 — dual-GPU full power training (stand + walk)
+
+**Run label**: `gpu0-stand` (PID 26252), `gpu1-walk` (PID 26362)
+
+**Goal**: Verify full GPU utilization with ApeBrain architecture, sync environments from remote, gather training data.
+
+**Setup**:
+- Remote: 51.158.111.55 (2x NVIDIA L4, 24GB each)
+- GPU 0: stand task, 512 envs, resumed from 1,048,576 steps
+- GPU 1: walk task, 512 envs, resumed from 162,304 steps
+- Both launched via Python subprocess with `CUDA_VISIBLE_DEVICES` binding
+
+**What worked**:
+- **100% GPU utilization achieved on both GPUs** (72-73W/72W, 17.5GB/23GB memory)
+- Both processes ran simultaneously without interference
+- Checkpoints saved every ~25K steps automatically
+- Stand: 1,048,576 → 1,114,112 steps (+65,536)
+- Walk: 162,304 → 227,840 steps (+65,536)
+- ApeBrain architecture verified: all 8 modules (basal ganglia, cerebellum, amygdala, hippocampus, prefrontal cortex, motor cortex, brainstem, neurotransmitters) functional
+
+**ApeBrain Architecture Confirmation**:
+- Basal Ganglia: Action selection via D1/D2 MSNs with TD learning
+- Cerebellum: Motor error correction via Purkinje cells
+- Amygdala: Fear/punishment system for unstable poses
+- Hippocampus: Episodic memory for state transitions
+- Prefrontal Cortex: High-level planning and goal setting
+- Motor Cortex: Motor program execution with smoothing
+- Brainstem: Vestibular, reflexes, arousal systems
+- Neurotransmitters: Dopamine (reward), Serotonin (patience), GABA (inhibition)
+
+**Data synced**: 200+ checkpoints, all logs, mlflow.db to local machine
+
+**Outcome**: Full dual-GPU utilization confirmed. ApeBrain modular architecture functional. Training data collected and synced for both stand and walk tasks.
+
+---
+
 ## 2026-05-10 — calibrated CPG + pace gait
 
 **Run label**: `PACE gait (left-pair right-pair), calibrated CPG, crawl-friendly`

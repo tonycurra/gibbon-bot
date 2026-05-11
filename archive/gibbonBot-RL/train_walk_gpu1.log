@@ -1,0 +1,26 @@
+Failed to import warp: No module named 'warp'
+Failed to import mujoco_warp: No module named 'warp'
+JAX devices: [CudaDevice(id=0)]
+Task: walk  |  512 envs  |  save every 25,600 steps
+Loading model...
+[walk_env] tree at xy=[3.0, 0.0]
+/usr/local/lib/python3.12/dist-packages/mujoco/mjx/_src/mesh.py:141: UserWarning: Mesh "link5" has a coplanar face with more than 20 vertices. This may lead to performance issues and inaccuracies in collision detection. Consider decimating the mesh.
+  warnings.warn(
+/usr/local/lib/python3.12/dist-packages/mujoco/mjx/_src/mesh.py:141: UserWarning: Mesh "gripper_link" has a coplanar face with more than 20 vertices. This may lead to performance issues and inaccuracies in collision detection. Consider decimating the mesh.
+  warnings.warn(
+[resume] FINGERPRINT MISMATCH — training inputs changed since mjx_000000162304.npz
+  ≠ envs/params_walk_mjx.py: was 70228b7331910841 now ab83d24f259a5023
+  ≠ envs/walk_env_mjx.py: was cd675297d2ab0bad now 37233daf6c0564d5
+    data/scene.xml: was fa99948db370249e now fa99948db370249e
+  ≠ envs/_shared_load_model.py: was 6cdd839a0923d0ae now ae383f36c0be341c
+    envs/_shared_dynamics.py: was 23627483cd9eae78 now 23627483cd9eae78
+    envs/_shared_obs.py: was d3206db11d05c83e now d3206db11d05c83e
+[resume] --resume given, loading anyway despite mismatch.
+[resume] loaded mjx_000000162304.npz (162,304 steps)
+[lineage] recorded run #54 — inherited from: runs/ape_walk_mjx/mjx_000000162304.npz
+2026/05/11 07:22:35 INFO mlflow.tracking.fluent: Experiment with name 'ape_walk_mjx' does not exist. Creating a new experiment.
+Training — 100,000,000 total steps.
+ updates         steps       sps    mean_rew  metrics
+------------------------------------------------------------
+[save] mjx_000000195072.npz
+[save] mjx_000000227840.npz
