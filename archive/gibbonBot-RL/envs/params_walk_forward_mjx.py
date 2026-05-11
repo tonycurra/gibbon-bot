@@ -3,11 +3,9 @@
 
 # ─── Motor & action shaping ──────────────────────────────────────────────────
 MOTOR_KP = 8.0
-MOTOR_SPEED_FRAC = 1.0
-MOTOR_ACCEL_RATIO = 5.0
-ACTION_SMOOTH_ALPHA = (
-    0.30  # firmer lowpass than walk-to-tree (encourages smoother steps)
-)
+MOTOR_SPEED_FRAC = 0.8
+MOTOR_ACCEL_RATIO = 2.0
+ACTION_SMOOTH_ALPHA = 0.10  # stronger lowpass for smoother movement
 
 # ─── Reward — minimal: forward velocity is the only positive driver ──────────
 W_FWD_VEL = 25.0  # primary signal: linvel_x (m/s)

@@ -4,9 +4,9 @@ the env's reading of TURN_SIGN."""
 
 # ─── Motor & action shaping ──────────────────────────────────────────────────
 MOTOR_KP = 8.0
-MOTOR_SPEED_FRAC = 1.0
-MOTOR_ACCEL_RATIO = 5.0
-ACTION_SMOOTH_ALPHA = 0.30
+MOTOR_SPEED_FRAC = 0.8
+MOTOR_ACCEL_RATIO = 2.0
+ACTION_SMOOTH_ALPHA = 0.10  # stronger lowpass for smoother movement
 
 # ─── Reward — minimal: yaw rate is the signal (negative target now) ──────────
 W_YAW = 15.0  # absolute magnitude — sign flipped in env via TURN_SIGN

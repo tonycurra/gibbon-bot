@@ -6,14 +6,10 @@ MOTOR_MAX_SPEED = (
 )
 MOTOR_MAX_ACCEL = 0.025  # legacy — unused
 MOTOR_SPEED_FRAC = (
-    1.0  # global scale on real motor max speed (1.0=realistic; <1=slower than reality)
+    0.8  # global scale on real motor max speed (0.8=20% slower; <1=slower than reality)
 )
-MOTOR_ACCEL_RATIO = (
-    5.0  # max angular accel = SPEED × this/sec (reach max speed in 1/RATIO seconds)
-)
-ACTION_SMOOTH_ALPHA = (
-    0.15  # heavy lowpass — kills micro-shake from policy entropy / random-init flicker
-)
+MOTOR_ACCEL_RATIO = 2.0  # max angular accel = SPEED × this/sec (gentler acceleration)
+ACTION_SMOOTH_ALPHA = 0.10  # stronger lowpass — smoother movement, less shake
 
 # Central Pattern Generator baseline — built-in trot rhythm added to policy
 # output before motor mapping. Lets policy learn corrections to a working gait
