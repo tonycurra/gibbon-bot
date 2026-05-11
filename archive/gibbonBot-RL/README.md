@@ -73,6 +73,7 @@ scripts/archive_runs.sh
 ├── view.py              live MuJoCo viewer (hot-swaps to newest checkpoint)
 ├── README.md            this file
 ├── requirements.txt
+├── brain/               Bioinspired neural architecture (Neurotransmitters, Brainstem, Basal Ganglia)
 ├── envs/                MJX environments + their hyperparams
 ├── data/                scene.xml, robot meshes, motor specs, terrain
 ├── trees/               olive-tree generation pipeline
@@ -136,6 +137,7 @@ reproducibility unit.
 - **[docs/BRAIN_CORE.md](docs/BRAIN_CORE.md)** — long-term vision for instinct + memory architecture (skill library, recurrent policy, world model)
 - **[docs/CURRICULUM.md](docs/CURRICULUM.md)** — multi-skill curriculum: stand → walk_forward → turn_left → turn_right
 - **[docs/CLOUD_DEPLOY.md](docs/CLOUD_DEPLOY.md)** — Dockerfile + docker-compose for local or cloud GPU training
+- **[docs/APEBRAIN.md](docs/APEBRAIN.md)** — Bioinspired neural architecture (Neurotransmitters, Brainstem, Basal Ganglia)
 
 ## Tooling cheat sheet
 
