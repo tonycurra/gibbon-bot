@@ -194,6 +194,11 @@ def save_checkpoint(train_state, RUNS, task, steps):
     path = RUNS / f"mjx_{steps:012d}.npz"
     flat, _ = jax.tree_util.tree_flatten(jax.device_get(train_state.params))
     np.savez(str(path), *flat)
+    try:
+        from utils.checkpoint import save as _save_st
+        _save_st(train_state.params, path.with_suffix(".safetensors"))
+    except Exception as e:
+        print(f"[save] safetensors sidecar skipped: {e}", flush=True)
     fp = fingerprint(task)
     (RUNS / "latest.fingerprint.json").write_text(json.dumps(fp, indent=2))
     print(f"[save] {path.name}", flush=True)
@@ -612,6 +617,11 @@ def main():
                 if not kpath.exists():
                     flat, _ = jax.tree_util.tree_flatten(jax.device_get(train_state.params))
                     np.savez(str(kpath), *flat)
+                    try:
+                        from utils.checkpoint import save as _save_st
+                        _save_st(train_state.params, kpath.with_suffix(".safetensors"))
+                    except Exception as e:
+                        print(f"[keeper] safetensors sidecar skipped: {e}", flush=True)
                     sidecar = {
                         "tag": tag, "step": int(total_steps), "task": TASK,
                         "metrics": metrics,

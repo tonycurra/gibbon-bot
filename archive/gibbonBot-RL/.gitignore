@@ -59,8 +59,33 @@ docs/*.toc
 output/
 results/
 
-# Training checkpoints + history are TRACKED. Do not ignore mjx_*.npz or _history/.
-# Only transient runtime cruft is ignored below.
+# Training checkpoints + history go to Object Storage, NOT git
+# Large binary files that git cannot handle efficiently
+*.npz
+*.h5
+*.hdf5
+
+# MLflow tracking - goes to Object Storage
+mlflow.db
+mlflow.db.*
+mlruns/
+
+# Training artifacts in runs/ - goes to Object Storage
+runs/*/mjx_*.npz
+runs/*/rollout_*.npz
+runs/*/rollouts/
+
+# Training logs - goes to Object Storage
+runs/*/train.log
+runs/*/*.log
+
+# MLflow remote sync files - goes to Object Storage
+*.remote
+
+# Keepers are curated checkpoints - still in git for reproducibility
+# runs/*/keepers/
+
+# Runtime cruft - ignored
 runs/*/health.json
 runs/*/latest.fingerprint.json
 runs/*/monitor.log
