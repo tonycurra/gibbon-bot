@@ -52,3 +52,28 @@ dist/
 
 # --- Local archive backups (this machine only) ---
 /runs-archive/
+
+# --- Large assets that live in Scaleway (gibbonbot-training/assets/) ---
+# Restore with: rclone sync scaleway:gibbonbot-training/assets/ data/
+data/trees/
+data/terrain_surface.obj
+data/*.blend
+data/*.blend1
+
+# --- Nested git clones (external repos, not submodules) ---
+data/OpenApePose/
+data/roarm_ws/
+
+# --- MuJoCo runtime dumps & generated artifacts ---
+MJMODEL.TXT
+MUJOCO_LOG.TXT
+mlflow.db.remote
+mlflow.db-shm
+mlflow.db-wal
+reward.png
+*.fingerprint.json
+health.json
+monitor.log
+autopilot.log
+autopilot_state.json
+live_stats.json
