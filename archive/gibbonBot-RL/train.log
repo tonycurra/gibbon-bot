@@ -1,33 +1,9 @@
 JAX devices: [CudaDevice(id=0)]
-512 envs  |  save every 25,600 steps
+Task: walk  |  512 envs  |  save every 25,600 steps
 Loading model...
 [walk_env] tree at xy=[3.0, 0.0]
-[resume] FINGERPRINT MISMATCH — training inputs changed since mjx_000001310720.npz
-  ≠ envs/params_walk_mjx.py: was d7f647dc5169ff84 now e6a9cd7811e4e862
-  ≠ envs/walk_env_mjx.py: was beeb6e7f14feb0bb now 80eb8072e8def1bb
-    data/scene.xml: was fa99948db370249e now fa99948db370249e
-[resume] --resume given, loading anyway despite mismatch.
-[resume] loaded mjx_000001310720.npz (1,310,720 steps)
-[lineage] recorded run #49 — inherited from: runs/ape_walk_mjx/mjx_000001310720.npz
-Training — 100,000,000 total steps.
- updates         steps       sps    mean_rew   mean_dist
-------------------------------------------------------------
-[save] mjx_000001343488.npz
-[sync] pushed to origin: auto: training data 2026-05-10T13:30:15Z
-[save] mjx_000001376256.npz
-[sync] pushed to origin: auto: training data 2026-05-10T13:33:26Z
-       5     1,392,640       161  rew=3.93  d=2.99  v=0.16m/s  z=0.20  upr=0.91  succ=0.0%  gait=+0.02  stride=0.20s
-[save] mjx_000001409024.npz
-[sync] pushed to origin: auto: training data 2026-05-10T13:36:59Z
-[save] mjx_000001441792.npz
-[sync] pushed to origin: auto: training data 2026-05-10T13:42:02Z
-      10     1,474,560       149  rew=3.59  d=3.00  v=0.14m/s  z=0.21  upr=0.91  succ=0.0%  gait=-0.18  stride=0.34s
-[save] mjx_000001474560.npz
-[sync] pushed to origin: auto: training data 2026-05-10T13:45:11Z
-[save] mjx_000001507328.npz
-[sync] pushed to origin: auto: training data 2026-05-10T13:48:43Z
-[save] mjx_000001540096.npz
-[sync] pushed to origin: auto: training data 2026-05-10T13:51:32Z
-      15     1,556,480       164  rew=4.40  d=2.99  v=0.19m/s  z=0.20  upr=0.89  succ=0.0%  gait=+0.05  stride=1.02s
-[save] mjx_000001572864.npz
-[sync] pushed to origin: auto: training data 2026-05-10T13:52:03Z
+/home/tony/gibbonBot-RL/.venv/lib/python3.12/site-packages/mujoco/mjx/_src/mesh.py:141: UserWarning: Mesh "link5" has a coplanar face with more than 20 vertices. This may lead to performance issues and inaccuracies in collision detection. Consider decimating the mesh.
+  warnings.warn(
+/home/tony/gibbonBot-RL/.venv/lib/python3.12/site-packages/mujoco/mjx/_src/mesh.py:141: UserWarning: Mesh "gripper_link" has a coplanar face with more than 20 vertices. This may lead to performance issues and inaccuracies in collision detection. Consider decimating the mesh.
+  warnings.warn(
+[resume] loaded mjx_000000506368.npz (506,368 steps)

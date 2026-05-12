@@ -20,6 +20,20 @@ python train_mjx.py --task walk --resume \
 # --label       : free-form note attached to the MLflow run as a tag
 # --resume-from : explicit checkpoint, even from a different task
 
+# train one task — detached background (use this when launching from a Claude/agent
+# session, so the shell never blocks and the trainer survives Ctrl-C / disconnect)
+scripts/train_bg.sh start walk      # nohup+setsid; pid → runs/.train.pid; log → train.log
+scripts/train_bg.sh status          # alive/dead + last 20 log lines (instant)
+scripts/train_bg.sh tail 80         # tail N log lines
+scripts/train_bg.sh stop            # TERM the whole process group, KILL after 5s
+# Refuses to start a 2nd trainer if any train_mjx.py is already running
+# (even one launched outside this wrapper). Refuses if the GPU is already in use;
+# override with ALLOW_GPU_SHARE=1.
+
+# audit "what's running on this box right now?" — claude sessions, trainers,
+# viewers, GPU users, procs with cwd in this repo, log holders, zombies
+scripts/ape_audit.sh
+
 # legacy entry point (back-compat shim that calls train_mjx.py --task walk)
 python train_walk_mjx.py --auto-push --label "..."
 
