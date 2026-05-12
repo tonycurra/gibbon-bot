@@ -11,6 +11,9 @@ from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
 import jax.numpy as jnp
+import numpy as np
+
+from brain.bus import BrainBus, EVENT_NOVELTY, EVENT_REPLAY_TICK, EVENT_THREAT
 
 
 @dataclass
@@ -20,6 +23,7 @@ class ApeBrainConfig:
     obs_dim: int = 88
     act_dim: int = 24
     training: bool = True
+    persist_dir: Optional[str] = None  # if set, hippocampus + semantic map persist here
 
 
 class ApeBrain:
@@ -45,6 +49,8 @@ class ApeBrain:
         self.config = config if config is not None else ApeBrainConfig()
         self.modules = {}
         self._step_count = 0
+        self.bus = BrainBus()
+        self.semantic_map = None
         self._initialize_modules()
 
     def _initialize_modules(self):
@@ -70,9 +76,18 @@ class ApeBrain:
             obs_dim=self.config.obs_dim,
             act_dim=self.config.act_dim,
         )
+        hippo_persist = None
+        if self.config.persist_dir is not None:
+            from pathlib import Path
+            persist_dir = Path(self.config.persist_dir)
+            persist_dir.mkdir(parents=True, exist_ok=True)
+            hippo_persist = str(persist_dir / "episodic.sqlite")
+            from brain.semantic_map import SemanticMap
+            self.semantic_map = SemanticMap(persist_dir / "semantic.sqlite")
         self.modules["hippocampus"] = Hippocampus(
             obs_dim=self.config.obs_dim,
             act_dim=self.config.act_dim,
+            persist_path=hippo_persist,
         )
         self.modules["prefrontal_cortex"] = PrefrontalCortex(
             obs_dim=self.config.obs_dim,
@@ -139,6 +154,18 @@ class ApeBrain:
         if reward is not None and next_observation is not None and self.config.training:
             bg.learn(reward, next_observation, action_idx)
 
+        # Record the transition in episodic memory (and persistent store if configured).
+        if reward is not None and next_observation is not None:
+            hippo = self.modules["hippocampus"]
+            punishment = max(-float(reward), 0.0)
+            hippo.store_memory(
+                observation,
+                action,
+                next_observation,
+                reward=float(reward),
+                punishment=punishment,
+            )
+
         # Apply cerebellum correction
         cerebellum = self.modules["cerebellum"]
         if next_observation is not None:
@@ -164,6 +191,56 @@ class ApeBrain:
     def get_module(self, name: str) -> Optional[Any]:
         """Get a specific module by name."""
         return self.modules.get(name)
+
+    def sleep(self, n_replays: int = 64, lr_scale: float = 2.0) -> int:
+        """Consolidation replay — the "sleep" phase.
+
+        Pulls priority-weighted episodes from the persistent hippocampal store
+        and replays them through the basal ganglia at elevated learning rate.
+        Mirrors how mammals consolidate the day's experience during sleep,
+        compressing episodic memory into procedural skill.
+
+        Returns the number of episodes replayed (0 if no persistent store).
+        """
+        hippo = self.modules["hippocampus"]
+        if hippo.store is None:
+            return 0
+        episodes = hippo.consolidate(n=n_replays)
+        if not episodes:
+            return 0
+
+        self.bus.publish(EVENT_REPLAY_TICK, {"n": len(episodes)})
+
+        bg = self.modules["basal_ganglia"]
+        original_lr = bg.learning_rate
+        bg.learning_rate = original_lr * lr_scale
+        try:
+            for ep in episodes:
+                # Map continuous action vector back to discrete action index.
+                act_idx = int(np.argmax(ep.action))
+                if act_idx >= self.config.act_dim:
+                    continue
+                bg.learn(
+                    reward=float(ep.reward) - float(ep.punishment),
+                    next_cortical_input=jnp.asarray(ep.next_obs),
+                    selected_action=act_idx,
+                )
+        finally:
+            bg.learning_rate = original_lr
+        return len(episodes)
+
+    def emit_novelty(self, obs: jnp.ndarray, similarity: float, threshold: float = 0.3) -> None:
+        """If the current obs is far from anything in memory, publish a novelty event."""
+        if similarity < threshold:
+            self.bus.publish(
+                EVENT_NOVELTY,
+                {"similarity": float(similarity), "step": self._step_count},
+            )
+
+    def emit_threat(self, valence: float, threshold: float = -1.0) -> None:
+        """If valence is sharply negative, publish a threat event."""
+        if valence <= threshold:
+            self.bus.publish(EVENT_THREAT, {"valence": float(valence)})
 
     def get_info(self) -> Dict[str, Any]:
         """Get information about the brain state."""

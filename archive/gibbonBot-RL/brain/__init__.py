@@ -66,6 +66,10 @@ def __getattr__(name):
         "PrefrontalCortex": ("brain.prefrontal_cortex", "PrefrontalCortex"),
         "MotorCortex": ("brain.motor_cortex", "MotorCortex"),
         "ApeBrain": ("brain.ape_brain", "ApeBrain"),
+        "EpisodicStore": ("brain.episodic_store", "EpisodicStore"),
+        "SemanticMap": ("brain.semantic_map", "SemanticMap"),
+        "BrainBus": ("brain.bus", "BrainBus"),
+        "NeuromodState": ("brain.bus", "NeuromodState"),
     }
 
     if name in _module_map:
@@ -92,6 +96,10 @@ __all__ = [
     "PrefrontalCortex",
     "MotorCortex",
     "ApeBrain",
+    "EpisodicStore",
+    "SemanticMap",
+    "BrainBus",
+    "NeuromodState",
 ]
 
 __version__ = "0.1.0"

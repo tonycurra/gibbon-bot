@@ -532,12 +532,38 @@ class PrefrontalCortex:
 
         return inhibition
 
+    def integrate_recall(self, recalled_episodes) -> Optional[jnp.ndarray]:
+        """Fold k recalled episodes into a single context vector.
+
+        Recency-weighted mean of the episodes' embeddings, scaled by valence
+        magnitude so emotionally salient episodes dominate the recall context.
+        Returns None if no episodes were recalled.
+
+        Args:
+            recalled_episodes: list of brain.episodic_store.Episode
+
+        Returns:
+            (spatial_dim,) jnp array or None
+        """
+        if not recalled_episodes:
+            return None
+        embs = jnp.stack(
+            [jnp.asarray(ep.embedding) for ep in recalled_episodes], axis=0
+        )
+        weights = jnp.asarray(
+            [abs(ep.valence) + 1e-3 for ep in recalled_episodes],
+            dtype=embs.dtype,
+        )
+        weights = weights / weights.sum()
+        return (embs * weights[:, None]).sum(axis=0)
+
     def step(
         self,
         observation: jnp.ndarray,
         context: Optional[jnp.ndarray] = None,
         action_values: Optional[jnp.ndarray] = None,
         generate_new_plan: bool = True,
+        recalled_episodes: Optional[list] = None,
     ) -> Tuple[jnp.ndarray, float, float]:
         """
         Complete prefrontal cortex processing step.
@@ -557,6 +583,12 @@ class PrefrontalCortex:
         Returns:
             (action, confidence, inhibition) - selected action, confidence, inhibition signal
         """
+        # Fold episodic recall (long-horizon hippocampal context) into the
+        # context passed to working memory — RAG-for-robots.
+        recall_ctx = self.integrate_recall(recalled_episodes) if recalled_episodes else None
+        if recall_ctx is not None:
+            context = recall_ctx if context is None else 0.5 * context + 0.5 * recall_ctx
+
         # Update working memory
         self.update_working_memory(observation, context)
 

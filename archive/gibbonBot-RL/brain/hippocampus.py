@@ -29,10 +29,14 @@ Simplification:
 """
 
 from dataclasses import dataclass, replace
+from pathlib import Path
 from typing import List, NamedTuple, Optional, Tuple
 
 import jax
 import jax.numpy as jnp
+import numpy as np
+
+from brain.episodic_store import EpisodicStore
 
 
 @dataclass
@@ -99,6 +103,7 @@ class Hippocampus:
         obs_dim: int = 88,
         act_dim: int = 24,
         config: Optional[HippocampusConfig] = None,
+        persist_path: Optional[str] = None,
     ):
         """
         Initialize hippocampus.
@@ -129,6 +134,17 @@ class Hippocampus:
             * 0.1
         )
         self.b_context = jnp.zeros(self.config.spatial_dim)
+
+        # Optional persistent episodic store (long-term consolidation substrate).
+        self.store: Optional[EpisodicStore] = None
+        if persist_path is not None:
+            self.store = EpisodicStore(
+                persist_path,
+                obs_dim=obs_dim,
+                act_dim=act_dim,
+                embed_dim=self.config.spatial_dim,
+                capacity=self.config.memory_capacity * 10,
+            )
 
         # Initialize state
         self._reset_state()
@@ -246,6 +262,20 @@ class Hippocampus:
             self.memories.pop(0)
 
         self.memories.append(memory)
+
+        if self.store is not None:
+            valence = float(reward) - float(punishment)
+            self.store.add(
+                timestamp=self._current_timestamp,
+                obs=np.asarray(observation, dtype=np.float32),
+                action=np.asarray(action, dtype=np.float32),
+                next_obs=np.asarray(next_observation, dtype=np.float32),
+                embedding=np.asarray(memory.spatial_code, dtype=np.float32),
+                reward=float(reward),
+                punishment=float(punishment),
+                valence=valence,
+            )
+
         self._current_timestamp += 1
 
     def compute_similarity(self, obs1: jnp.ndarray, obs2: jnp.ndarray) -> float:
@@ -450,6 +480,28 @@ class Hippocampus:
     def get_memory_count(self) -> int:
         """Get the number of stored memories."""
         return len(self.memories)
+
+    def recall_persistent(self, observation: jnp.ndarray, k: int = 8):
+        """Retrieve k most-similar persisted episodes by spatial-code cosine.
+
+        Returns an empty list if no persistent store was configured. This is
+        the long-horizon recall path used by the PFC for context augmentation;
+        the in-RAM `retrieve_memory` is the working-memory fast path.
+        """
+        if self.store is None:
+            return []
+        embedding = np.asarray(self.encode_spatial(observation), dtype=np.float32)
+        return self.store.recall(embedding, k=k)
+
+    def consolidate(self, n: int = 32):
+        """Hippocampal replay: sample priority-weighted persisted episodes.
+
+        Intended to be called between rollouts (the "sleep" phase). Returns
+        episodes the caller can replay into BG/cerebellum at elevated LR.
+        """
+        if self.store is None:
+            return []
+        return self.store.sample_by_priority(n)
 
     def clear_memories(self) -> None:
         """Clear all stored memories."""
