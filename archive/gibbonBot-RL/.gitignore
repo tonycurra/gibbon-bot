@@ -1,101 +1,54 @@
-.venv/
-__pycache__/
-*.pyc
-*.pyo
-.DS_Store
-*.egg-info/
-dist/
-build/
-# Windows download metadata
-*:Zone.Identifier
-# MuJoCo runtime log
-MUJOCO_LOG.TXT
-MJMODEL.TXT
-
-# MLflow tracking store — TRACKED (training data).
-
-# ===== Project-Specific Ignores =====
-# Evaluation results
-*.npy
-*.pkl
-
-# ROS build artifacts
-build/
-devel/
-install/
-.catkin_workspace
-
-# Large dataset files
-*.h5
-*.hdf5
-*.tar
-*.gz
-
-# Model weights
-*.ckpt
+# --- Training artifacts (live in Scaleway: gibbonbot-training/) ---
+# Restore with:  rclone sync scaleway:gibbonbot-training/archive/working_tree/ ./
+*.npz
+*.safetensors
+*.treedef.json
 *.pt
 *.pth
-
-# Test output
-test_*.py
-coverage.xml
-.htmlcov/
-# (no global *.log — train.log etc. are training data, kept in git)
-
-# Documentation build
-docs/_build/
-docs/*.aux
-docs/*.log
-docs/*.out
-docs/*.toc
-
-# Specific to this project
-/data/*
-!/data/scene.xml
-!/data/*.xml
-!/data/*.md
-!/data/meshes/
-!/data/meshes/**
-output/
-results/
-
-# Training checkpoints + history go to Object Storage, NOT git
-# Large binary files that git cannot handle efficiently
-*.npz
-*.h5
-*.hdf5
-
-# MLflow tracking - goes to Object Storage
+*.onnx
+*.gguf
 mlflow.db
-mlflow.db.*
+mlflow.db-journal
 mlruns/
+runs/
+rollouts/
+keepers/
+_history/
 
-# Training artifacts in runs/ - goes to Object Storage
-runs/*/mjx_*.npz
-runs/*/rollout_*.npz
-runs/*/rollouts/
+# Large logs (per-run train.log lives under runs/, gitignored above)
+train.log
+*.log.gz
 
-# Training logs - goes to Object Storage
-runs/*/train.log
-runs/*/*.log
+# Archives / dumps
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.bz2
 
-# MLflow remote sync files - goes to Object Storage
-*.remote
+# --- Build / python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+venv/
+.eggs/
+*.egg-info/
+build/
+dist/
 
-# Keepers are curated checkpoints - still in git for reproducibility
-# runs/*/keepers/
+# --- Secrets ---
+*.pem
+*.key
+.env
+.env.*
 
-# Runtime cruft - ignored
-runs/*/health.json
-runs/*/latest.fingerprint.json
-runs/*/monitor.log
-runs/*/autopilot_state.json
-runs/*/autopilot.log
-runs/*/live_stats.json
+# --- Editor / OS ---
+.DS_Store
+.idea/
+.vscode/
+*.swp
 
-# eval output (matplotlib)
-reward.png
-
-# Procedurally generated scenes (gen_trees.py output)
-data/trees_forest.xml
-.claude/
+# --- Local archive backups (this machine only) ---
+/runs-archive/
