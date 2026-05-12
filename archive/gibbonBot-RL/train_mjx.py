@@ -332,6 +332,14 @@ def main():
     parser.add_argument("--early-stop-window", type=int, default=20,
                         help="how many consecutive metric blocks satisfying the criterion")
     parser.add_argument("--mlflow-parent-run-id", default=None)
+    parser.add_argument("--brain-persist", default=None,
+                        help="If set, write ApeBrain episodic/semantic stores under this directory.")
+    parser.add_argument("--brain-samples-per-rollout", type=int, default=32,
+                        help="Transitions to sample from each rollout into the episodic store.")
+    parser.add_argument("--brain-sleep-every", type=int, default=20,
+                        help="Run consolidation replay every N updates (0 disables).")
+    parser.add_argument("--brain-sleep-replays", type=int, default=64,
+                        help="Episodes to replay through BG per sleep tick.")
     args = parser.parse_args()
 
     TASK = args.task
@@ -476,6 +484,20 @@ def main():
     ent_coef = jnp.float32(P.ENT_COEF)
     clip_eps = jnp.float32(P.CLIP_EPS)
 
+    brain_hook = None
+    if args.brain_persist is not None:
+        from utils.brain_hook import BrainHook
+        brain_hook = BrainHook(
+            persist_dir=args.brain_persist,
+            obs_dim=OBS_DIM,
+            act_dim=ACT_DIM,
+            samples_per_rollout=args.brain_samples_per_rollout,
+            sleep_every_updates=args.brain_sleep_every,
+            sleep_replays=args.brain_sleep_replays,
+        )
+        mlflow.set_tag("brain_persist", args.brain_persist)
+        print(f"[brain] persisting episodic+semantic memory to {args.brain_persist}", flush=True)
+
     while total_steps < TOTAL_STEPS and not _stop[0]:
         buf_obs, buf_act, buf_logp, buf_rew, buf_done, buf_val, buf_dist = [], [], [], [], [], [], []
 
@@ -550,6 +572,17 @@ def main():
         train_state, _ = update_step(train_state, rollout, ent_coef, clip_eps)
         update_count += 1
 
+        if brain_hook is not None:
+            # Build next_obs for each (t, env): obs_t shifted by 1, last step
+            # uses the post-rollout obs_batch.
+            next_obs_t = jnp.concatenate(
+                [obs_t[1:], obs_batch[None, ...]], axis=0
+            )
+            brain_hook.record_rollout(obs_t, act_t, rew_t, next_obs_t)
+            slept = brain_hook.maybe_sleep(update_count)
+            if slept:
+                print(f"[brain] consolidation: replayed {brain_hook._last_sleep_replays} episodes", flush=True)
+
         if update_count % LOG_EVERY == 0:
             sps = (total_steps - start_steps) / (time.time() - t0)
             stacked_rew = jnp.stack(buf_rew)
@@ -598,6 +631,8 @@ def main():
             }
 
             print(f"{update_count:>8}  {total_steps:>12,}  {sps:>8,.0f}  rew={mean_rew:+.2f}  d={mean_dist:.2f}  vx={mean_speed_x:+.2f}  z={mean_z:.2f}  upr={mean_upright:.2f}  ωz={mean_angvel_z:+.2f}", flush=True)
+            if brain_hook is not None:
+                metrics.update(brain_hook.metrics())
             mlflow.log_metrics(metrics, step=total_steps)
 
             # Per-task keeper criterion (env may override).
@@ -657,6 +692,8 @@ def main():
     mlflow.set_tag("stop_reason", reason)
     mlflow.set_tag("final_steps", str(total_steps))
     mlflow.end_run()
+    if brain_hook is not None:
+        brain_hook.close()
     if watcher is not None:
         watcher.terminate()
     print("Done.")
