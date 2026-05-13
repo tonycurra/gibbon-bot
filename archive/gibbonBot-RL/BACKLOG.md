@@ -36,3 +36,57 @@ Things proposed in conversation that weren't implemented inline. Priority is my 
 ## P3 — speculative
 
 - **Real-time CV comparison of MuJoCo viewer vs. real-ape video.** Attempted earlier; declined because pose estimators trained on real animals don't transfer to low-poly schematic robots. Re-evaluate only if we render a textured high-fidelity robot.
+
+## Reference — 2026 physics-engine landscape
+
+Snapshot of the alternatives we could move to if MJX hits a hard ceiling.
+Most of these are *not* on the roadmap; they're here so we remember the
+options exist.
+
+**High-throughput RL**
+- **NVIDIA Isaac Lab** — successor to Isaac Gym, PhysX 5 + Isaac Sim,
+  industry default for humanoid/quadruped locomotion on NVIDIA GPUs.
+  RTX-locked. Already in P2 above with a 3–6 week migration estimate.
+- **MJX** (current) — JAX-native MuJoCo, matches Isaac/Brax throughput
+  while keeping the MuJoCo contact model.
+- **Genesis** ([github.com/Genesis-Embodied-AI/Genesis](https://github.com/Genesis-Embodied-AI/Genesis))
+  — claims "world's fastest" but the 43M-FPS number is a Franka-on-plane
+  benchmark; for contact-heavy quadruped walking the lead shrinks or
+  flips. Real reason to adopt: generative-simulation pipeline (4D scenes
+  from natural language) — relevant when we want diverse training
+  environments for the harvest task.
+
+**Differentiable / open-source**
+- **Newton** ([developer.nvidia.com/newton-physics](https://developer.nvidia.com/newton-physics))
+  — already in P2. NVIDIA + DeepMind + Disney Research, Linux Foundation
+  governance, Warp-based, designed for contact-rich manipulation.
+  Concrete trigger: soft soil, ropes, or multi-physics.
+- **Brax** — JAX-based, fully differentiable; pieces have merged into
+  MJX, so adopting it would mostly mean dropping MJX-specific code paths.
+- **DART** — mature multi-body dynamics, CPU-only, used in biomechanics.
+  Not relevant for our GPU workflow.
+
+**ROS 2 / hardware-in-loop**
+- **Gazebo (Harmonic/Ionic)** — default ROS 2 simulator, rich sensor
+  models. Use when we wire the trained policy into the real robot stack
+  (cameras, LiDAR, IMU). Already targeted for the sim2real export step.
+- **Webots** — lighter than Gazebo, good for swarms and education. Not
+  for us.
+- **O3DE** — AAA-grade graphics; only worth it if vision-based policies
+  need photorealism.
+
+**Specialized**
+- **Drake** (TRI/MIT) — formal verification, complex contact analysis,
+  not speed-focused. Would only matter if we need provable safety
+  guarantees, e.g. before a real harvester goes near a person.
+- **CoppeliaSim** — swappable backends (MuJoCo / Bullet / Newton in one
+  scene). Useful for prototyping but slower than going native.
+
+| Engine | Strength | License | Hardware |
+|---|---|---|---|
+| Isaac Lab | Humanoid/Quadruped RL | BSD-3 | NVIDIA GPU |
+| MJX (current) | MuJoCo on JAX | Apache 2.0 | GPU/TPU |
+| Genesis | Generative scenes, manipulation speed | Apache 2.0 | Multi-backend |
+| Newton | Differentiable + contact-rich | Apache 2.0 | GPU/CPU |
+| Gazebo | ROS 2 + sensors | Apache 2.0 | CPU/GPU |
+| Drake | Formal verification | BSD-3 | CPU |
