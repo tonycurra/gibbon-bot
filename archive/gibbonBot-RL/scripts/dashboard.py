@@ -17,6 +17,7 @@ import json
 import re
 import os
 import signal
+import sqlite3
 import subprocess
 import time
 from pathlib import Path
@@ -121,38 +122,119 @@ def _trainer_pids() -> list[int]:
     return [int(x) for x in out.split() if x.strip().isdigit()]
 
 
-def _mlflow_latest_metric(task: str, metric: str) -> Optional[float]:
-    """Pull the most-recent value of `metric` for the experiment matching this
-    task from mlflow.db.remote (preferred — that's the H100 data) falling back
-    to mlflow.db. Cheap sqlite query, no mlflow client deps."""
-    import sqlite3
+def _mlflow_db_path() -> Optional[Path]:
+    """Prefer the H100-synced DB; fall back to local."""
     for db_path in (ROOT / "mlflow.db.remote", ROOT / "mlflow.db"):
-        if not db_path.exists():
-            continue
-        try:
-            con = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=2.0)
-        except sqlite3.Error:
-            continue
-        try:
-            cur = con.cursor()
-            # Find the experiment whose name maps to this task. The trainer
-            # uses experiment_name=f"ape_{task}_mjx".
-            cur.execute(
-                "SELECT m.value FROM metrics m "
-                "JOIN runs r ON r.run_uuid = m.run_uuid "
-                "JOIN experiments e ON e.experiment_id = r.experiment_id "
-                "WHERE e.name = ? AND m.key = ? "
-                "ORDER BY m.timestamp DESC LIMIT 1",
-                (f"ape_{task}_mjx", metric),
-            )
-            row = cur.fetchone()
-            if row is not None:
-                return float(row[0])
-        except sqlite3.Error:
-            continue
-        finally:
-            con.close()
+        if db_path.exists():
+            return db_path
     return None
+
+
+def _mlflow_runs(task: Optional[str] = None, limit: int = 40) -> list[dict]:
+    """Return the most recent runs across all experiments (or filtered to one
+    task's experiment), with the latest value of each interesting metric.
+    Used by the runs-explorer UI for sorting + comparison."""
+    db = _mlflow_db_path()
+    if db is None:
+        return []
+    # Keys we want to surface in the runs table. Order matters — first column
+    # after run_id is the "headline" sort metric.
+    METRIC_KEYS = [
+        "mean_rew", "min_dist", "mean_upright", "mean_speed_x",
+        "mean_angvel_z", "success_frac", "gait_coherence", "checkpoint_steps",
+    ]
+    rows: list[dict] = []
+    try:
+        con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=2.0)
+        cur = con.cursor()
+        if task is not None:
+            cur.execute(
+                "SELECT r.run_uuid, r.name, r.status, r.start_time, r.end_time, e.name "
+                "FROM runs r JOIN experiments e ON e.experiment_id = r.experiment_id "
+                "WHERE r.lifecycle_stage = 'active' AND e.name = ? "
+                "ORDER BY r.start_time DESC LIMIT ?",
+                (f"ape_{task}_mjx", limit),
+            )
+        else:
+            cur.execute(
+                "SELECT r.run_uuid, r.name, r.status, r.start_time, r.end_time, e.name "
+                "FROM runs r JOIN experiments e ON e.experiment_id = r.experiment_id "
+                "WHERE r.lifecycle_stage = 'active' AND e.name LIKE 'ape_%' "
+                "ORDER BY r.start_time DESC LIMIT ?",
+                (limit,),
+            )
+        run_rows = cur.fetchall()
+        for run_uuid, name, status, start_ms, end_ms, exp_name in run_rows:
+            entry = {
+                "run_id": run_uuid,
+                "short_id": run_uuid[:8],
+                "name": name or "(unnamed)",
+                "status": status,
+                "experiment": exp_name,
+                "start_time": (start_ms or 0) / 1000.0,
+                "end_time": (end_ms or 0) / 1000.0 if end_ms else None,
+                "metrics": {},
+            }
+            # Pull latest values for each interesting key in one query.
+            qmarks = ",".join("?" for _ in METRIC_KEYS)
+            cur.execute(
+                f"SELECT key, value FROM latest_metrics WHERE run_uuid = ? AND key IN ({qmarks})",
+                (run_uuid, *METRIC_KEYS),
+            )
+            for k, v in cur.fetchall():
+                entry["metrics"][k] = float(v) if v is not None else None
+            rows.append(entry)
+        con.close()
+    except sqlite3.Error as e:
+        return [{"error": str(e)}]
+    return rows
+
+
+def _mlflow_run_history(run_id: str, metric: str, max_points: int = 400) -> list[list[float]]:
+    """Return [[step, value], ...] for a metric within a run, downsampled to
+    max_points by simple stride sampling. Cheap enough at 400 pts to render
+    inline SVG curves for several runs at once."""
+    db = _mlflow_db_path()
+    if db is None:
+        return []
+    try:
+        con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=2.0)
+        cur = con.cursor()
+        cur.execute(
+            "SELECT step, value FROM metrics WHERE run_uuid = ? AND key = ? AND is_nan = 0 ORDER BY step ASC",
+            (run_id, metric),
+        )
+        rows = cur.fetchall()
+        con.close()
+    except sqlite3.Error:
+        return []
+    if len(rows) <= max_points:
+        return [[int(s), float(v)] for s, v in rows]
+    stride = max(1, len(rows) // max_points)
+    return [[int(rows[i][0]), float(rows[i][1])] for i in range(0, len(rows), stride)]
+
+
+def _mlflow_latest_metric(task: str, metric: str) -> Optional[float]:
+    """Most-recent value of `metric` for the experiment matching this task."""
+    db = _mlflow_db_path()
+    if db is None:
+        return None
+    try:
+        con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=2.0)
+        cur = con.cursor()
+        cur.execute(
+            "SELECT m.value FROM metrics m "
+            "JOIN runs r ON r.run_uuid = m.run_uuid "
+            "JOIN experiments e ON e.experiment_id = r.experiment_id "
+            "WHERE e.name = ? AND m.key = ? "
+            "ORDER BY m.timestamp DESC LIMIT 1",
+            (f"ape_{task}_mjx", metric),
+        )
+        row = cur.fetchone()
+        con.close()
+        return float(row[0]) if row else None
+    except sqlite3.Error:
+        return None
 
 
 def _skill_status(task: str, metric: str, op: str, threshold: float) -> dict:
@@ -268,6 +350,16 @@ def api_status() -> JSONResponse:
         "watch_remote_pid": _pid_alive(WATCH_PID_FILE),
         "cloud_push_pid": _pid_alive(CLOUD_PID_FILE),
     })
+
+
+@app.get("/api/runs")
+def api_runs(task: Optional[str] = None, limit: int = 40) -> JSONResponse:
+    return JSONResponse({"runs": _mlflow_runs(task=task, limit=limit)})
+
+
+@app.get("/api/run_history")
+def api_run_history(run_id: str, metric: str = "mean_rew") -> JSONResponse:
+    return JSONResponse({"run_id": run_id, "metric": metric, "points": _mlflow_run_history(run_id, metric)})
 
 
 @app.get("/api/skills")
@@ -561,6 +653,62 @@ canvas { width: 100%; height: 140px; display: block; background: #0b0e13; border
 </div>
 
 <div class="card">
+  <h2>runs explorer · pick runs to overlay
+    <span class="muted" style="margin-left:8px">task:</span>
+    <select id="runs-task" onchange="refreshRuns()">
+      <option value="">all</option>
+      <option value="walk">walk</option>
+      <option value="stand">stand</option>
+      <option value="walk_forward">walk_forward</option>
+      <option value="turn_left">turn_left</option>
+      <option value="turn_right">turn_right</option>
+    </select>
+    <span class="muted" style="margin-left:8px">sort:</span>
+    <select id="runs-sort" onchange="renderRuns()">
+      <option value="start_time">newest</option>
+      <option value="mean_rew">mean_rew</option>
+      <option value="min_dist">min_dist (asc)</option>
+      <option value="mean_upright">mean_upright</option>
+      <option value="mean_speed_x">mean_speed_x</option>
+      <option value="checkpoint_steps">steps</option>
+    </select>
+    <button onclick="refreshRuns()" style="margin-left:8px">refresh</button>
+  </h2>
+  <table id="runs-table" style="font-size:12px">
+    <thead><tr>
+      <th></th>
+      <th style="text-align:left">run</th>
+      <th style="text-align:left">exp</th>
+      <th>status</th>
+      <th>mean_rew</th>
+      <th>min_dist</th>
+      <th>upright</th>
+      <th>speed_x</th>
+      <th>ωz</th>
+      <th>steps</th>
+      <th>age</th>
+    </tr></thead>
+    <tbody></tbody>
+  </table>
+  <div style="margin-top:10px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+    <span class="muted">overlay metric:</span>
+    <select id="runs-metric" onchange="renderRunCharts()">
+      <option value="mean_rew">mean_rew</option>
+      <option value="min_dist">min_dist</option>
+      <option value="mean_upright">mean_upright</option>
+      <option value="mean_speed_x">mean_speed_x</option>
+      <option value="mean_angvel_z">mean_angvel_z</option>
+      <option value="success_frac">success_frac</option>
+      <option value="gait_coherence">gait_coherence</option>
+    </select>
+    <span class="muted" id="runs-selected-count">0 selected</span>
+  </div>
+  <svg id="runs-chart" width="100%" height="260"
+       style="margin-top:8px; background:#0b0e13; border:1px solid #2a313a; border-radius:4px; display:block;"></svg>
+  <div id="runs-legend" style="margin-top:6px; font-size:11px;"></div>
+</div>
+
+<div class="card">
   <h2>system processes · top 25 by RAM</h2>
   <table id="proc-table">
     <thead><tr><th style="text-align:left">pid</th><th>tag</th><th>cpu%</th><th>mem%</th><th>rss</th><th style="text-align:left">cmd</th></tr></thead>
@@ -692,6 +840,147 @@ async function refreshRemote() {
   }
 }
 
+// --- Runs explorer state ---
+let runsCache = [];
+let selectedRuns = new Set();
+// 8 categorical colours that read well on dark background.
+const PALETTE = ['#3fb950','#58a6ff','#d29922','#f85149','#bc8cff','#39c5cf','#ff7b72','#a371f7'];
+
+async function refreshRuns() {
+  const task = document.getElementById('runs-task').value;
+  const url = '/api/runs?limit=40' + (task ? '&task=' + encodeURIComponent(task) : '');
+  let j;
+  try { j = await (await fetch(url)).json(); } catch (e) { return; }
+  runsCache = j.runs || [];
+  renderRuns();
+}
+
+function renderRuns() {
+  const sortKey = document.getElementById('runs-sort').value;
+  const sorted = [...runsCache].sort((a, b) => {
+    if (sortKey === 'start_time') return b.start_time - a.start_time;
+    const av = a.metrics[sortKey];
+    const bv = b.metrics[sortKey];
+    if (av == null && bv == null) return 0;
+    if (av == null) return 1;
+    if (bv == null) return -1;
+    return sortKey === 'min_dist' ? av - bv : bv - av;  // min_dist is "lower is better"
+  });
+  const tbody = document.querySelector('#runs-table tbody');
+  tbody.innerHTML = '';
+  sorted.forEach(r => {
+    const tr = document.createElement('tr');
+    const m = r.metrics || {};
+    const ageS = (Date.now() / 1000) - r.start_time;
+    const fmt = v => v == null ? '<span class="muted">—</span>' : v.toFixed(3);
+    const fmtSteps = v => v == null ? '<span class="muted">—</span>' : Math.round(v).toLocaleString();
+    const checked = selectedRuns.has(r.run_id) ? 'checked' : '';
+    tr.innerHTML = `
+      <td><input type="checkbox" data-run="${r.run_id}" ${checked}></td>
+      <td style="text-align:left"><code>${r.short_id}</code> <span class="muted">${r.name}</span></td>
+      <td style="text-align:left" class="muted">${r.experiment.replace('ape_','').replace('_mjx','')}</td>
+      <td class="${r.status === 'RUNNING' ? 'warn' : r.status === 'FINISHED' ? 'ok' : 'muted'}">${r.status}</td>
+      <td>${fmt(m.mean_rew)}</td>
+      <td>${fmt(m.min_dist)}</td>
+      <td>${fmt(m.mean_upright)}</td>
+      <td>${fmt(m.mean_speed_x)}</td>
+      <td>${fmt(m.mean_angvel_z)}</td>
+      <td>${fmtSteps(m.checkpoint_steps)}</td>
+      <td class="muted">${fmtAge(ageS)}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+  tbody.querySelectorAll('input[type=checkbox]').forEach(cb => {
+    cb.addEventListener('change', e => {
+      const id = e.target.dataset.run;
+      if (e.target.checked) selectedRuns.add(id); else selectedRuns.delete(id);
+      document.getElementById('runs-selected-count').textContent = selectedRuns.size + ' selected';
+      renderRunCharts();
+    });
+  });
+  document.getElementById('runs-selected-count').textContent = selectedRuns.size + ' selected';
+}
+
+async function renderRunCharts() {
+  const metric = document.getElementById('runs-metric').value;
+  const svg = document.getElementById('runs-chart');
+  const legend = document.getElementById('runs-legend');
+  svg.innerHTML = '';
+  legend.innerHTML = '';
+  if (selectedRuns.size === 0) {
+    svg.innerHTML = '<text x="12" y="20" fill="#6e7681" font-size="11">select runs above to overlay</text>';
+    return;
+  }
+  const W = svg.clientWidth || 800;
+  const H = 260;
+  svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+
+  const ids = [...selectedRuns];
+  const series = await Promise.all(ids.map(async (id, i) => {
+    const r = await fetch('/api/run_history?run_id=' + id + '&metric=' + encodeURIComponent(metric));
+    const j = await r.json();
+    return { run_id: id, points: j.points || [], colour: PALETTE[i % PALETTE.length] };
+  }));
+
+  const allPts = series.flatMap(s => s.points);
+  if (allPts.length === 0) {
+    svg.innerHTML = '<text x="12" y="20" fill="#6e7681" font-size="11">no data for metric "' + metric + '" in selected runs</text>';
+    return;
+  }
+  const minX = Math.min(...allPts.map(p => p[0]));
+  const maxX = Math.max(...allPts.map(p => p[0]));
+  const minY = Math.min(...allPts.map(p => p[1]));
+  const maxY = Math.max(...allPts.map(p => p[1]));
+  const padL = 50, padR = 12, padT = 14, padB = 24;
+  const spanX = Math.max(1, maxX - minX);
+  const spanY = (maxY - minY) || 1;
+  const sx = x => padL + (x - minX) / spanX * (W - padL - padR);
+  const sy = y => H - padB - (y - minY) / spanY * (H - padT - padB);
+
+  // Axes / grid
+  const axisColour = '#2a313a';
+  const tickColour = '#6e7681';
+  let grid = '';
+  for (let k = 0; k <= 4; k++) {
+    const yPx = padT + k / 4 * (H - padT - padB);
+    const yVal = maxY - k / 4 * spanY;
+    grid += `<line x1="${padL}" y1="${yPx}" x2="${W-padR}" y2="${yPx}" stroke="${axisColour}" stroke-dasharray="2,3"/>`;
+    grid += `<text x="${padL-6}" y="${yPx+3}" fill="${tickColour}" font-size="10" text-anchor="end">${yVal.toFixed(2)}</text>`;
+  }
+  for (let k = 0; k <= 4; k++) {
+    const xPx = padL + k / 4 * (W - padL - padR);
+    const xVal = minX + k / 4 * spanX;
+    grid += `<text x="${xPx}" y="${H-padB+14}" fill="${tickColour}" font-size="10" text-anchor="middle">${(xVal/1000).toFixed(0)}k</text>`;
+  }
+
+  // Series lines
+  let lines = '';
+  for (const s of series) {
+    if (s.points.length < 2) continue;
+    const d = s.points.map((p, i) => (i === 0 ? 'M' : 'L') + sx(p[0]).toFixed(1) + ',' + sy(p[1]).toFixed(1)).join(' ');
+    lines += `<path d="${d}" stroke="${s.colour}" stroke-width="1.5" fill="none"/>`;
+  }
+
+  // Best-of indicator: highest-final-value run (or lowest for min_dist).
+  const lower_is_better = metric === 'min_dist';
+  const ranked = series
+    .filter(s => s.points.length)
+    .map(s => ({ id: s.run_id, last: s.points[s.points.length - 1][1], colour: s.colour }))
+    .sort((a, b) => lower_is_better ? a.last - b.last : b.last - a.last);
+
+  svg.innerHTML = grid + lines;
+
+  // Legend
+  legend.innerHTML = ranked.map((r, i) => {
+    const tag = i === 0 ? '<span class="ok"> ★ best</span>' : '';
+    return `<span style="display:inline-block; margin-right:14px;">
+      <span style="display:inline-block; width:10px; height:10px; background:${r.colour}; vertical-align:middle; margin-right:4px;"></span>
+      <code>${r.id.slice(0,8)}</code>
+      <span class="muted">${metric}=</span>${r.last.toFixed(3)}${tag}
+    </span>`;
+  }).join('');
+}
+
 async function refreshProcesses() {
   let p;
   try { p = await (await fetch('/api/processes')).json(); } catch (e) { return; }
@@ -779,13 +1068,15 @@ async function refresh() {
   document.getElementById('log-tail').textContent = s.log_tail.join('\\n') || '(empty)';
 }
 
-function refreshAll() { refresh(); refreshSkills(); refreshProcesses(); refreshRemote(); }
+function refreshAll() { refresh(); refreshSkills(); refreshProcesses(); refreshRemote(); refreshRuns(); }
 refreshAll();
 setInterval(refresh, 4000);
 setInterval(refreshSkills, 8000);
 setInterval(refreshProcesses, 6000);
 // Remote ssh is the slowest poll — every 15s. Skipped silently if box is down.
 setInterval(refreshRemote, 15000);
+// Runs list refreshes infrequently — MLflow data only changes on sync ticks.
+setInterval(refreshRuns, 30000);
 </script>
 </body></html>
 """
