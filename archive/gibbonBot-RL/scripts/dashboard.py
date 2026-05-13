@@ -33,6 +33,8 @@ TRAIN_LOG = ROOT / "train.log"
 REMOTE_LOG_GLOB = "ape_*_mjx/train.log"
 WATCH_PID_FILE = ROOT / "runs" / ".watch_remote.pid"
 CLOUD_PID_FILE = ROOT / "runs" / ".cloud_push.pid"
+MLFLOW_UI_PID_FILE = ROOT / "runs" / ".mlflow_ui.pid"
+MLFLOW_UI_PORT = int(os.environ.get("MLFLOW_UI_PORT", "5000"))
 
 # Source of truth for "what skills exist + what's the success bar?" — kept in
 # sync with scripts/curriculum.py TASKS table. (task, prereq, metric, op, threshold)
@@ -553,6 +555,51 @@ def api_sync_stop() -> dict:
     return {"ok": True}
 
 
+@app.get("/api/mlflow_ui/status")
+def api_mlflow_ui_status() -> dict:
+    pid = _pid_alive(MLFLOW_UI_PID_FILE)
+    return {"running": pid is not None, "pid": pid, "port": MLFLOW_UI_PORT, "url": f"http://127.0.0.1:{MLFLOW_UI_PORT}"}
+
+
+@app.post("/api/mlflow_ui/start")
+def api_mlflow_ui_start() -> dict:
+    if _pid_alive(MLFLOW_UI_PID_FILE):
+        return {"ok": True, "already_running": True, "url": f"http://127.0.0.1:{MLFLOW_UI_PORT}"}
+    # Prefer the H100-synced DB so the UI shows the latest runs.
+    db = _mlflow_db_path()
+    if db is None:
+        return {"ok": False, "error": "no mlflow.db found"}
+    log = ROOT / "runs" / "mlflow_ui.log"
+    log.parent.mkdir(parents=True, exist_ok=True)
+    venv_python = ROOT / ".venv" / "bin" / "python"
+    cmd = [
+        str(venv_python), "-m", "mlflow", "ui",
+        "--backend-store-uri", f"sqlite:///{db.name}",
+        "--host", "127.0.0.1", "--port", str(MLFLOW_UI_PORT),
+    ]
+    proc = subprocess.Popen(
+        cmd, cwd=ROOT,
+        stdout=log.open("ab"), stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+    MLFLOW_UI_PID_FILE.write_text(str(proc.pid))
+    return {"ok": True, "pid": proc.pid, "url": f"http://127.0.0.1:{MLFLOW_UI_PORT}", "db": db.name}
+
+
+@app.post("/api/mlflow_ui/stop")
+def api_mlflow_ui_stop() -> dict:
+    pid = _pid_alive(MLFLOW_UI_PID_FILE)
+    if not pid:
+        return {"ok": False, "error": "mlflow_ui not running"}
+    try:
+        os.killpg(os.getpgid(pid), signal.SIGTERM)
+    except OSError:
+        try: os.kill(pid, signal.SIGTERM)
+        except OSError as e: return {"ok": False, "error": str(e)}
+    MLFLOW_UI_PID_FILE.unlink(missing_ok=True)
+    return {"ok": True}
+
+
 @app.post("/api/cloud/push")
 def api_cloud_push() -> dict:
     # Synchronous — small enough that it should complete in <60s for typical runs.
@@ -709,6 +756,18 @@ canvas { width: 100%; height: 140px; display: block; background: #0b0e13; border
 </div>
 
 <div class="card">
+  <h2>mlflow ui · embedded deep-dive
+    <span class="muted" id="mlflow-status" style="margin-left:8px">checking…</span>
+    <button class="go" id="mlflow-start" onclick="mlflowStart()" style="margin-left:8px">launch</button>
+    <button class="danger" id="mlflow-stop" onclick="mlflowStop()" style="display:none">stop</button>
+    <button id="mlflow-toggle" onclick="mlflowToggle()" style="margin-left:4px">hide</button>
+  </h2>
+  <div id="mlflow-frame-wrap" style="display:none;">
+    <iframe id="mlflow-frame" src="" style="width:100%; height:600px; border:1px solid #2a313a; border-radius:4px; background:#fff;"></iframe>
+  </div>
+</div>
+
+<div class="card">
   <h2>system processes · top 25 by RAM</h2>
   <table id="proc-table">
     <thead><tr><th style="text-align:left">pid</th><th>tag</th><th>cpu%</th><th>mem%</th><th>rss</th><th style="text-align:left">cmd</th></tr></thead>
@@ -837,6 +896,55 @@ async function refreshRemote() {
   if (hh.log_idle_seconds != null) {
     setKv('rh-update', hh.log_idle_seconds.toFixed(0) + 's ago',
       hh.log_idle_seconds > 300 ? 'bad' : hh.log_idle_seconds > 60 ? 'warn' : 'ok');
+  }
+}
+
+// --- Embedded mlflow ui controls ---
+async function mlflowStatus() {
+  try {
+    const r = await (await fetch('/api/mlflow_ui/status')).json();
+    const statusEl = document.getElementById('mlflow-status');
+    const startBtn = document.getElementById('mlflow-start');
+    const stopBtn = document.getElementById('mlflow-stop');
+    const wrap = document.getElementById('mlflow-frame-wrap');
+    const frame = document.getElementById('mlflow-frame');
+    if (r.running) {
+      statusEl.textContent = '· running pid=' + r.pid + ' on :' + r.port;
+      statusEl.className = 'muted ok';
+      startBtn.style.display = 'none';
+      stopBtn.style.display = '';
+      if (!frame.src) frame.src = r.url;
+      if (wrap.dataset.userHidden !== '1') wrap.style.display = '';
+    } else {
+      statusEl.textContent = '· not running';
+      statusEl.className = 'muted';
+      startBtn.style.display = '';
+      stopBtn.style.display = 'none';
+      wrap.style.display = 'none';
+      frame.src = '';
+    }
+  } catch (e) {}
+}
+async function mlflowStart() {
+  await fetch('/api/mlflow_ui/start', { method: 'POST' });
+  // mlflow ui takes ~3 s to bind its port; poll until status flips, then load iframe.
+  setTimeout(mlflowStatus, 3500);
+}
+async function mlflowStop() {
+  await fetch('/api/mlflow_ui/stop', { method: 'POST' });
+  mlflowStatus();
+}
+function mlflowToggle() {
+  const wrap = document.getElementById('mlflow-frame-wrap');
+  const btn = document.getElementById('mlflow-toggle');
+  if (wrap.style.display === 'none') {
+    wrap.style.display = '';
+    wrap.dataset.userHidden = '0';
+    btn.textContent = 'hide';
+  } else {
+    wrap.style.display = 'none';
+    wrap.dataset.userHidden = '1';
+    btn.textContent = 'show';
   }
 }
 
@@ -1068,7 +1176,7 @@ async function refresh() {
   document.getElementById('log-tail').textContent = s.log_tail.join('\\n') || '(empty)';
 }
 
-function refreshAll() { refresh(); refreshSkills(); refreshProcesses(); refreshRemote(); refreshRuns(); }
+function refreshAll() { refresh(); refreshSkills(); refreshProcesses(); refreshRemote(); refreshRuns(); mlflowStatus(); }
 refreshAll();
 setInterval(refresh, 4000);
 setInterval(refreshSkills, 8000);
@@ -1077,6 +1185,7 @@ setInterval(refreshProcesses, 6000);
 setInterval(refreshRemote, 15000);
 // Runs list refreshes infrequently — MLflow data only changes on sync ticks.
 setInterval(refreshRuns, 30000);
+setInterval(mlflowStatus, 10000);
 </script>
 </body></html>
 """

@@ -481,6 +481,36 @@ def main():
         print("\n[stop] Ctrl+C — finishing rollout then saving...")
     signal.signal(signal.SIGINT, _on_sigint)
 
+    def _on_sigterm(signum, frame):
+        # SIGTERM = process manager asked us to stop (train_bg.sh stop,
+        # systemd, kill <pid>). Close MLflow run cleanly so it doesn't get
+        # stuck in RUNNING state forever, then exit. We don't try to save a
+        # checkpoint here — SIGTERM may be followed by SIGKILL on a short
+        # grace period, and an unfinished save would corrupt the npz.
+        try:
+            if mlflow.active_run() is not None:
+                mlflow.set_tag("stop_reason", "sigterm")
+                mlflow.set_tag("final_steps", str(total_steps))
+                mlflow.end_run(status="KILLED")
+        except Exception as e:
+            print(f"[sigterm] mlflow.end_run failed: {e}", flush=True)
+        print("[sigterm] received — exiting cleanly", flush=True)
+        sys.exit(143)
+    signal.signal(signal.SIGTERM, _on_sigterm)
+
+    # Final safety net: if the process dies any other way (uncaught exception
+    # propagating, sys.exit, hardware fault that gives Python a chance to
+    # unwind), close the MLflow run with status FAILED if it's still open.
+    import atexit
+    def _atexit_close_mlflow():
+        try:
+            if mlflow.active_run() is not None:
+                mlflow.set_tag("stop_reason", _stop_reason[0] or "atexit_unknown")
+                mlflow.end_run(status="FAILED")
+        except Exception:
+            pass
+    atexit.register(_atexit_close_mlflow)
+
     ent_coef = jnp.float32(P.ENT_COEF)
     clip_eps = jnp.float32(P.CLIP_EPS)
 
