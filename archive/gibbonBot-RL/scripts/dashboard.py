@@ -342,6 +342,21 @@ def api_status() -> JSONResponse:
     lines = _tail(log_path, n=200)
     metrics = _parse_metrics(lines)
 
+    # Best guess at which task the local trainer is on, parsed from its
+    # cmdline. If multiple pids match, take the first.
+    trainer_task: Optional[str] = None
+    for pid in _trainer_pids():
+        try:
+            cmdline = (Path("/proc") / str(pid) / "cmdline").read_bytes().split(b"\0")
+            for i, a in enumerate(cmdline):
+                if a == b"--task" and i + 1 < len(cmdline):
+                    trainer_task = cmdline[i + 1].decode()
+                    break
+            if trainer_task:
+                break
+        except OSError:
+            continue
+
     return JSONResponse({
         "now": time.time(),
         "log_path": str(log_path.relative_to(ROOT)) if log_path.exists() else None,
@@ -349,6 +364,7 @@ def api_status() -> JSONResponse:
         "metrics": metrics,
         "ckpt": _newest_ckpt(),
         "trainer_pids": _trainer_pids(),
+        "trainer_task": trainer_task,
         "watch_remote_pid": _pid_alive(WATCH_PID_FILE),
         "cloud_push_pid": _pid_alive(CLOUD_PID_FILE),
     })
@@ -401,42 +417,52 @@ def api_remote_health() -> JSONResponse:
     if not host:
         return JSONResponse({"ok": False, "error": "no REMOTE= in scripts/remote.sh"}, status_code=500)
 
-    # One ssh round-trip: fetch health.json + nvidia-smi in a single shell.
+    # Single ssh round-trip: GPU snapshot, tmux list, every per-task train.log's
+    # last metric row + mtime, and health.json. The shell script is intentionally
+    # all in one ssh to keep latency ~600 ms.
+    remote_script = r"""
+nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw --format=csv,noheader,nounits 2>/dev/null
+echo '---TMUX---'
+tmux ls 2>/dev/null
+echo '---TASKS---'
+for d in gibbonBot-RL/runs/ape_*_mjx; do
+    [ -d "$d" ] || continue
+    task=$(basename "$d" | sed 's/^ape_//;s/_mjx$//')
+    log="$d/train.log"
+    [ -f "$log" ] || continue
+    mtime=$(stat -c %Y "$log" 2>/dev/null)
+    metric_line=$(grep -E '^[[:space:]]+[0-9]+[[:space:]]+[0-9,]+[[:space:]]+[0-9,]+' "$log" 2>/dev/null | tail -1)
+    echo "TASK|$task|$mtime|$metric_line"
+done
+echo '---HEALTH---'
+cat gibbonBot-RL/runs/ape_walk_mjx/health.json 2>/dev/null
+"""
     cmd = [
-        "ssh",
-        "-o", "ConnectTimeout=4",
-        "-o", "BatchMode=yes",                # never prompt for password
-        "-o", "StrictHostKeyChecking=accept-new",
-        host,
-        "cat gibbonBot-RL/runs/ape_walk_mjx/health.json 2>/dev/null; "
-        "echo '---SMI---'; "
-        "nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw "
-        "--format=csv,noheader,nounits 2>/dev/null",
+        "ssh", "-o", "ConnectTimeout=4", "-o", "BatchMode=yes",
+        "-o", "StrictHostKeyChecking=accept-new", host, remote_script,
     ]
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=8)
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
     except subprocess.TimeoutExpired:
         return JSONResponse({"ok": False, "error": "ssh timeout", "host": host}, status_code=504)
-
     if r.returncode != 0:
         return JSONResponse({"ok": False, "error": r.stderr.strip()[:300] or "ssh failed", "host": host}, status_code=502)
 
-    parts = r.stdout.split("---SMI---", 1)
-    health_raw = parts[0].strip()
-    smi_raw = parts[1].strip() if len(parts) > 1 else ""
+    sections: dict[str, str] = {}
+    current = "SMI"
+    sections[current] = []
+    for line in r.stdout.splitlines():
+        if line.startswith("---") and line.endswith("---"):
+            current = line.strip("- ")
+            sections[current] = []
+        else:
+            sections[current].append(line)
 
-    health: dict = {}
-    if health_raw:
-        try:
-            health = json.loads(health_raw)
-        except ValueError:
-            health = {"raw": health_raw[:200]}
-
+    # GPU
     gpu: dict = {}
-    if smi_raw:
-        # First line is the GPU we care about (single-GPU box).
-        first = smi_raw.splitlines()[0]
-        bits = [b.strip() for b in first.split(",")]
+    smi_lines = sections.get("SMI", [])
+    if smi_lines and smi_lines[0]:
+        bits = [b.strip() for b in smi_lines[0].split(",")]
         if len(bits) >= 5:
             try:
                 gpu = {
@@ -447,9 +473,119 @@ def api_remote_health() -> JSONResponse:
                     "power_w": float(bits[4]),
                 }
             except ValueError:
-                gpu = {"raw": first}
+                pass
 
-    return JSONResponse({"ok": True, "host": host, "health": health, "gpu": gpu, "ts": time.time()})
+    # tmux sessions
+    tmux_sessions = [ln.split(":")[0] for ln in sections.get("TMUX", []) if ":" in ln]
+
+    # Per-task training state from remote logs.
+    tasks: list[dict] = []
+    now = time.time()
+    for ln in sections.get("TASKS", []):
+        if not ln.startswith("TASK|"):
+            continue
+        parts = ln.split("|", 3)
+        if len(parts) < 3:
+            continue
+        task = parts[1]
+        try:
+            mtime = float(parts[2])
+        except ValueError:
+            mtime = 0.0
+        last_line = parts[3] if len(parts) > 3 else ""
+        last_metric: dict = {}
+        if last_line:
+            mm = METRIC_RE.match(last_line)
+            if mm:
+                last_metric = {
+                    "update": int(mm.group(1)),
+                    "env_steps": int(mm.group(2).replace(",", "")),
+                    "sps": int(mm.group(3).replace(",", "")),
+                    "loss": float(mm.group(4)),
+                    "reward": float(mm.group(5)),
+                }
+        tasks.append({
+            "task": task,
+            "log_age_s": round(now - mtime, 0) if mtime else None,
+            "last_metric": last_metric,
+        })
+
+    # Health.json (writer is monitor.py).
+    health: dict = {}
+    health_raw = "\n".join(sections.get("HEALTH", [])).strip()
+    if health_raw:
+        try:
+            health = json.loads(health_raw)
+        except ValueError:
+            pass
+
+    # Determine which task is "actively training" right now: most-recent
+    # log mtime among tasks whose log was touched in the last 5 minutes.
+    active = None
+    if tasks:
+        recent = [t for t in tasks if t["log_age_s"] is not None and t["log_age_s"] < 300]
+        if recent:
+            active = min(recent, key=lambda t: t["log_age_s"])
+    train_alive = "train" in tmux_sessions
+
+    # Stuck detection: GPU pinned but no metric row from the active task in 5+ min.
+    stuck = False
+    stuck_reason = None
+    if gpu.get("util_pct", 0) > 50 and train_alive:
+        # tmux says trainer is alive, GPU is busy — but is the log producing rows?
+        if active is None:
+            stuck = True
+            stuck_reason = "GPU at {:.0f}% util but no task log touched in the last 5 min".format(gpu.get("util_pct", 0))
+        elif not active.get("last_metric"):
+            stuck = True
+            stuck_reason = f"trainer for '{active['task']}' running but no metric rows logged yet (log_age={active['log_age_s']:.0f}s) — likely stuck in JIT compile or crashed silently"
+
+    # Overall state for the prominent badge.
+    if not train_alive:
+        state = "idle"
+    elif stuck:
+        state = "stuck"
+    elif active and active.get("last_metric", {}).get("sps", 0) > 0:
+        state = "training"
+    else:
+        state = "starting"
+
+    return JSONResponse({
+        "ok": True, "host": host,
+        "state": state,
+        "active_task": active["task"] if active else None,
+        "tasks": tasks,
+        "tmux_sessions": tmux_sessions,
+        "train_alive": train_alive,
+        "stuck": stuck,
+        "stuck_reason": stuck_reason,
+        "health": health,
+        "gpu": gpu,
+        "ts": time.time(),
+    })
+
+
+@app.post("/api/remote/restart_safe")
+def api_remote_restart_safe() -> dict:
+    """Stop the remote trainer, kill the tmux session, and restart with
+    MUJOCO_BACKEND=mjx. The 'stuck on mjwarp first compile' escape hatch.
+    """
+    host = _remote_host()
+    if not host:
+        return {"ok": False, "error": "no REMOTE= in scripts/remote.sh"}
+    # Kill any existing trainer outright (Ctrl-C-then-wait is unreliable when
+    # we already think it's stuck), then start fresh with the safe backend.
+    kill_cmd = ["ssh", "-o", "ConnectTimeout=4", "-o", "BatchMode=yes", host,
+                "tmux kill-session -t train 2>/dev/null; tmux kill-session -t monitor 2>/dev/null; true"]
+    kr = subprocess.run(kill_cmd, capture_output=True, text=True, timeout=15)
+    if kr.returncode != 0:
+        return {"ok": False, "stage": "kill", "stderr": kr.stderr[-500:]}
+    # Now launch via remote.sh start with the mjx backend forced.
+    env = {**os.environ, "MUJOCO_BACKEND": "mjx"}
+    sr = subprocess.run([str(ROOT / "scripts/remote.sh"), "start"],
+                        cwd=ROOT, env=env, capture_output=True, text=True, timeout=60)
+    return {"ok": sr.returncode == 0, "stage": "start",
+            "stdout": sr.stdout[-1000:], "stderr": sr.stderr[-500:]}
 
 
 @app.get("/api/processes")
@@ -638,24 +774,32 @@ canvas { width: 100%; height: 140px; display: block; background: #0b0e13; border
   <div class="card">
     <h2>local trainer</h2>
     <div class="kv"><span>pids</span><span class="v" id="trainer-pids">—</span></div>
+    <div class="kv"><span>task</span><span class="v" id="trainer-task">—</span></div>
     <div style="margin-top: 8px;">
-      <button class="go" onclick="post('/api/train/start')">start walk</button>
+      <button class="go" onclick="trainTask('walk')">walk</button>
+      <button class="go" onclick="trainTask('stand')">stand</button>
+      <button class="go" onclick="trainTask('walk_forward')">walk_fwd</button>
       <button class="danger" onclick="post('/api/train/stop')">stop</button>
     </div>
   </div>
 
-  <div class="card">
-    <h2>remote H100 <span class="muted" id="remote-host"></span></h2>
-    <div class="kv"><span>watch_remote</span><span class="v" id="watch-pid">—</span></div>
+  <div class="card" style="flex: 2; min-width: 360px;">
+    <h2>remote H100 <span class="muted" id="remote-host"></span>
+      <span id="rh-badge" style="margin-left:8px; padding:2px 8px; border-radius:3px; font-size:11px; background:#21262d;">—</span>
+    </h2>
+    <div class="kv"><span>active task</span><span class="v" id="rh-task">—</span></div>
     <div class="kv"><span>gpu util</span><span class="v" id="rh-util">—</span></div>
     <div class="kv"><span>vram</span><span class="v" id="rh-vram">—</span></div>
     <div class="kv"><span>temp</span><span class="v" id="rh-temp">—</span></div>
     <div class="kv"><span>power</span><span class="v" id="rh-power">—</span></div>
-    <div class="kv"><span>sps</span><span class="v" id="rh-sps">—</span></div>
-    <div class="kv"><span>last update</span><span class="v" id="rh-update">—</span></div>
+    <div class="kv"><span>sps · last reward</span><span class="v" id="rh-sps">—</span></div>
+    <div class="kv"><span>last log line</span><span class="v" id="rh-update">—</span></div>
+    <div class="kv"><span>watch_remote</span><span class="v" id="watch-pid">—</span></div>
+    <div id="rh-stuck-banner" style="display:none; background:#3d1212; border:1px solid #f85149; color:#ffb4ad; padding:6px 8px; border-radius:4px; margin-top:8px; font-size:12px;"></div>
     <div style="margin-top: 8px;">
-      <button class="go" onclick="post('/api/remote/start')">start</button>
+      <button class="go" onclick="post('/api/remote/start')">start (mjwarp)</button>
       <button class="danger" onclick="post('/api/remote/stop')">stop</button>
+      <button onclick="post('/api/remote/restart_safe')" title="kill stuck trainer, restart with MUJOCO_BACKEND=mjx">restart safe</button>
       <button class="go" onclick="post('/api/sync/start')">sync on</button>
       <button class="danger" onclick="post('/api/sync/stop')">sync off</button>
     </div>
@@ -848,54 +992,86 @@ async function refreshRemote() {
   let h;
   try { h = await (await fetch('/api/remote/health')).json(); } catch (e) { return; }
   document.getElementById('remote-host').textContent = h.host ? '· ' + h.host : '';
-  if (!h.ok) {
-    ['rh-util','rh-vram','rh-temp','rh-power','rh-sps','rh-update'].forEach(id => {
-      const el = document.getElementById(id);
-      el.textContent = 'unreachable';
-      el.className = 'v bad';
-    });
-    return;
-  }
-  const g = h.gpu || {};
-  const hh = h.health || {};
 
   function setKv(id, text, cls) {
     const el = document.getElementById(id);
     el.textContent = text;
     el.className = 'v ' + (cls || '');
   }
+  const badge = document.getElementById('rh-badge');
+  const banner = document.getElementById('rh-stuck-banner');
+  banner.style.display = 'none';
 
+  if (!h.ok) {
+    badge.textContent = 'UNREACHABLE';
+    badge.style.background = '#3d1212'; badge.style.color = '#ffb4ad';
+    ['rh-task','rh-util','rh-vram','rh-temp','rh-power','rh-sps','rh-update'].forEach(id => setKv(id, '—', 'muted'));
+    return;
+  }
+
+  // State badge — primary "is the box doing what i want" signal.
+  const stateMap = {
+    'training': { bg:'#1a3d1a', fg:'#3fb950', txt:'TRAINING' },
+    'stuck':    { bg:'#3d1212', fg:'#f85149', txt:'STUCK' },
+    'starting': { bg:'#3d3a12', fg:'#d29922', txt:'STARTING' },
+    'idle':     { bg:'#21262d', fg:'#8b949e', txt:'IDLE' },
+  };
+  const st = stateMap[h.state] || stateMap.idle;
+  badge.textContent = st.txt;
+  badge.style.background = st.bg;
+  badge.style.color = st.fg;
+
+  // Active task
+  if (h.active_task) {
+    setKv('rh-task', h.active_task, 'ok');
+  } else if (h.train_alive) {
+    setKv('rh-task', '(trainer alive but no recent log activity)', 'warn');
+  } else {
+    setKv('rh-task', 'none', 'muted');
+  }
+
+  // GPU
+  const g = h.gpu || {};
   if (g.util_pct != null) {
     setKv('rh-util', g.util_pct.toFixed(0) + '%', g.util_pct > 80 ? 'ok' : g.util_pct > 30 ? 'warn' : 'bad');
   } else { setKv('rh-util', '—', 'muted'); }
-
   if (g.mem_used_mb != null && g.mem_total_mb) {
     const pct = (g.mem_used_mb / g.mem_total_mb) * 100;
-    setKv('rh-vram',
-      (g.mem_used_mb / 1024).toFixed(1) + ' / ' + (g.mem_total_mb / 1024).toFixed(0) + ' GB (' + pct.toFixed(0) + '%)',
+    setKv('rh-vram', (g.mem_used_mb / 1024).toFixed(1) + ' / ' + (g.mem_total_mb / 1024).toFixed(0) + ' GB (' + pct.toFixed(0) + '%)',
       pct > 95 ? 'bad' : pct > 60 ? 'ok' : 'muted');
   } else { setKv('rh-vram', '—', 'muted'); }
-
-  if (g.temp_c != null) {
-    setKv('rh-temp', g.temp_c.toFixed(0) + '°C', g.temp_c > 85 ? 'bad' : g.temp_c > 70 ? 'warn' : 'ok');
-  } else { setKv('rh-temp', '—', 'muted'); }
-
+  if (g.temp_c != null) setKv('rh-temp', g.temp_c.toFixed(0) + '°C', g.temp_c > 85 ? 'bad' : g.temp_c > 70 ? 'warn' : 'ok');
   if (g.power_w != null) setKv('rh-power', g.power_w.toFixed(0) + ' W', 'muted');
 
-  if (hh.last_sps != null) {
+  // sps + last reward from the active task's last metric line.
+  const last = h.active_task ? (h.tasks.find(t => t.task === h.active_task) || {}).last_metric : null;
+  if (last && last.sps) {
     let arrow = '';
     if (lastRemoteSps != null) {
-      const d = hh.last_sps - lastRemoteSps;
+      const d = last.sps - lastRemoteSps;
       const pct = lastRemoteSps ? (d / lastRemoteSps * 100) : 0;
-      arrow = ' ' + (d > 0 ? '▲' : d < 0 ? '▼' : '·') + ' ' + (Math.abs(pct) < 10 ? '' : (pct > 0 ? '+' : '') + pct.toFixed(0) + '%');
+      arrow = ' ' + (d > 0 ? '▲' : d < 0 ? '▼' : '·') + (Math.abs(pct) < 10 ? '' : ' ' + (pct > 0 ? '+' : '') + pct.toFixed(0) + '%');
     }
-    setKv('rh-sps', hh.last_sps.toLocaleString() + arrow, 'ok');
-    lastRemoteSps = hh.last_sps;
+    setKv('rh-sps', last.sps.toLocaleString() + ' sps · rew=' + last.reward.toFixed(2) + arrow, 'ok');
+    lastRemoteSps = last.sps;
+  } else {
+    setKv('rh-sps', '—', 'muted');
   }
 
-  if (hh.log_idle_seconds != null) {
-    setKv('rh-update', hh.log_idle_seconds.toFixed(0) + 's ago',
-      hh.log_idle_seconds > 300 ? 'bad' : hh.log_idle_seconds > 60 ? 'warn' : 'ok');
+  // Last log line: most-recent log mtime across all tasks.
+  const active = h.active_task && h.tasks.find(t => t.task === h.active_task);
+  if (active && active.log_age_s != null) {
+    setKv('rh-update', fmtAge(active.log_age_s) + ' ago',
+      active.log_age_s > 300 ? 'bad' : active.log_age_s > 60 ? 'warn' : 'ok');
+  } else {
+    setKv('rh-update', '—', 'muted');
+  }
+
+  // Stuck banner.
+  if (h.stuck && h.stuck_reason) {
+    banner.style.display = '';
+    banner.innerHTML = '<strong>STUCK:</strong> ' + h.stuck_reason +
+      '<br><span class="muted">click <strong>restart safe</strong> to kill it and relaunch with MUJOCO_BACKEND=mjx (mjwarp fallback)</span>';
   }
 }
 
@@ -1145,6 +1321,9 @@ async function refresh() {
     s.trainer_pids.length ? s.trainer_pids.join(',') : 'idle';
   document.getElementById('trainer-pids').className =
     'v ' + (s.trainer_pids.length ? 'ok' : 'muted');
+  const tt = document.getElementById('trainer-task');
+  if (s.trainer_task) { tt.textContent = s.trainer_task; tt.className = 'v ok'; }
+  else { tt.textContent = '—'; tt.className = 'v muted'; }
 
   document.getElementById('watch-pid').textContent = s.watch_remote_pid || 'off';
   document.getElementById('watch-pid').className =
