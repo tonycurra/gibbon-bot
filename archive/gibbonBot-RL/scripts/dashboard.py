@@ -121,6 +121,40 @@ def _trainer_pids() -> list[int]:
     return [int(x) for x in out.split() if x.strip().isdigit()]
 
 
+def _mlflow_latest_metric(task: str, metric: str) -> Optional[float]:
+    """Pull the most-recent value of `metric` for the experiment matching this
+    task from mlflow.db.remote (preferred — that's the H100 data) falling back
+    to mlflow.db. Cheap sqlite query, no mlflow client deps."""
+    import sqlite3
+    for db_path in (ROOT / "mlflow.db.remote", ROOT / "mlflow.db"):
+        if not db_path.exists():
+            continue
+        try:
+            con = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=2.0)
+        except sqlite3.Error:
+            continue
+        try:
+            cur = con.cursor()
+            # Find the experiment whose name maps to this task. The trainer
+            # uses experiment_name=f"ape_{task}_mjx".
+            cur.execute(
+                "SELECT m.value FROM metrics m "
+                "JOIN runs r ON r.run_uuid = m.run_uuid "
+                "JOIN experiments e ON e.experiment_id = r.experiment_id "
+                "WHERE e.name = ? AND m.key = ? "
+                "ORDER BY m.timestamp DESC LIMIT 1",
+                (f"ape_{task}_mjx", metric),
+            )
+            row = cur.fetchone()
+            if row is not None:
+                return float(row[0])
+        except sqlite3.Error:
+            continue
+        finally:
+            con.close()
+    return None
+
+
 def _skill_status(task: str, metric: str, op: str, threshold: float) -> dict:
     run_dir = RUNS / f"ape_{task}_mjx"
     if not run_dir.exists():
@@ -135,21 +169,31 @@ def _skill_status(task: str, metric: str, op: str, threshold: float) -> dict:
     steps = int(m.group(1)) if m else 0
 
     last_value: Optional[float] = None
+    source: Optional[str] = None
 
-    # Prefer per-task sidecars in keepers/ (richest data).
-    keepers = run_dir / "keepers"
-    if keepers.exists():
-        sidecars = sorted(keepers.glob("auto_*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
-        for sc in sidecars[:5]:
-            try:
-                metrics = json.loads(sc.read_text()).get("metrics", {})
-                if metric in metrics:
-                    last_value = float(metrics[metric])
-                    break
-            except (OSError, ValueError):
-                continue
+    # Source priority: MLflow remote DB (richest, freshest) → keepers sidecar
+    # → live_stats.json → train.log fallback.
+    mlf = _mlflow_latest_metric(task, metric)
+    if mlf is not None:
+        last_value = mlf
+        source = "mlflow"
 
-    # Fall back to live_stats.json (some tasks write this).
+    # Per-task sidecars in keepers/.
+    if last_value is None:
+        keepers = run_dir / "keepers"
+        if keepers.exists():
+            sidecars = sorted(keepers.glob("auto_*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+            for sc in sidecars[:5]:
+                try:
+                    metrics = json.loads(sc.read_text()).get("metrics", {})
+                    if metric in metrics:
+                        last_value = float(metrics[metric])
+                        source = "keeper"
+                        break
+                except (OSError, ValueError):
+                    continue
+
+    # live_stats.json (some tasks write this).
     if last_value is None:
         live = run_dir / "live_stats.json"
         if live.exists():
@@ -157,6 +201,7 @@ def _skill_status(task: str, metric: str, op: str, threshold: float) -> dict:
                 data = json.loads(live.read_text())
                 if metric in data:
                     last_value = float(data[metric])
+                    source = "live_stats"
             except (OSError, ValueError):
                 pass
 
@@ -166,6 +211,7 @@ def _skill_status(task: str, metric: str, op: str, threshold: float) -> dict:
             mm = METRIC_RE.match(line)
             if mm:
                 last_value = float(mm.group(5))
+                source = "log"
                 break
 
     pass_check: Optional[bool] = None
@@ -186,6 +232,7 @@ def _skill_status(task: str, metric: str, op: str, threshold: float) -> dict:
         "threshold": threshold,
         "op": op,
         "value": last_value,
+        "value_source": source,
         "confidence": confidence,
         "passes": pass_check,
         "steps": steps,
