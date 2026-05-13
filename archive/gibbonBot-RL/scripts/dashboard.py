@@ -242,6 +242,75 @@ def api_skills() -> JSONResponse:
     return JSONResponse({"skills": out, "next_to_train": next_task})
 
 
+def _remote_host() -> Optional[str]:
+    """Parse the REMOTE=... line from scripts/remote.sh so the dashboard
+    always pings the same host the operator scripts target."""
+    try:
+        for line in (ROOT / "scripts/remote.sh").read_text().splitlines():
+            if line.startswith("REMOTE="):
+                return line.split("=", 1)[1].strip()
+    except OSError:
+        pass
+    return None
+
+
+@app.get("/api/remote/health")
+def api_remote_health() -> JSONResponse:
+    host = _remote_host()
+    if not host:
+        return JSONResponse({"ok": False, "error": "no REMOTE= in scripts/remote.sh"}, status_code=500)
+
+    # One ssh round-trip: fetch health.json + nvidia-smi in a single shell.
+    cmd = [
+        "ssh",
+        "-o", "ConnectTimeout=4",
+        "-o", "BatchMode=yes",                # never prompt for password
+        "-o", "StrictHostKeyChecking=accept-new",
+        host,
+        "cat gibbonBot-RL/runs/ape_walk_mjx/health.json 2>/dev/null; "
+        "echo '---SMI---'; "
+        "nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw "
+        "--format=csv,noheader,nounits 2>/dev/null",
+    ]
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=8)
+    except subprocess.TimeoutExpired:
+        return JSONResponse({"ok": False, "error": "ssh timeout", "host": host}, status_code=504)
+
+    if r.returncode != 0:
+        return JSONResponse({"ok": False, "error": r.stderr.strip()[:300] or "ssh failed", "host": host}, status_code=502)
+
+    parts = r.stdout.split("---SMI---", 1)
+    health_raw = parts[0].strip()
+    smi_raw = parts[1].strip() if len(parts) > 1 else ""
+
+    health: dict = {}
+    if health_raw:
+        try:
+            health = json.loads(health_raw)
+        except ValueError:
+            health = {"raw": health_raw[:200]}
+
+    gpu: dict = {}
+    if smi_raw:
+        # First line is the GPU we care about (single-GPU box).
+        first = smi_raw.splitlines()[0]
+        bits = [b.strip() for b in first.split(",")]
+        if len(bits) >= 5:
+            try:
+                gpu = {
+                    "util_pct": float(bits[0]),
+                    "mem_used_mb": float(bits[1]),
+                    "mem_total_mb": float(bits[2]),
+                    "temp_c": float(bits[3]),
+                    "power_w": float(bits[4]),
+                }
+            except ValueError:
+                gpu = {"raw": first}
+
+    return JSONResponse({"ok": True, "host": host, "health": health, "gpu": gpu, "ts": time.time()})
+
+
 @app.get("/api/processes")
 def api_processes() -> JSONResponse:
     # Top processes by RSS — covers the "what's eating my RAM" question without
@@ -390,8 +459,14 @@ canvas { width: 100%; height: 140px; display: block; background: #0b0e13; border
   </div>
 
   <div class="card">
-    <h2>remote H100</h2>
+    <h2>remote H100 <span class="muted" id="remote-host"></span></h2>
     <div class="kv"><span>watch_remote</span><span class="v" id="watch-pid">—</span></div>
+    <div class="kv"><span>gpu util</span><span class="v" id="rh-util">—</span></div>
+    <div class="kv"><span>vram</span><span class="v" id="rh-vram">—</span></div>
+    <div class="kv"><span>temp</span><span class="v" id="rh-temp">—</span></div>
+    <div class="kv"><span>power</span><span class="v" id="rh-power">—</span></div>
+    <div class="kv"><span>sps</span><span class="v" id="rh-sps">—</span></div>
+    <div class="kv"><span>last update</span><span class="v" id="rh-update">—</span></div>
     <div style="margin-top: 8px;">
       <button class="go" onclick="post('/api/remote/start')">start</button>
       <button class="danger" onclick="post('/api/remote/stop')">stop</button>
@@ -512,6 +587,64 @@ function trainTask(task) {
   post('/api/train/start?task=' + encodeURIComponent(task));
 }
 
+// Tracks last sps so the UI can render a delta arrow.
+let lastRemoteSps = null;
+
+async function refreshRemote() {
+  let h;
+  try { h = await (await fetch('/api/remote/health')).json(); } catch (e) { return; }
+  document.getElementById('remote-host').textContent = h.host ? '· ' + h.host : '';
+  if (!h.ok) {
+    ['rh-util','rh-vram','rh-temp','rh-power','rh-sps','rh-update'].forEach(id => {
+      const el = document.getElementById(id);
+      el.textContent = 'unreachable';
+      el.className = 'v bad';
+    });
+    return;
+  }
+  const g = h.gpu || {};
+  const hh = h.health || {};
+
+  function setKv(id, text, cls) {
+    const el = document.getElementById(id);
+    el.textContent = text;
+    el.className = 'v ' + (cls || '');
+  }
+
+  if (g.util_pct != null) {
+    setKv('rh-util', g.util_pct.toFixed(0) + '%', g.util_pct > 80 ? 'ok' : g.util_pct > 30 ? 'warn' : 'bad');
+  } else { setKv('rh-util', '—', 'muted'); }
+
+  if (g.mem_used_mb != null && g.mem_total_mb) {
+    const pct = (g.mem_used_mb / g.mem_total_mb) * 100;
+    setKv('rh-vram',
+      (g.mem_used_mb / 1024).toFixed(1) + ' / ' + (g.mem_total_mb / 1024).toFixed(0) + ' GB (' + pct.toFixed(0) + '%)',
+      pct > 95 ? 'bad' : pct > 60 ? 'ok' : 'muted');
+  } else { setKv('rh-vram', '—', 'muted'); }
+
+  if (g.temp_c != null) {
+    setKv('rh-temp', g.temp_c.toFixed(0) + '°C', g.temp_c > 85 ? 'bad' : g.temp_c > 70 ? 'warn' : 'ok');
+  } else { setKv('rh-temp', '—', 'muted'); }
+
+  if (g.power_w != null) setKv('rh-power', g.power_w.toFixed(0) + ' W', 'muted');
+
+  if (hh.last_sps != null) {
+    let arrow = '';
+    if (lastRemoteSps != null) {
+      const d = hh.last_sps - lastRemoteSps;
+      const pct = lastRemoteSps ? (d / lastRemoteSps * 100) : 0;
+      arrow = ' ' + (d > 0 ? '▲' : d < 0 ? '▼' : '·') + ' ' + (Math.abs(pct) < 10 ? '' : (pct > 0 ? '+' : '') + pct.toFixed(0) + '%');
+    }
+    setKv('rh-sps', hh.last_sps.toLocaleString() + arrow, 'ok');
+    lastRemoteSps = hh.last_sps;
+  }
+
+  if (hh.log_idle_seconds != null) {
+    setKv('rh-update', hh.log_idle_seconds.toFixed(0) + 's ago',
+      hh.log_idle_seconds > 300 ? 'bad' : hh.log_idle_seconds > 60 ? 'warn' : 'ok');
+  }
+}
+
 async function refreshProcesses() {
   let p;
   try { p = await (await fetch('/api/processes')).json(); } catch (e) { return; }
@@ -599,11 +732,13 @@ async function refresh() {
   document.getElementById('log-tail').textContent = s.log_tail.join('\\n') || '(empty)';
 }
 
-function refreshAll() { refresh(); refreshSkills(); refreshProcesses(); }
+function refreshAll() { refresh(); refreshSkills(); refreshProcesses(); refreshRemote(); }
 refreshAll();
 setInterval(refresh, 4000);
 setInterval(refreshSkills, 8000);
 setInterval(refreshProcesses, 6000);
+// Remote ssh is the slowest poll — every 15s. Skipped silently if box is down.
+setInterval(refreshRemote, 15000);
 </script>
 </body></html>
 """
