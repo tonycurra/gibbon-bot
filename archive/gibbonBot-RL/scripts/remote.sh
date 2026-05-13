@@ -20,6 +20,7 @@ ENVS=${ENVS:-16384}
 ROLLOUT_EVERY=${ROLLOUT_EVERY:-50}
 ROLLOUT_ENVS=${ROLLOUT_ENVS:-256}
 RESUME=${RESUME:-1}    # default ON: force-resume past fingerprint mismatch (so param edits keep weights). Set RESUME=0 to start fresh.
+BACKEND=${MUJOCO_BACKEND:-mjwarp}    # mjwarp = NVIDIA Warp kernels (2-5x faster on H100). Set MUJOCO_BACKEND=mjx to fall back.
 
 cmd=${1:-help}
 
@@ -34,7 +35,7 @@ case "$cmd" in
     # We just truncate the file at start; python appends from there.
     # XLA_PYTHON_CLIENT_MEM_FRACTION caps VRAM so a parallel stand job can fit on the same H100.
     train_cmd="cd $REPO && export JAX_COMPILATION_CACHE_DIR=~/.jax_cache PYTHONUNBUFFERED=1 \
-   XLA_PYTHON_CLIENT_MEM_FRACTION=0.75 \
+   XLA_PYTHON_CLIENT_MEM_FRACTION=0.75 MUJOCO_BACKEND=$BACKEND \
 && mkdir -p $RUN_DIR && : > $RUN_DIR/train.log \
 && python3 -u train_walk_mjx.py --no-watch --envs $ENVS \
      --save-rollouts-every $ROLLOUT_EVERY --rollout-envs $ROLLOUT_ENVS $resume_flag; \
@@ -47,7 +48,7 @@ case "$cmd" in
                    tmux new-session -d -s monitor 'cd $REPO && ENVS=$ENVS stdbuf -oL -eL python3 -u scripts/monitor.py'"
     echo "[remote.sh] training started in tmux session '$SESSION' on $REMOTE"
     echo "[remote.sh] watchdog started in tmux session 'monitor' (auto-restarts on stall)"
-    echo "[remote.sh] envs=$ENVS  rollout_every=$ROLLOUT_EVERY  rollout_envs=$ROLLOUT_ENVS  resume=${RESUME:-auto}"
+    echo "[remote.sh] envs=$ENVS  rollout_every=$ROLLOUT_EVERY  rollout_envs=$ROLLOUT_ENVS  resume=${RESUME:-auto}  backend=$BACKEND"
     echo "[remote.sh] watch with: ./remote.sh log    OR    ./remote.sh status    OR    ./remote.sh health"
     ;;
 
@@ -60,7 +61,7 @@ case "$cmd" in
     STAND_ENVS=${STAND_ENVS:-4096}
     STAND_DIR=$REPO/runs/ape_stand_mjx
     stand_cmd="cd $REPO && export JAX_COMPILATION_CACHE_DIR=~/.jax_cache_stand PYTHONUNBUFFERED=1 \
-   XLA_PYTHON_CLIENT_MEM_FRACTION=0.18 \
+   XLA_PYTHON_CLIENT_MEM_FRACTION=0.18 MUJOCO_BACKEND=$BACKEND \
 && mkdir -p $STAND_DIR && : > $STAND_DIR/train.log \
 && python3 -u archive/train_mjx.py --no-watch --envs $STAND_ENVS --resume; \
    ec=\$?; echo \"[remote.sh] stand python exited with code \$ec\" >> $STAND_DIR/train.log"

@@ -9,6 +9,23 @@ inspired by ape and human neuroanatomy. It replaces the standard monolithic neur
 network policy with a modular, brain-like system that includes neurotransmitter
 modulation, reflexes, action selection, and memory systems.
 
+## Current integration status (2026-05-13)
+
+The architecture below describes the full vision. Today, only a subset is actually
+wired into PPO training in `train_mjx.py`:
+
+| Module | Defined in `brain/` | In PPO loop |
+|---|---|---|
+| Hippocampus (episodic memory + consolidation replay) | ✅ | ✅ (commit `d10eb9a`) |
+| Semantic map (persistent place memory) | ✅ | ✅ |
+| Basal ganglia, cerebellum, amygdala, PFC, motor cortex, brainstem, neurotransmitters | ✅ | ❌ — scaffolding only |
+| `ApeBrain.step()` integrator (`brain/ape_brain.py`) | ✅ | ❌ — not called by trainer |
+
+PPO action selection is still a plain Flax policy net. The bio modules exist as
+isolated, tested components; only hippocampal memory currently influences the
+policy (via consolidation replay during the sleep phase). Wiring BG/cerebellum/
+amygdala into the action loop is future work and not currently scheduled.
+
 ## 🧠 Architecture Overview
 
 ```

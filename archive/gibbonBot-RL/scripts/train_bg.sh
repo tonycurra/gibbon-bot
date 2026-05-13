@@ -8,8 +8,9 @@
 #   scripts/train_bg.sh status            # pid + last 20 log lines
 #   scripts/train_bg.sh tail [N]          # last N lines (default 40)
 #   scripts/train_bg.sh stop              # kill the trainer
+#   scripts/train_bg.sh docker [task]     # same, but inside docker compose
 #
-# Extra args after `start <task>` are forwarded to train_mjx.py.
+# Extra args after `start <task>` or `docker <task>` are forwarded to train_mjx.py.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -96,8 +97,26 @@ case "$cmd" in
         rm -f "$PID_FILE"
         echo "stopped pids=$pids"
         ;;
+    docker)
+        if [[ -n "$(_any_trainer_pids)" ]]; then
+            echo "host trainer already running — stop it first ('$0 stop')" >&2
+            exit 1
+        fi
+        if docker ps --format '{{.Names}}' 2>/dev/null | grep -q '^gibbonbot-trainer$'; then
+            echo "docker trainer already running:" >&2
+            docker ps --filter name=gibbonbot-trainer >&2
+            echo "stop with: docker compose stop trainer" >&2
+            exit 1
+        fi
+        task="${1:-walk}"; shift || true
+        docker compose run -d --rm --name gibbonbot-trainer trainer \
+            python train_mjx.py --task "$task" --no-watch "$@"
+        echo "started docker trainer task=$task"
+        echo "logs: docker compose logs -f trainer"
+        echo "stop: docker compose stop trainer"
+        ;;
     *)
-        echo "usage: $0 {start [task]|status|tail [N]|stop}" >&2
+        echo "usage: $0 {start [task]|docker [task]|status|tail [N]|stop}" >&2
         exit 2
         ;;
 esac
