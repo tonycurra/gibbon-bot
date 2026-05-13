@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mujoco model="ape_robot">
+  <compiler angle="degree" />
+  <include file="terrain.xml"/>
+  <include file="robot.xml"/>
+</mujoco>

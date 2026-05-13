@@ -11,7 +11,8 @@
     <mesh name="link4" content_type="model/stl" file="meshes/link4.stl" scale="0.001 0.001 0.001" />
     <mesh name="link5" content_type="model/stl" file="meshes/link5.stl" scale="0.001 0.001 0.001" />
     <mesh name="gripper_link" content_type="model/stl" file="meshes/gripper_link.stl" scale="0.001 0.001 0.001" />
-  
+    <mesh name="gibbon_torso_mk2" content_type="model/obj" file="meshes/gibbon_torso_mk2.obj" scale="0.001 0.001 0.001" />
+
 
     <!-- TERRAIN-ASSETS-BEGIN (flat-only for fast compile; hfield/terrain mesh disabled) -->
     <texture name="skybox" type="skybox" builtin="gradient" rgb1="0.350 0.550 0.850" rgb2="0.700 0.833 0.960" width="256" height="256" />
@@ -27,7 +28,7 @@
     <map fogstart="20" fogend="60" znear="0.05" zfar="200" />
     <rgba haze="0.65 0.74 0.82 1" />
     <global offwidth="1920" offheight="1920" />
-  
+
   </visual>
 
   <default>
@@ -57,15 +58,15 @@
     <!-- TERRAIN-WORLDBODY-END -->
 
     <!-- ROBOT (hand-edited; spawn z on torso body patched by gen_terrain.py) -->
-    <body name="torso" pos="0 0 0.5310">
+    <!-- NEW MK2.1 TORSO: hole positions approx at x=±0.034, y=±0.038, z=0
+         Box collision: size=0.1x0.15x0.15, bottom at torso_z - 0.075 -->
+    <body name="torso" pos="0 0 0.58">
       <inertial pos="-0.0192447 0 -0.0101645" quat="0.439032 0.439032 -0.554303 0.554303" mass="1.02487" diaginertia="0.0402837 0.0351039 0.0308832" />
       <joint name="world_to_torso" type="free" />
-      <geom size="0.15 0.15 0.05" type="box" rgba="0.3 0.3 0.3 1" class="robot" />
-      <geom pos="0.12 0.15 -0.05" quat="0.5 -0.5 0.5 0.5" type="mesh" rgba="0.75 0.75 0.75 1" mesh="base_link" class="robot" />
-      <geom pos="0.12 -0.15 -0.05" quat="0.5 0.5 0.5 -0.5" type="mesh" rgba="0.75 0.75 0.75 1" mesh="base_link" class="robot" />
-      <geom pos="-0.12 0.1 -0.05" quat="0.7071068 0 -0.7071068 0" type="mesh" rgba="0.75 0.75 0.75 1" mesh="base_link" class="robot" />
-      <geom pos="-0.12 -0.1 -0.05" quat="0.7071068 0 -0.7071068 0" type="mesh" rgba="0.75 0.75 0.75 1" mesh="base_link" class="robot" />
-      <body name="fl_link1" pos="0.12 0.15 -0.05" quat="0.5 -0.5 0.5 0.5">
+      <!-- Box for collision (fast), mesh for visual -->
+      <geom size="0.1 0.15 0.15" type="box" rgba="0.3 0.3 0.3 0.3" class="robot" contype="1" conaffinity="31" />
+      <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="gibbon_torso_mk2" class="robot" contype="0" conaffinity="0" />
+      <body name="fl_link1" pos="0.034 0.038 0" quat="0.5 -0.5 0.5 0.5">
         <inertial pos="0 0 0.037" quat="0.5 0.5 0.5 -0.5" mass="0.0729177" diaginertia="5.01023e-05 4.68465e-05 3.32107e-05" />
         <joint name="fl_shoulder_yaw" pos="0 0 0" axis="0 0 1" range="-180 180" actuatorfrcrange="-2.94 2.94" class="st3235" />
         <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link1" class="robot" contype="1" conaffinity="31" />
@@ -97,7 +98,7 @@
           </body>
         </body>
       </body>
-      <body name="fr_link1" pos="0.12 -0.15 -0.05" quat="0.5 0.5 0.5 -0.5">
+      <body name="fr_link1" pos="0.034 -0.038 0" quat="0.5 0.5 0.5 -0.5">
         <inertial pos="0 0 0.037" quat="0.5 0.5 0.5 -0.5" mass="0.0729177" diaginertia="5.01023e-05 4.68465e-05 3.32107e-05" />
         <joint name="fr_shoulder_yaw" pos="0 0 0" axis="0 0 1" range="-180 180" actuatorfrcrange="-2.94 2.94" class="st3235" />
         <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link1" class="robot" contype="1" conaffinity="31" />
@@ -129,7 +130,7 @@
           </body>
         </body>
       </body>
-      <body name="bl_link1" pos="-0.12 0.1 -0.05" quat="0.7071068 0 -0.7071068 0">
+      <body name="bl_link1" pos="-0.034 0.038 0" quat="0.7071068 0 -0.7071068 0">
         <inertial pos="0 0 0.037" quat="0.5 0.5 0.5 -0.5" mass="0.0729177" diaginertia="5.01023e-05 4.68465e-05 3.32107e-05" />
         <joint name="bl_hip_yaw" pos="0 0 0" axis="0 0 1" range="-180 180" actuatorfrcrange="-2.94 2.94" class="st3235" />
         <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link1" class="robot" contype="1" conaffinity="31" />
@@ -161,7 +162,7 @@
           </body>
         </body>
       </body>
-      <body name="br_link1" pos="-0.12 -0.1 -0.05" quat="0.7071068 0 -0.7071068 0">
+      <body name="br_link1" pos="-0.034 -0.038 0" quat="0.7071068 0 -0.7071068 0">
         <inertial pos="0 0 0.037" quat="0.5 0.5 0.5 -0.5" mass="0.0729177" diaginertia="5.01023e-05 4.68465e-05 3.32107e-05" />
         <joint name="br_hip_yaw" pos="0 0 0" axis="0 0 1" range="-180 180" actuatorfrcrange="-2.94 2.94" class="st3235" />
         <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link1" class="robot" contype="1" conaffinity="31" />
@@ -195,7 +196,7 @@
       </body>
     </body>
     <camera name="fixed" pos="1.5 0 0.3" xyaxes="1 0 0 0 0.8 0.2"/>
-  
+
 
     <!-- TREE-WORLDBODY-BEGIN (trunk-only — walk task needs t0_trunk for goal lookup) -->
     <geom name="t0_trunk" type="capsule" fromto="3.000 0.000 -0.016 3.000 0.000 2.127" size="0.137" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31" friction="0.7 0.01 0.001"/>
@@ -227,6 +228,6 @@
     <position name="act_br_shin_roll"        joint="br_shin_roll"        kp="8" ctrlrange="-90 90"          forcelimited="true" forcerange="-2.94 2.94" />
     <position name="act_br_ankle"            joint="br_ankle"            kp="8" ctrlrange="-180 180"        forcelimited="true" forcerange="-2.94 2.94" />
     <position name="act_br_foot"             joint="br_foot"             kp="8" ctrlrange="0 85.9437"       forcelimited="true" forcerange="-1.96 1.96" />
-  
+
   </actuator>
 </mujoco>
