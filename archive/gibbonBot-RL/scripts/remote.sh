@@ -1,5 +1,6 @@
 #!/bin/bash
 # Drive the remote H100 from your laptop. Run from repo root:
+#   scripts/remote.sh bootstrap # prime a fresh instance (rclone + jax_cache + runs/ from Scaleway)
 #   scripts/remote.sh start    # kick training in detached tmux at H100-max settings
 #   scripts/remote.sh log      # live-tail the training log
 #   scripts/remote.sh status   # last log lines + nvidia-smi snapshot
@@ -25,6 +26,21 @@ BACKEND=${MUJOCO_BACKEND:-mjwarp}    # mjwarp = NVIDIA Warp kernels (2-5x faster
 cmd=${1:-help}
 
 case "$cmd" in
+  bootstrap)
+    # Prime a fresh GPU instance: install rclone, copy local rclone config,
+    # pull jax_cache + runs/ + mlruns/ from Scaleway. Run this once after
+    # spinning up a new instance, BEFORE `start`. Saves the ~5min cold-compile.
+    ssh "$REMOTE" "command -v rclone >/dev/null || (curl -fsSL https://rclone.org/install.sh | bash)"
+    ssh "$REMOTE" "mkdir -p ~/.config/rclone"
+    scp ~/.config/rclone/rclone.conf "$REMOTE:.config/rclone/rclone.conf"
+    ssh "$REMOTE" "rclone copy scaleway:gibbonbot-training/jax_cache/ ~/.jax_cache/ --transfers 8 --checkers 16 --stats-one-line --stats 5s"
+    ssh "$REMOTE" "mkdir -p $REPO/runs $REPO/mlruns && \
+                   rclone copy scaleway:gibbonbot-training/runs/   $REPO/runs/   --transfers 8 --checkers 16 --stats-one-line --stats 5s && \
+                   rclone copy scaleway:gibbonbot-training/mlruns/ $REPO/mlruns/ --transfers 8 --checkers 16 --stats-one-line --stats 5s"
+    echo "[remote.sh] bootstrap done — instance primed with jax_cache, runs/, mlruns/"
+    echo "[remote.sh] now run: ./remote.sh start"
+    ;;
+
   start)
     resume_flag=""
     [[ "$RESUME" != "0" && -n "$RESUME" ]] && resume_flag="--resume"
@@ -34,10 +50,11 @@ case "$cmd" in
     # In-process tee writes train.log line-buffered (shell tee buffered at 4KB).
     # We just truncate the file at start; python appends from there.
     # XLA_PYTHON_CLIENT_MEM_FRACTION caps VRAM so a parallel stand job can fit on the same H100.
-    train_cmd="cd $REPO && export JAX_COMPILATION_CACHE_DIR=~/.jax_cache PYTHONUNBUFFERED=1 \
+    train_cmd="cd $REPO && export PATH=\$PWD/.venv/bin:\$PATH JAX_COMPILATION_CACHE_DIR=~/.jax_cache PYTHONUNBUFFERED=1 \
+   JAX_PERSISTENT_CACHE_MIN_ENTRY_SIZE_BYTES=0 JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS=0 \
    XLA_PYTHON_CLIENT_MEM_FRACTION=0.75 MUJOCO_BACKEND=$BACKEND \
 && mkdir -p $RUN_DIR && : > $RUN_DIR/train.log \
-&& python3 -u train_walk_mjx.py --no-watch --envs $ENVS \
+&& .venv/bin/python -u train_walk_mjx.py --no-watch --envs $ENVS \
      --save-rollouts-every $ROLLOUT_EVERY --rollout-envs $ROLLOUT_ENVS $resume_flag; \
    ec=\$?; echo \"[remote.sh] python exited with code \$ec\" >> $RUN_DIR/train.log; \
    echo \"[remote.sh] tmux command finished — pane will close\""
@@ -45,7 +62,7 @@ case "$cmd" in
     ssh "$REMOTE" "tmux kill-session -t $SESSION 2>/dev/null; \
                    tmux kill-session -t monitor 2>/dev/null; \
                    tmux new-session -d -s $SESSION '$train_cmd'; \
-                   tmux new-session -d -s monitor 'cd $REPO && ENVS=$ENVS stdbuf -oL -eL python3 -u scripts/monitor.py'"
+                   tmux new-session -d -s monitor 'cd $REPO && ENVS=$ENVS stdbuf -oL -eL .venv/bin/python -u scripts/monitor.py'"
     echo "[remote.sh] training started in tmux session '$SESSION' on $REMOTE"
     echo "[remote.sh] watchdog started in tmux session 'monitor' (auto-restarts on stall)"
     echo "[remote.sh] envs=$ENVS  rollout_every=$ROLLOUT_EVERY  rollout_envs=$ROLLOUT_ENVS  resume=${RESUME:-auto}  backend=$BACKEND"
@@ -63,7 +80,7 @@ case "$cmd" in
     stand_cmd="cd $REPO && export JAX_COMPILATION_CACHE_DIR=~/.jax_cache_stand PYTHONUNBUFFERED=1 \
    XLA_PYTHON_CLIENT_MEM_FRACTION=0.18 MUJOCO_BACKEND=$BACKEND \
 && mkdir -p $STAND_DIR && : > $STAND_DIR/train.log \
-&& python3 -u archive/train_mjx.py --no-watch --envs $STAND_ENVS --resume; \
+&& .venv/bin/python -u archive/train_mjx.py --no-watch --envs $STAND_ENVS --resume; \
    ec=\$?; echo \"[remote.sh] stand python exited with code \$ec\" >> $STAND_DIR/train.log"
     ssh "$REMOTE" "tmux kill-session -t train_stand 2>/dev/null; \
                    tmux new-session -d -s train_stand '$stand_cmd'"
@@ -116,6 +133,17 @@ case "$cmd" in
     sleep 35
     kill "$pid" 2>/dev/null || true
     echo "[remote.sh] one sync tick done"
+    ;;
+
+  final_sync)
+    # Push EVERYTHING (jax_cache + runs + mlruns) to Scaleway right now.
+    # Run this before destroying the instance so nothing is lost since the
+    # last 10-min push tick.
+    ssh "$REMOTE" "cd $REPO && \
+      rclone copy /root/.jax_cache scaleway:gibbonbot-training/jax_cache/ --transfers 8 --checkers 16 --stats-one-line --stats 5s && \
+      rclone copy runs/   scaleway:gibbonbot-training/runs/   --include '**/*.npz' --include '**/*.json' --include '**/train.log' --transfers 8 --checkers 16 --stats-one-line --stats 5s && \
+      [ -d mlruns ] && rclone copy mlruns/ scaleway:gibbonbot-training/mlruns/ --transfers 8 --checkers 16 --stats-one-line --stats 5s; \
+      echo 'final_sync done — safe to destroy instance'"
     ;;
 
   *)

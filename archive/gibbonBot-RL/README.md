@@ -3,6 +3,13 @@
 PPO + MuJoCo MJX (JAX, GPU-accelerated) for a 4-limbed robotic ape.
 Currently learning to walk to a tree on flat ground.
 
+Scene is intentionally lean for fast XLA compile: flat plane floor (no
+heightfield/terrain mesh), single trunk capsule at (3, 0, 0), and
+convex-hull collision meshes for `link5` / `gripper_link` / `link2`
+(originals in `data/meshes/_original/`). Re-enable heightfield + tree
+branches via the `TERRAIN-*` / `TREE-*` markers in `data/scene.xml` when
+training the climb/harvest tasks.
+
 ## Quickstart
 
 ```bash
@@ -37,11 +44,20 @@ scripts/ape_audit.sh
 # legacy entry point (back-compat shim that calls train_mjx.py --task walk)
 python train_walk_mjx.py --auto-push --label "..."
 
-# train remote
+# train remote (ephemeral H100 — instance can be destroyed between sessions)
+scripts/remote.sh bootstrap     # prime fresh instance: pulls jax_cache + runs/ from Scaleway
 scripts/remote.sh start         # H100, walk task, autopilot, watchdog, all in one
 scripts/remote.sh status        # GPU util + log tail + tmux state
 scripts/remote.sh log           # live tail of training log
 scripts/remote.sh stop          # graceful save + exit
+scripts/remote.sh final_sync    # push EVERYTHING (jax_cache + runs + mlruns) to Scaleway
+                                # — run before destroying instance
+
+# while training runs, a background tmux session pushes runs/, mlruns/, and
+# ~/.jax_cache/ to scaleway:gibbonbot-training/ every 10 min. So the
+# expensive XLA autotune cache (~10-15min cold compile on a fresh instance)
+# is preserved across instance lifetimes — bootstrap pulls it back, and
+# subsequent starts go from cold-compile 15min → warm-restart ~1min.
 
 # pull artifacts down + watch policy
 scripts/pull_checkpoints.sh &   # syncs runs/ + mlruns/ from remote, every 30s

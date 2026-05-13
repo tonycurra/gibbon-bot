@@ -13,16 +13,11 @@
     <mesh name="gripper_link" content_type="model/stl" file="meshes/gripper_link.stl" scale="0.001 0.001 0.001" />
   
 
-    <!-- TERRAIN-ASSETS-BEGIN -->
-    <!-- size: half-x, half-y, max-height, base-thickness -->
-    <hfield name="terrain" file="terrain.png" size="5.0 5.0 0.0500 0.05" />
-    <mesh name="terrain_surface" file="terrain_surface.obj"/>
+    <!-- TERRAIN-ASSETS-BEGIN (flat-only for fast compile; hfield/terrain mesh disabled) -->
     <texture name="skybox" type="skybox" builtin="gradient" rgb1="0.350 0.550 0.850" rgb2="0.700 0.833 0.960" width="256" height="256" />
     <!-- TERRAIN-ASSETS-END -->
 
-    <!-- TREE-ASSETS-BEGIN -->
-    <mesh name="tree_0_wood" file="trees/tree_0_wood.obj"/>
-    <mesh name="tree_0_leaves" file="trees/tree_0_leaves.obj"/>
+    <!-- TREE-ASSETS-BEGIN (disabled for fast compile — re-enable for grove/climb) -->
     <!-- TREE-ASSETS-END -->
   </asset>
 
@@ -57,10 +52,8 @@
          solimp capped at 0.92 (not fully rigid), bumped rolling friction so
          feet don't slide on the soft surface. Tune by editing solref's first
          number (larger = softer, slower bounce-back). -->
-    <geom name="floor" type="plane" size="20 20 0.1" pos="0 0 0" rgba="0 0 0 0" condim="4" friction="1.490 0.0715 0.05" solimp="0.85 0.92 0.02" solref="0.035 1" contype="1" conaffinity="31" />
-    <geom name="terrain_visual" type="mesh" mesh="terrain_surface" rgba="0.45 0.32 0.18 1" contype="0" conaffinity="0"/>
-    <geom name="terrain_hfield_visual" type="hfield" hfield="terrain" pos="0 0 0" rgba="0 0 0 0" contype="0" conaffinity="0"/>
-  
+    <geom name="floor" type="plane" size="20 20 0.1" pos="0 0 0" rgba="0.45 0.32 0.18 1" condim="4" friction="1.490 0.0715 0.05" solimp="0.85 0.92 0.02" solref="0.035 1" contype="1" conaffinity="31" />
+
     <!-- TERRAIN-WORLDBODY-END -->
 
     <!-- ROBOT (hand-edited; spawn z on torso body patched by gen_terrain.py) -->
@@ -204,14 +197,8 @@
     <camera name="fixed" pos="1.5 0 0.3" xyaxes="1 0 0 0 0.8 0.2"/>
   
 
-    <!-- TREE-WORLDBODY-BEGIN -->
-    <!-- tree 0: r=0.137 h=2.08 ground_z=0.052 -->
+    <!-- TREE-WORLDBODY-BEGIN (trunk-only — walk task needs t0_trunk for goal lookup) -->
     <geom name="t0_trunk" type="capsule" fromto="3.000 0.000 -0.016 3.000 0.000 2.127" size="0.137" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31" friction="0.7 0.01 0.001"/>
-    <geom name="t0_b0" type="capsule" fromto="3.044 0.053 1.083 3.570 0.685 1.052" size="0.057" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31" friction="0.7 0.01 0.001"/>
-    <geom name="t0_b1" type="capsule" fromto="3.067 0.014 1.514 3.543 0.110 1.492" size="0.059" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31" friction="0.7 0.01 0.001"/>
-    <geom name="t0_b2" type="capsule" fromto="2.986 -0.067 1.477 2.863 -0.633 1.670" size="0.053" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31" friction="0.7 0.01 0.001"/>
-    <geom name="t0_b3" type="capsule" fromto="3.047 -0.050 1.125 3.326 -0.351 1.277" size="0.052" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31" friction="0.7 0.01 0.001"/>
-    <geom name="t0_b4" type="capsule" fromto="3.015 0.067 1.124 3.096 0.432 1.265" size="0.050" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31" friction="0.7 0.01 0.001"/>
     <!-- TREE-WORLDBODY-END -->
   </worldbody>
 
