@@ -166,6 +166,7 @@ reproducibility unit.
 | `scripts/compare_runs.py` | MLflow cross-run metric comparison |
 | `scripts/note.py "..."` | Attach prose note to current MLflow run |
 | `scripts/sync.sh` | One-shot push to all configured git remotes |
+| `scripts/dashboard.sh start` | Local web dashboard — log tail, metrics, start/stop trainer, toggle remote sync. → http://127.0.0.1:8765 |
 
 ## Motor model
 

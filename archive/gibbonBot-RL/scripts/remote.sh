@@ -10,7 +10,7 @@
 #   scripts/remote.sh sync     # one-shot pull of checkpoints + mlruns + rollouts
 set -euo pipefail
 
-REMOTE=root@51.159.167.125
+REMOTE=root@51.159.159.202
 REPO=gibbonBot-RL
 SESSION=train
 RUN_DIR="$REPO/runs/ape_walk_mjx"
