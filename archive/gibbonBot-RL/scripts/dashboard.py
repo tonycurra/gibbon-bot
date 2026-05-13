@@ -33,6 +33,17 @@ REMOTE_LOG_GLOB = "ape_*_mjx/train.log"
 WATCH_PID_FILE = ROOT / "runs" / ".watch_remote.pid"
 CLOUD_PID_FILE = ROOT / "runs" / ".cloud_push.pid"
 
+# Source of truth for "what skills exist + what's the success bar?" — kept in
+# sync with scripts/curriculum.py TASKS table. (task, prereq, metric, op, threshold)
+SKILLS: list[tuple[str, Optional[str], str, str, float]] = [
+    ("stand",        None,           "mean_upright",  "gt",  0.90),
+    ("walk",         None,           "mean_rew",      "gt",  5.0),     # legacy walk-to-tree
+    ("walk_forward", "stand",        "mean_speed_x",  "gt",  0.20),
+    ("turn_left",    "walk_forward", "mean_angvel_z", "gt",  0.40),
+    ("turn_right",   "turn_left",    "mean_angvel_z", "lt", -0.40),
+]
+CKPT_RE = re.compile(r"mjx_(\d+)\.npz$")
+
 # Matches train_mjx.py per-update lines: "  123  4,096  12,345   0.123   2.901"
 METRIC_RE = re.compile(r"^\s*(\d+)\s+([\d,]+)\s+([\d,]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s*$")
 
@@ -110,6 +121,80 @@ def _trainer_pids() -> list[int]:
     return [int(x) for x in out.split() if x.strip().isdigit()]
 
 
+def _skill_status(task: str, metric: str, op: str, threshold: float) -> dict:
+    run_dir = RUNS / f"ape_{task}_mjx"
+    if not run_dir.exists():
+        return {"task": task, "state": "untrained", "metric": metric, "threshold": threshold}
+
+    ckpts = list(run_dir.glob("mjx_*.npz"))
+    if not ckpts:
+        return {"task": task, "state": "started_no_ckpt", "metric": metric, "threshold": threshold}
+
+    newest_ckpt = max(ckpts, key=lambda p: p.stat().st_mtime)
+    m = CKPT_RE.search(newest_ckpt.name)
+    steps = int(m.group(1)) if m else 0
+
+    last_value: Optional[float] = None
+
+    # Prefer per-task sidecars in keepers/ (richest data).
+    keepers = run_dir / "keepers"
+    if keepers.exists():
+        sidecars = sorted(keepers.glob("auto_*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+        for sc in sidecars[:5]:
+            try:
+                metrics = json.loads(sc.read_text()).get("metrics", {})
+                if metric in metrics:
+                    last_value = float(metrics[metric])
+                    break
+            except (OSError, ValueError):
+                continue
+
+    # Fall back to live_stats.json (some tasks write this).
+    if last_value is None:
+        live = run_dir / "live_stats.json"
+        if live.exists():
+            try:
+                data = json.loads(live.read_text())
+                if metric in data:
+                    last_value = float(data[metric])
+            except (OSError, ValueError):
+                pass
+
+    # Last resort: parse last reward from train.log.
+    if last_value is None and metric == "mean_rew":
+        for line in reversed(_tail(run_dir / "train.log", n=400)):
+            mm = METRIC_RE.match(line)
+            if mm:
+                last_value = float(mm.group(5))
+                break
+
+    pass_check: Optional[bool] = None
+    confidence: Optional[float] = None
+    if last_value is not None:
+        if op == "gt":
+            pass_check = last_value > threshold
+            confidence = max(0.0, min(1.0, last_value / threshold)) if threshold > 0 else None
+        else:  # lt — used for negative thresholds (e.g. turn_right angvel)
+            pass_check = last_value < threshold
+            confidence = max(0.0, min(1.0, last_value / threshold)) if threshold < 0 else None
+
+    log_mtime = (run_dir / "train.log").stat().st_mtime if (run_dir / "train.log").exists() else newest_ckpt.stat().st_mtime
+    return {
+        "task": task,
+        "state": "trained" if pass_check else ("training" if (time.time() - log_mtime) < 600 else "stalled"),
+        "metric": metric,
+        "threshold": threshold,
+        "op": op,
+        "value": last_value,
+        "confidence": confidence,
+        "passes": pass_check,
+        "steps": steps,
+        "ckpts": len(ckpts),
+        "ckpt": newest_ckpt.name,
+        "age_s": round(time.time() - newest_ckpt.stat().st_mtime, 1),
+    }
+
+
 def _bash(cmd: list[str], timeout: int = 20) -> dict:
     try:
         r = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, timeout=timeout)
@@ -138,8 +223,76 @@ def api_status() -> JSONResponse:
     })
 
 
+@app.get("/api/skills")
+def api_skills() -> JSONResponse:
+    out = []
+    for task, prereq, metric, op, thr in SKILLS:
+        s = _skill_status(task, metric, op, thr)
+        s["prereq"] = prereq
+        out.append(s)
+    # "next to train" = first untrained skill whose prereq is trained (or has no prereq).
+    trained = {s["task"] for s in out if s.get("passes")}
+    next_task = None
+    for s in out:
+        if s.get("passes"):
+            continue
+        if s.get("prereq") is None or s["prereq"] in trained:
+            next_task = s["task"]
+            break
+    return JSONResponse({"skills": out, "next_to_train": next_task})
+
+
+@app.get("/api/processes")
+def api_processes() -> JSONResponse:
+    # Top processes by RSS — covers the "what's eating my RAM" question without
+    # needing psutil. ps output is portable.
+    try:
+        out = subprocess.check_output(
+            ["ps", "-eo", "pid,pcpu,pmem,rss,comm,args", "--sort=-rss"],
+            text=True, timeout=5,
+        )
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+        return JSONResponse({"error": str(e), "rows": []}, status_code=500)
+
+    lines = out.splitlines()
+    rows = []
+    for ln in lines[1:60]:  # top 60 by RSS, header dropped
+        parts = ln.split(None, 5)
+        if len(parts) < 6:
+            continue
+        try:
+            pid = int(parts[0]); pcpu = float(parts[1]); pmem = float(parts[2]); rss_kb = int(parts[3])
+        except ValueError:
+            continue
+        comm = parts[4]
+        args = parts[5][:140]
+        # Annotate gibbonbot-related rows so the UI can highlight them.
+        tag = None
+        if "train_mjx" in args or "train_walk_mjx" in args:
+            tag = "trainer"
+        elif "/claude" in args or "claude-agent" in args:
+            tag = "claude"
+        elif "uvicorn" in args or "dashboard.py" in args:
+            tag = "dashboard"
+        elif "mlflow" in args:
+            tag = "mlflow"
+        elif "ollama" in args:
+            tag = "ollama"
+        elif "dockerd" in args or "containerd" in args:
+            tag = "docker"
+        elif "rsync" in args or "watch_remote" in args:
+            tag = "sync"
+        rows.append({"pid": pid, "pcpu": pcpu, "pmem": pmem, "rss_mb": rss_kb // 1024, "comm": comm, "args": args, "tag": tag})
+
+    return JSONResponse({"rows": rows[:25]})
+
+
 @app.post("/api/train/start")
 def api_train_start(task: str = "walk") -> dict:
+    # Whitelist task names against SKILLS — never let the browser pass arbitrary args to bash.
+    valid = {t for t, *_ in SKILLS}
+    if task not in valid:
+        raise HTTPException(400, f"unknown task '{task}' — valid: {sorted(valid)}")
     return _bash([str(ROOT / "scripts/train_bg.sh"), "start", task])
 
 
@@ -266,6 +419,14 @@ canvas { width: 100%; height: 140px; display: block; background: #0b0e13; border
   </div>
 </div>
 
+<div class="card">
+  <h2>skills · what gibbon can do <span class="muted" id="next-hint"></span></h2>
+  <table id="skills-table">
+    <thead><tr><th style="text-align:left">task</th><th>state</th><th>steps</th><th>metric</th><th>value</th><th>target</th><th>confidence</th><th>age</th><th></th></tr></thead>
+    <tbody></tbody>
+  </table>
+</div>
+
 <div class="row">
   <div class="card" style="flex: 1; min-width: 360px;">
     <h2>reward (last 60 updates)</h2>
@@ -275,6 +436,14 @@ canvas { width: 100%; height: 140px; display: block; background: #0b0e13; border
     <h2>sps</h2>
     <canvas id="sps-chart"></canvas>
   </div>
+</div>
+
+<div class="card">
+  <h2>system processes · top 25 by RAM</h2>
+  <table id="proc-table">
+    <thead><tr><th style="text-align:left">pid</th><th>tag</th><th>cpu%</th><th>mem%</th><th>rss</th><th style="text-align:left">cmd</th></tr></thead>
+    <tbody></tbody>
+  </table>
 </div>
 
 <div class="card">
@@ -299,6 +468,71 @@ async function post(url) {
     out.textContent = url + '  FAILED: ' + e;
   }
   refresh();
+}
+
+function fmtAge(s) {
+  if (s == null) return '—';
+  if (s < 60) return s.toFixed(0) + 's';
+  if (s < 3600) return (s/60).toFixed(1) + 'm';
+  if (s < 86400) return (s/3600).toFixed(1) + 'h';
+  return (s/86400).toFixed(1) + 'd';
+}
+
+async function refreshSkills() {
+  let s;
+  try { s = await (await fetch('/api/skills')).json(); } catch (e) { return; }
+  const tbody = document.querySelector('#skills-table tbody');
+  tbody.innerHTML = '';
+  for (const sk of s.skills) {
+    const tr = document.createElement('tr');
+    const stateClass = sk.state === 'trained' ? 'ok' :
+                       sk.state === 'training' ? 'warn' :
+                       sk.state === 'stalled' ? 'bad' : 'muted';
+    const conf = sk.confidence == null ? '—' : (sk.confidence * 100).toFixed(0) + '%';
+    const val = sk.value == null ? '—' : sk.value.toFixed(3);
+    const thr = (sk.op === 'lt' ? '< ' : '> ') + sk.threshold;
+    tr.innerHTML = `
+      <td style="text-align:left"><strong>${sk.task}</strong>${sk.prereq ? ' <span class="muted">← '+sk.prereq+'</span>' : ''}</td>
+      <td class="${stateClass}">${sk.state}</td>
+      <td>${sk.steps ? sk.steps.toLocaleString() : '—'}</td>
+      <td class="muted">${sk.metric}</td>
+      <td>${val}</td>
+      <td class="muted">${thr}</td>
+      <td class="${sk.passes ? 'ok' : 'muted'}">${conf}</td>
+      <td>${fmtAge(sk.age_s)}</td>
+      <td><button class="go" onclick="trainTask('${sk.task}')">train</button></td>
+    `;
+    tbody.appendChild(tr);
+  }
+  document.getElementById('next-hint').textContent =
+    s.next_to_train ? '· next to train: ' + s.next_to_train : '· all skills passing';
+}
+
+function trainTask(task) {
+  post('/api/train/start?task=' + encodeURIComponent(task));
+}
+
+async function refreshProcesses() {
+  let p;
+  try { p = await (await fetch('/api/processes')).json(); } catch (e) { return; }
+  const tbody = document.querySelector('#proc-table tbody');
+  tbody.innerHTML = '';
+  for (const r of p.rows) {
+    const tr = document.createElement('tr');
+    const tagClass = r.tag === 'trainer' ? 'ok' :
+                     r.tag === 'claude' ? 'warn' :
+                     r.tag === 'ollama' ? 'bad' :
+                     r.tag ? 'muted' : '';
+    tr.innerHTML = `
+      <td style="text-align:left">${r.pid}</td>
+      <td class="${tagClass}">${r.tag || ''}</td>
+      <td>${r.pcpu.toFixed(1)}</td>
+      <td>${r.pmem.toFixed(1)}</td>
+      <td>${r.rss_mb}M</td>
+      <td style="text-align:left" class="muted">${r.args.length > 90 ? r.args.slice(0, 90)+'…' : r.args}</td>
+    `;
+    tbody.appendChild(tr);
+  }
 }
 
 function drawChart(canvas, points) {
@@ -365,8 +599,11 @@ async function refresh() {
   document.getElementById('log-tail').textContent = s.log_tail.join('\\n') || '(empty)';
 }
 
-refresh();
+function refreshAll() { refresh(); refreshSkills(); refreshProcesses(); }
+refreshAll();
 setInterval(refresh, 4000);
+setInterval(refreshSkills, 8000);
+setInterval(refreshProcesses, 6000);
 </script>
 </body></html>
 """
