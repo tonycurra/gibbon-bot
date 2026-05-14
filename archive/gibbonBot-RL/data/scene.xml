@@ -45,6 +45,16 @@
     <default class="st3215_hs"> <joint damping="0.18"/></default>
   </default>
 
+  <contact>
+    <!-- Disable limb-limb collisions so arms/legs pass through each other -->
+    <exclude body1="fl_link1" body2="fr_link1"/>
+    <exclude body1="bl_link1" body2="br_link1"/>
+    <exclude body1="fl_link1" body2="bl_link1"/>
+    <exclude body1="fl_link1" body2="br_link1"/>
+    <exclude body1="fr_link1" body2="bl_link1"/>
+    <exclude body1="fr_link1" body2="br_link1"/>
+  </contact>
+
   <worldbody>
     <light name="top" pos="0 0 3" dir="0 0 -1" directional="true" diffuse="0.8 0.8 0.8" castshadow="false"/>
     <geom name="floor" type="plane" size="5 5 100" pos="0 0 0" condim="3"/>
