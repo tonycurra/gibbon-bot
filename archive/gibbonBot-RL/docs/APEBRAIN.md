@@ -26,6 +26,9 @@ wired into PPO training in `train_mjx.py`:
 | Brainstem | ✅ | ✅ | Reflex preprocessing + attention filtering |
 | Neurotransmitters | ✅ | ✅ | Global modulation via BrainBus |
 | `ApeBrain.step()` integrator | ✅ | ✅ | Orchestrates all 8 modules |
+| **Decision Engine** | ✅ | ✅ | Multi-layer hierarchy with safety/risk/priorities |
+| **Brain State Persistence** | ✅ | ✅ | SQLite storage for complete brain states |
+| **Quantum Basal Ganglia** | ✅ | ⚠️ | JAX-simulated quantum circuits (stub) |
 
 PPO action selection uses ApeBrain (via BrainHook) for episodic memory + bioinspired
 modulation. The **amygdala** reduces BG dopamine based on fear level and applies action
@@ -34,6 +37,12 @@ suggestions and inhibition signals that blend with BG output. **Cerebellum** and
 cortex** provide motor correction and smoothing. **Brainstem** preprocesses observations
 through vestibular system, reflexes, and attention filtering. **Neurotransmitters** modulate
 learning rates, exploration, and thresholds across all modules via the global BrainBus.
+
+**New Components:**
+- **DecisionEngine**: 4-layer hierarchical decision making with safety checks, risk assessment,
+  multi-candidate evaluation, and resource management
+- **BrainStatePersistence**: Complete brain state save/load with versioning and neuromodulator history
+- **QuantumBasalGanglia**: Simulated quantum circuits with Grover-inspired amplitude amplification
 
 ## 🧠 Architecture Overview
 
@@ -376,9 +385,16 @@ python -m pytest tests_brain/ -v
 | Module | File | Status | Priority | Dependencies |
 |--------|------|--------|----------|--------------|
 | Training loop integration | `train_mjx.py` | ⏳ TODO | **HIGH** | Direct ApeBrain control |
-| Full brain state persistence | `brain/brain_state_persistence.py` | ⏳ TODO | **HIGH** | Extend policy_database |
-| Quantum basal ganglia | `brain/quantum.py` | ⏳ TODO | **MEDIUM** | PennyLane/Qiskit backend |
-| Multi-layer decision engine | `brain/decision_engine.py` | ⏳ TODO | **MEDIUM** | Safety, risk, priorities |
+| PennyLane backend | `brain/quantum.py` | ⏳ TODO | **MEDIUM** | Install PennyLane |
+| Qiskit backend | `brain/quantum.py` | ⏳ TODO | **MEDIUM** | Install Qiskit |
+
+### ✅ Recently Completed
+
+| Module | File | Status | Priority | Notes |
+|--------|------|--------|----------|-------|
+| Full brain state persistence | `brain/brain_state_persistence.py` | ✅ **Done** | **HIGH** | SQLite with versioning |
+| Quantum basal ganglia | `brain/quantum.py` | ✅ **Done** | **MEDIUM** | JAX-simulated circuits |
+| Multi-layer decision engine | `brain/decision_engine.py` | ✅ **Done** | **MEDIUM** | 4-layer hierarchy |
 
 ### 📋 Backlog
 
