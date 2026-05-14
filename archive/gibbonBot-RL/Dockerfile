@@ -1,4 +1,4 @@
-# gibbonBot-RL training container — CUDA 12 + JAX-cuda + MuJoCo MJX.
+# gibbonBot-RL training container — CUDA 12.4 + JAX-cuda + MuJoCo MJX + Warp.
 #
 # Build:
 #   docker build -t gibbonbot:latest .
@@ -16,10 +16,12 @@
 # Image size ~5GB (mostly cuDNN + JAX-cuda wheels). Headless only — no GUI viewer
 # (use scripts/snapshot.py to inspect via PNG dumps when running in cloud).
 
-# CUDA 12.2 base — matches WSL2 driver passthrough on the user's RTX 4070
-# (driver 537.28 → CUDA 12.2). JAX-cuda 0.10.0 wheels are forward-compatible
-# with newer drivers, so cloud H100 hosts on driver 535+ also work.
-FROM nvidia/cuda:12.2.2-cudnn8-runtime-ubuntu22.04
+# CUDA 12.4 base — chosen to satisfy mujoco-warp's `wp.is_conditional_graph_supported()`
+# check (CUDA >= 12.4 enables conditional graph nodes and reliable graph capture). CUDA
+# forward-compatibility means a 12.4 user-space runs fine on the host's WSL2 driver
+# 537.28 (CUDA 12.2 class). Cloud H100 hosts on driver 535+ also work.
+# JAX has no jax[cuda13] wheels yet, so we stay on cuda12 extras.
+FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
 
 ARG DEBIAN_FRONTEND=noninteractive
 
@@ -41,17 +43,22 @@ WORKDIR /app
 
 # Install JAX with CUDA 12 support FIRST so the layer caches across code changes.
 # Pinning to match local environment versions.
+# `--default-timeout=300 --retries=10`: jaxlib + mujoco wheels are 100+ MB each;
+# resilience against slow / flaky connections so a single stalled chunk doesn't
+# kill a 10-minute build.
+# `imageio` deliberately omitted — only used by scripts/snapshot.py, which runs
+# from the host venv, not inside the trainer container.
 RUN pip install --no-cache-dir \
+        --default-timeout=300 --retries=10 \
         "jax[cuda12]==0.10.0" \
         jaxlib==0.10.0 \
         flax==0.12.7 \
         optax==0.2.8 \
         numpy==2.4.4 \
-        mujoco==3.8.0 \
-        mujoco-mjx==3.8.0 \
+        mujoco==3.8.1 \
+        mujoco-mjx==3.8.1 \
         mujoco-warp>=3.8.0 \
         mlflow==3.12.0 \
-        imageio==2.37.3 \
         pandas \
     && pip cache purge
 
@@ -65,5 +72,5 @@ RUN mkdir -p /app/runs /app/mlruns
 ENV TF_CPP_MIN_LOG_LEVEL=3
 ENV PYTHONUNBUFFERED=1
 
-# Default command — train walk. Override with `docker run ... <cmd>`.
-CMD ["python", "train_mjx.py", "--task", "walk", "--auto-push", "--no-watch", "--label", "containerized run"]
+# Default command — train stand (current focus). Override with `docker run ... <cmd>`.
+CMD ["python", "train_mjx.py", "--task", "stand", "--auto-push", "--no-watch", "--label", "containerized run"]
