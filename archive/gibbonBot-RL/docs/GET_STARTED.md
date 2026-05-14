@@ -1,16 +1,13 @@
-# Get started — train stand locally in Docker
+# Get Started: Train Stand
 
 This is the **canonical workflow** for running training on your own machine.
-We use Docker so the CUDA + JAX + MuJoCo versions are pinned and identical
-to what runs on remote GPU hosts. You don't need to know Docker beyond the
-six commands in this doc.
+You have two paths: **Docker** (recommended for reproducibility) or **Local** (faster iteration).
 
 > **Inspection vs training.** The `look.py` viewer (and any one-off Python
 > snippet you run locally) uses your **venv**. The trainer (`train_mjx.py`)
-> runs inside **Docker**. They share the same `data/`, `runs/`, and
-> `mlruns/` because Docker mounts those folders from your repo. So edits to
-> `data/scene.xml` or `envs/stand_env_mjx.py` take effect immediately for
-> the next training run — no rebuild needed.
+> can run either inside **Docker** or directly in your **venv**. They share the same
+> `data/`, `runs/`, and `mlruns/` folders. So edits to `data/scene.xml` or
+> `envs/stand_env_mjx.py` take effect immediately for the next training run.
 
 ---
 
@@ -44,12 +41,51 @@ You should see your GPU listed. If `--gpus all` fails, install
 
 ---
 
+## Local Installation (No Docker)
+
+If you prefer to avoid Docker, you can install dependencies directly.
+This is faster for iteration but requires manual version management.
+
+```bash
+# 1. Create and activate a virtual environment
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# 2. Install core dependencies
+pip install -r requirements.txt
+
+# 3. Install JAX with CUDA (for GPU support)
+# Choose the right version for your CUDA toolkit from:
+# https://github.com/jax-ml/jax/releases
+pip install --upgrade "jax[cuda12_pip]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+
+# 4. Install MuJoCo Python bindings
+pip install mujoco
+
+# 5. (Optional) Install Warp for GPU-accelerated physics
+pip install warp-lang
+
+# 6. Install MJX (MuJoCo JAX backend)
+pip install mujoco_mjx
+
+# 7. Verify installation
+python -c "import jax; import mujoco; import mujoco_mjx; print('All imports OK')"
+```
+
+> **Note on Warp backend**: If you installed Warp, set `MUJOCO_BACKEND=mjwarp`
+> before running training. The local path uses pure MJX by default.
+
+---
+
 ## Daily commands
 
 ```bash
-# Start stand training in the background (detached). 
-# Uses Docker, --warp backend, auto-resumes if checkpoints exist.
-scripts/train_bg.sh docker stand
+# Start stand training in the background (detached).
+# Docker path (recommended for reproducibility):
+scripts/train_bg.sh docker stand           # auto-resumes from runs/ape_stand_mjx/
+
+# Local path (faster iteration, uses your venv):
+scripts/train_bg.sh start stand            # auto-resumes, uses local Python
 
 # Watch progress (separate terminal — Ctrl-C just stops the tail, not the trainer).
 scripts/train_bg.sh tail            # last 40 lines
@@ -63,11 +99,10 @@ scripts/train_bg.sh status
 scripts/train_bg.sh stop
 ```
 
-> **Why `docker` and not `start`?** `start` runs the trainer in your local
-> venv (faster, no container overhead, but versions can drift). `docker`
-> runs it in the container (slower to launch by ~30s, but guaranteed
-> reproducible). We use `docker` as the canonical path; reach for `start`
-> only if you've made a Python change you want to test instantly.
+> **Docker vs Local**: `docker` runs in the container (slower to launch by ~30s,
+> but guaranteed reproducible). `start` runs in your local venv (faster,
+> but versions can drift). Use `docker` as the canonical path; use `start`
+> for rapid iteration or when testing Python changes.
 
 ---
 

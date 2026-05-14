@@ -60,7 +60,7 @@
     <geom name="floor" type="plane" size="5 5 100" pos="0 0 0" condim="3"/>
 
     <body name="torso" pos="0 0 0.5310">
-      <inertial pos="-0.0192447 0 -0.0101645" quat="0.439032 0.439032 -0.554303 0.554303" mass="1.02487" diaginertia="0.0402837 0.0351039 0.0308832"/>
+      <inertial pos="-0.0192447 0 -0.0101645" quat="0.439032 0.439032 -0.554303 0.554303" mass="2.0" diaginertia="0.0805674 0.0702078 0.0617664"/>
       <joint name="world_to_torso" type="free"/>
       <!-- Torso = two connected slabs, 30 mm tall (Z), centered on the
            base_link Z midpoint (z_body=-0.043). Legs slab spans from the

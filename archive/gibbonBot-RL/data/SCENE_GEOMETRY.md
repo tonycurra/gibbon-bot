@@ -158,3 +158,21 @@ check (script lives inline in the commit that introduced this section).
 - `data/meshes/` — STL meshes, byte-identical to
   `data/roarm_ws/src/roarm_main/roarm_description/meshes/roarm_m3/`
   (verified by md5; do not modify).
+
+## Mass and inertia notes
+
+**Motor masses are NOT included in the scene.xml inertial properties.**
+The URDF-derived masses only account for the structural link geometry (plastic/aluminum).
+Each ST3235/ST3215 motor adds ~0.18–0.20 kg at its joint. With 24 motors total,
+**~4.3–4.8 kg of motor mass is missing** from the simulation.
+
+| Source | Mass contribution |
+|---|---|
+| scene.xml structural masses | ~3.8 kg total |
+| 20× ST3235/ST3215 motors (shoulders, elbows, etc.) | ~3.6–4.0 kg |
+| 4× ST3215-HS motors (grippers, feet) | ~0.8 kg |
+| **Estimated total (realistic)** | **~8.2–8.6 kg** |
+
+The current torso mass is 2.0 kg (updated from 1.0 kg). For more realistic
+dynamics, motor masses should be added as inertial elements on their parent links.
+See `data/motors.md` for torque and damping specs (which ARE correctly implemented).

@@ -48,6 +48,16 @@ future curricula.
 │  • cerebellum (motor)  • motor_cortex (motor primitives)       │
 │  • ape_brain.py integrates all 8 via a Basal-Ganglia router.   │
 └────────────────────────────────────────────────────────────────┘
+                              ▲
+                              │ extended by
+                              │
+┌────────────────────────────────────────────────────────────────┐
+│  Brain Memory System — "fire together, wire together"            │
+│  • policy_database.py: SQLite storage of all trained policies │
+│  • policy_router.py: Intelligent policy selection & evaluation │
+│  • brain_viewer.py: GUI viewer with brain memory integration    │
+│  Stores 196+ policies from runs/ → selects best for current task │
+└────────────────────────────────────────────────────────────────┘
 
   look.py   ← static inspect (gravity-only, no policy, no checkpoint)
   view.py   ← live MuJoCo viewer; hot-swaps to newest checkpoint
@@ -55,12 +65,13 @@ future curricula.
 
 ---
 
-## Quickstart — stand training in Docker
+## Quickstart — stand training
 
-We run training in Docker so the CUDA / JAX / MuJoCo / Warp versions are
-pinned to one known-good combination. Local Python in `.venv` is used
-only for the GUI viewer (`look.py`, `view.py`) and one-off scripts.
+You have two paths: **Docker** (recommended for reproducibility) or **Local** (faster iteration).
+Docker pins CUDA / JAX / MuJoCo / Warp versions to one known-good combination.
+Local Python in `.venv` is used for the GUI viewer (`look.py`, `view.py`) and one-off scripts.
 
+### Docker path (recommended)
 ```bash
 # 1. ONE-TIME: build the image (~5 GB, ~10 min).
 docker build -t gibbonbot:latest .
@@ -77,12 +88,31 @@ scripts/train_bg.sh tail 100
 docker compose logs -f trainer
 docker compose up -d mlflow_ui             # then open http://localhost:5000
 
-# 5. Inspect the live policy in the GUI viewer (uses .venv, not Docker).
+# 5. Stop the trainer cleanly.
+docker compose stop trainer
+```
+
+### Local path (faster iteration)
+```bash
+# 1. ONE-TIME: create venv and install dependencies
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+pip install mujoco mujoco_mjx "jax[cuda12_pip]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+
+# 2. EVERY DAY: start a stand training run, detached.
+scripts/train_bg.sh start stand            # auto-resumes, uses local Python
+
+# 3. Watch progress.
+scripts/train_bg.sh tail 100
+tail -f train.log
+
+# 4. Inspect the live policy in the GUI viewer.
 python view.py                             # newest checkpoint, hot-swaps
 python view.py --best                      # best mean_rew per MLflow
 
-# 6. Stop the trainer cleanly.
-docker compose stop trainer
+# 5. Stop the trainer cleanly.
+scripts/train_bg.sh stop
 ```
 
 Just want to look at the rest pose, no training, no policy?
@@ -194,10 +224,12 @@ python look.py                             # data/scene.xml, gravity only
 | Script | Purpose |
 |---|---|
 | `scripts/train_bg.sh docker stand` | Start stand training in Docker, detached, Warp backend |
+| `scripts/train_bg.sh start stand` | Start stand training locally (no Docker), detached |
 | `scripts/train_bg.sh status\|tail\|stop` | Inspect / stop the active trainer |
 | `look.py` | Static scene inspect (no policy, no checkpoint) |
 | `view.py` | Live policy viewer; hot-swaps to newest checkpoint; default `--env stand` |
 | `view.py --env <task> --best` | View best-mean_rew checkpoint per MLflow for any task |
+| `python -m utils.brain_viewer --task stand --brain` | Brain-powered viewer: selects best policy from all past training |
 | `scripts/dashboard.sh` | Local web dashboard (log tail, metrics, start/stop) → http://127.0.0.1:8765 |
 | `scripts/snapshot.py` | 5-view PNGs + 13-keypoint 3D landmarks JSON |
 | `scripts/calibrate_cpg.py` | Probe each joint; output direction-of-effect table |

@@ -14,17 +14,26 @@ modulation, reflexes, action selection, and memory systems.
 The architecture below describes the full vision. Today, only a subset is actually
 wired into PPO training in `train_mjx.py`:
 
-| Module | Defined in `brain/` | In PPO loop |
-|---|---|---|
-| Hippocampus (episodic memory + consolidation replay) | ✅ | ✅ (commit `d10eb9a`) |
-| Semantic map (persistent place memory) | ✅ | ✅ |
-| Basal ganglia, cerebellum, amygdala, PFC, motor cortex, brainstem, neurotransmitters | ✅ | ❌ — scaffolding only |
-| `ApeBrain.step()` integrator (`brain/ape_brain.py`) | ✅ | ❌ — not called by trainer |
+| Module | Defined in `brain/` | In PPO loop | Integration Status |
+|---|---|---|---|
+| Hippocampus (episodic memory + consolidation replay) | ✅ | ✅ | Full integration via BrainHook |
+| Semantic map (persistent place memory) | ✅ | ✅ | Used by Hippocampus |
+| Basal ganglia | ✅ | ✅ | Primary action selector in ApeBrain |
+| Amygdala | ✅ | ✅ | Fear/punishment modulation of BG dopamine + action penalties |
+| Prefrontal Cortex | ✅ | ✅ | Goal-directed action blending + inhibition |
+| Cerebellum | ✅ | ✅ | Motor error correction in ApeBrain |
+| Motor cortex | ✅ | ✅ | Action smoothing in ApeBrain |
+| Brainstem | ✅ | ❌ | Scaffolding only |
+| Neurotransmitters | ✅ | ❌ | Scaffolding only |
+| `ApeBrain.step()` integrator | ✅ | ✅ | Orchestrates BG, Amygdala, PFC, Cerebellum, Motor Cortex |
 
-PPO action selection is still a plain Flax policy net. The bio modules exist as
-isolated, tested components; only hippocampal memory currently influences the
-policy (via consolidation replay during the sleep phase). Wiring BG/cerebellum/
-amygdala into the action loop is future work and not currently scheduled.
+PPO action selection uses ApeBrain (via BrainHook) for episodic memory + bioinspired
+modulation. The **amygdala** now reduces BG dopamine based on fear level and applies
+action penalties for avoidance behavior. The **prefrontal cortex** provides goal-directed
+action suggestions and inhibition signals that blend with BG output. **Cerebellum** and
+**Motor cortex** provide motor correction and smoothing respectively.
+
+Brainstem and Neurotransmitters are defined but not yet wired into the PPO loop.
 
 ## 🧠 Architecture Overview
 
@@ -348,24 +357,27 @@ python -m pytest tests_brain/ -v
 
 ### ✅ Completed (Deployed & Tested)
 
-| Module | File | Status | Tests | LOC | Commit |
-|--------|------|--------|-------|-----|--------|
-| Neurotransmitters | `brain/neurotransmitters.py` | ✅ **Done** | ✅ All pass | 448 | 423d329 |
-| Brainstem | `brain/brainstem.py` | ✅ **Done** | ✅ All pass | 575 | fb9c3dc |
-| Basal Ganglia | `brain/basal_ganglia.py` | ✅ **Done** | ✅ All pass | 520 | 437b85d |
-| Documentation | `docs/APEBRAIN.md` | ✅ **Done** | - | 500+ | 367ce4c |
-| Stand Task Upgrade | `envs/params_stand_mjx.py` | ✅ **Done** | ✅ Working | 67 | 9a00450 |
+| Module | File | Status | Tests | LOC | Integration |
+|--------|------|--------|-------|-----|-------------|
+| Neurotransmitters | `brain/neurotransmitters.py` | ✅ **Done** | ✅ All pass | 448 | ❌ Scaffolding |
+| Brainstem | `brain/brainstem.py` | ✅ **Done** | ✅ All pass | 575 | ❌ Scaffolding |
+| Basal Ganglia | `brain/basal_ganglia.py` | ✅ **Done** | ✅ All pass | 520 | ✅ ApeBrain |
+| Cerebellum | `brain/cerebellum.py` | ✅ **Done** | ✅ All pass | N/A | ✅ ApeBrain |
+| Amygdala | `brain/amygdala.py` | ✅ **Done** | ✅ All pass | N/A | ✅ ApeBrain |
+| Hippocampus | `brain/hippocampus.py` | ✅ **Done** | ✅ All pass | N/A | ✅ ApeBrain + BrainHook |
+| Prefrontal Cortex | `brain/prefrontal_cortex.py` | ✅ **Done** | ✅ All pass | N/A | ✅ ApeBrain |
+| Motor Cortex | `brain/motor_cortex.py` | ✅ **Done** | ✅ All pass | N/A | ✅ ApeBrain |
+| ApeBrain Integrator | `brain/ape_brain.py` | ✅ **Done** | ✅ All pass | N/A | ✅ BrainHook → PPO |
+| Documentation | `docs/APEBRAIN.md` | ✅ **Done** | - | 500+ | - |
+| Stand Task Upgrade | `envs/params_stand_mjx.py` | ✅ **Done** | ✅ Working | 67 | - |
 
 ### 🚧 In Development (Next Priority)
 
 | Module | File | Status | Priority | Dependencies |
 |--------|------|--------|----------|--------------|
-| Cerebellum | `brain/cerebellum.py` | ⏳ TODO | **HIGH** | None |
-| Amygdala | `brain/amygdala.py` | ⏳ TODO | **HIGH** | None |
-| Hippocampus | `brain/hippocampus.py` | ⏳ TODO | **HIGH** | None |
-| Prefrontal Cortex | `brain/prefrontal_cortex.py` | ⏳ TODO | **HIGH** | Neurotransmitters |
-| Motor Cortex | `brain/motor_cortex.py` | ⏳ TODO | **HIGH** | Brainstem |
-| ApeBrain Integrator | `brain/ape_brain.py` | ⏳ TODO | **HIGH** | All above |
+| Brainstem → ApeBrain integration | `brain/brainstem.py` | ⏳ TODO | **HIGH** | Test harness |
+| Neurotransmitters → ApeBrain integration | `brain/neurotransmitters.py` | ⏳ TODO | **HIGH** | Global modulation |
+| Training loop integration | `train_mjx.py` | ⏳ TODO | **HIGH** | Direct ApeBrain control |
 
 ### 📋 Backlog
 

@@ -13,7 +13,7 @@ from typing import Any, Dict, Optional
 import jax.numpy as jnp
 import numpy as np
 
-from brain.bus import BrainBus, EVENT_NOVELTY, EVENT_REPLAY_TICK, EVENT_THREAT
+from brain.bus import EVENT_NOVELTY, EVENT_REPLAY_TICK, EVENT_THREAT, BrainBus
 
 
 @dataclass
@@ -79,10 +79,12 @@ class ApeBrain:
         hippo_persist = None
         if self.config.persist_dir is not None:
             from pathlib import Path
+
             persist_dir = Path(self.config.persist_dir)
             persist_dir.mkdir(parents=True, exist_ok=True)
             hippo_persist = str(persist_dir / "episodic.sqlite")
             from brain.semantic_map import SemanticMap
+
             self.semantic_map = SemanticMap(persist_dir / "semantic.sqlite")
         self.modules["hippocampus"] = Hippocampus(
             obs_dim=self.config.obs_dim,
@@ -133,14 +135,32 @@ class ApeBrain:
 
         self._step_count += 1
 
-        # Use Basal Ganglia for action selection
+        # Initialize modules
         bg = self.modules["basal_ganglia"]
+        amygdala = self.modules["amygdala"]
         dopamine = 0.0
+        action_penalty = jnp.zeros(self.config.act_dim)
 
         if reward is not None:
             dopamine = min(max(reward, 0) * 2, 1.0)  # Convert reward to dopamine
 
-        # Get action from BG
+            # Amygdala: assess threat and apply fear modulation
+            # Predict BG action first for amygdala to evaluate
+            pred_state = bg.process_cortical_input(observation, dopamine)
+            pred_action_idx = int(jnp.argmax(pred_state.thalamus_output))
+            pred_action = jnp.zeros(self.config.act_dim)
+            if pred_action_idx < self.config.act_dim:
+                pred_action = pred_action.at[pred_action_idx].set(1.0)
+            pred_action = pred_action * 2.0 - 1.0
+
+            # Process through amygdala
+            action_penalty, _ = amygdala.step(observation, pred_action, reward)
+            fear_level = amygdala.get_fear_level()
+
+            # Fear reduces dopamine (biological: fear suppresses dopamine release)
+            dopamine = dopamine * (1.0 - fear_level * 0.7)
+
+        # Get action from BG with fear-modulated dopamine
         state = bg.process_cortical_input(observation, dopamine)
         action_idx, _ = bg.select_action_deterministic(observation, dopamine)
 
@@ -149,6 +169,29 @@ class ApeBrain:
         if action_idx < self.config.act_dim:
             action = action.at[action_idx].set(1.0)
         action = action * 2.0 - 1.0  # Scale to [-1, 1]
+
+        # Apply amygdala's action penalty (avoidance behavior)
+        action = action - action_penalty * 0.3
+
+        # Prefrontal Cortex: goal-directed modulation
+        pfc = self.modules["prefrontal_cortex"]
+        hippo = self.modules["hippocampus"]
+        context = hippo.get_context() if hasattr(hippo, "get_context") else None
+        pfc_action, pfc_confidence, inhibition = pfc.step(
+            observation,
+            context=context,
+            action_values=bg.action_values,
+            generate_new_plan=(reward is not None),
+        )
+
+        # Apply PFC inhibition (cognitive control over automatic responses)
+        if inhibition > 0:
+            action = action * (1.0 - inhibition * 0.5)
+
+        # Blend with PFC action when confident (goal-directed override)
+        if pfc_confidence > 0.5:
+            blend = pfc_confidence * 0.4  # Max 40% PFC influence
+            action = action * (1.0 - blend) + pfc_action * blend
 
         # Learn if training
         if reward is not None and next_observation is not None and self.config.training:
@@ -229,7 +272,9 @@ class ApeBrain:
             bg.learning_rate = original_lr
         return len(episodes)
 
-    def emit_novelty(self, obs: jnp.ndarray, similarity: float, threshold: float = 0.3) -> None:
+    def emit_novelty(
+        self, obs: jnp.ndarray, similarity: float, threshold: float = 0.3
+    ) -> None:
         """If the current obs is far from anything in memory, publish a novelty event."""
         if similarity < threshold:
             self.bus.publish(
