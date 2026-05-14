@@ -4,6 +4,22 @@ Things proposed in conversation that weren't implemented inline. Priority is my 
 
 ## P1 — high value, low cost
 
+- **Fix the MuJoCo-Warp backend wrapper** (`envs/_shared_physics_backend.py`).
+  Discovered 2026-05-14: `_to_jax_data` builds a `mujoco.mjx.Data` with only
+  8 of its 47 *required* fields. Crashes with `TypeError: Data.__init__()
+  got an unexpected keyword argument 'energy'` (the 9th field we name) and
+  even after that, with missing-positional-argument errors for `xpos`,
+  `xmat`, `geom_xpos`, etc. The integration commit (`1a8e374`, "MuJoCo Warp
+  backend for 2-5x performance") added the dispatcher but the conversion
+  layer was never exercised end-to-end. Also fixed a related bug there:
+  `mjwarp.make_data` requires the raw CPU `MjModel`, not the converted Warp
+  Model (already patched — stash `mj_model` in `put_model`). Real fix:
+  populate all 47 mjx.Data fields from warp.Data (mostly direct mapping;
+  remaining ones via `mjx.kinematics`/`mjx.forward` on the JAX side) OR
+  bypass the mjx.Data adapter entirely and let the env use warp.Data
+  natively (would require an env-side branch). Estimate: ~half a day,
+  unblocks the claimed 2-5× perf for local training. Until fixed, use
+  `MUJOCO_BACKEND=mjx`.
 - **Brain × trainer deeper integration.** `BrainHook` ships the *companion-memory* layer: persistent episodic store + `ApeBrain.sleep()` consolidation. What's still missing: (a) feed `Hippocampus.recall_persistent` results into actor obs so PPO can condition on recall (requires OBS_DIM change, then a JIT-friendly host-callback or pre-baked recall tensor); (b) populate `SemanticMap` from rollouts — needs torso XY in obs or a separate env hook since current obs is target-relative; (c) wire BG action proposals into PPO exploration (bonus or mixed-action sampler). Each piece is its own small project — measure impact before stacking.
 - **Brain-core: skill library + meta-policy.** First concrete step in `docs/BRAIN_CORE.md`. Add `envs/climb_env_mjx.py`, train a climb policy, hand-rolled meta-policy that switches walk → climb based on distance to tree. Validates the multi-skill architecture without committing to hierarchical RL. Cost: ~1 week. **STATUS**: foundation shipped 2026-05-10 — `train_mjx.py` is now task-parameterized, four atomic skills (stand, walk_forward, turn_left, turn_right) have env + params files, `scripts/curriculum.py` sequences them with cross-task weight transfer. See `docs/CURRICULUM.md`. Next: extend with climb + reach.
 - **Auto-push training data to Codeberg.** Add a `scripts/sync.sh` that does `git add runs mlruns train.log && git commit -m "auto: $(date)" && git push`. Hook into the trainer's SIGTERM save path and/or a 30-min cron. Cost: ~15 lines.

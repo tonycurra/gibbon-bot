@@ -133,12 +133,21 @@ class _MJWarpBackend:
         self._model_cache = {}
 
     def put_model(self, mj_model):
-        """Convert MjModel to MJWarp model."""
+        """Convert MjModel to MJWarp model.
+
+        Stash the raw CPU MjModel — mujoco_warp.make_data() requires
+        the original `mujoco.MjModel`, not the converted Warp Model
+        (it does its own put_model-like work internally and reads
+        host-side numpy fields like geom_type during sizing). Without
+        this we hit `AttributeError: 'bool' object has no attribute 'any'`
+        inside mujoco_warp's _default_nconmax.
+        """
+        self._mj_model = mj_model
         return self._mjwarp.put_model(mj_model)
 
     def make_data(self, mx):
         """Create data for a model, with JAX arrays."""
-        d = self._mjwarp.make_data(mx)
+        d = self._mjwarp.make_data(self._mj_model)
         return self._to_jax_data(d, mx)
 
     def step(self, mx, dx):
@@ -193,7 +202,7 @@ class _MJWarpBackend:
 
     def _to_mjwarp_data(self, dx, mx):
         """Convert JAX data to MJWarp data (with warp arrays)."""
-        d = self._mjwarp.make_data(mx)
+        d = self._mjwarp.make_data(self._mj_model)
 
         # Copy values from dx to d
         for field in ["qpos", "qvel", "qacc", "qfrc_actuator", "ctrl", "act"]:
