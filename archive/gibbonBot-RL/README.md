@@ -1,16 +1,21 @@
 # gibbonBot-RL
 
 PPO + MuJoCo MJX (JAX, GPU-accelerated) for a 4-limbed robotic ape.
-Currently learning to walk to a tree on flat ground.
+**Current focus**: train `stand` on the new 4-limb scene
+(`data/scene.xml`). All other tasks (walk, turn) are parked but their
+envs remain in `envs/` for future curricula.
 
-Scene is intentionally lean for fast XLA compile: flat plane floor (no
-heightfield/terrain mesh), single trunk capsule at (3, 0, 0), and
-convex-hull collision meshes for `link5` / `gripper_link` / `link2`
-(originals in `data/meshes/_original/`). Re-enable heightfield + tree
-branches via the `TERRAIN-*` / `TREE-*` markers in `data/scene.xml` when
-training the climb/harvest tasks.
+## 👉 Start here
 
-## Quickstart
+**[docs/GET_STARTED.md](docs/GET_STARTED.md)** — the canonical workflow:
+one-time Docker setup, daily commands to start / monitor / stop a stand
+training run, where the checkpoints + MLflow data live, and how to
+inspect the live policy.
+
+For scene-geometry edits, **[data/SCENE_GEOMETRY.md](data/SCENE_GEOMETRY.md)**
+is required reading (units, formulas, gotchas).
+
+## Power-user quickstart
 
 ```bash
 # train a multi-skill curriculum (everyday flow)

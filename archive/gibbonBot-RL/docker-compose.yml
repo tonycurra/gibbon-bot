@@ -23,6 +23,9 @@ services:
     environment:
       - TF_CPP_MIN_LOG_LEVEL=3
       - PYTHONUNBUFFERED=1
+      # MJX-Warp backend by default; override on the host with
+      # `MUJOCO_BACKEND=mjx scripts/train_bg.sh docker stand` to pin to pure MJX.
+      - MUJOCO_BACKEND=${MUJOCO_BACKEND:-mjwarp}
     volumes:
       - ./runs:/app/runs
       - ./mlruns:/app/mlruns
