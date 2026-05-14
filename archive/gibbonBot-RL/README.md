@@ -177,7 +177,7 @@ reproducibility unit.
 | `train_walk_mjx.py --auto-push --label "..."` | Train walk-to-tree policy, push every save |
 | `view.py --env walk` | Live MuJoCo viewer (hot-swaps to newest checkpoint) |
 | `view.py --env walk --best` | View best-mean_rew checkpoint per MLflow |
-| `look.py` | Inspect the robot in a clean scene: loads `data/scene_minimal.xml` (old 4-limb architecture, radians compiler, floor + one light, no fog/haze/skybox/tree). Arm shoulders at `y=±0.14`, leg hips at `x=-0.20, y=±0.10`. Back-leg `link1` body quats pre-rotated 180° around the hip-yaw axis (baked into the body, not into `ref`/`ctrl`) so `qpos=0` is the rest pose and there's no startup yaw kick. Zero actuator command, gravity-only settle. No policy, no checkpoint, no training. Use this to eyeball proportions/joints. |
+| `look.py` | Inspect the robot in a clean scene (`data/scene_minimal.xml`). Loads the pre-mk2 4-limb robot, floor + one light, settles under gravity with zero command. **Read [`data/SCENE_GEOMETRY.md`](data/SCENE_GEOMETRY.md) before editing scene dimensions** — it documents units, real roarm M3 mesh sizes, the "base-to-base = inner-face gap" formula, and the don't-use-`ref`-for-pose-offsets rule. |
 | `scripts/snapshot.py` | 5-view PNGs + 13-keypoint 3D landmarks JSON |
 | `scripts/calibrate_cpg.py` | Probe each joint, output direction-of-effect table |
 | `scripts/verify_dynamics.py` | Audit physics + motors against motors.md |
