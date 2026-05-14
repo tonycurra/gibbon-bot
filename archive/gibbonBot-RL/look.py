@@ -5,15 +5,17 @@ and settles under gravity with zero actuator command. No policy, no
 checkpoint, no training — eyeball-only.
 
 Usage:
-    python look.py
+    python look.py                                       # data/scene.xml
+    python look.py data/torso_height_history/before_30mm.xml
 """
 import pathlib
+import sys
 import time
 
 import mujoco
 import mujoco.viewer
 
-SCENE = pathlib.Path("data/scene.xml")
+SCENE = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else "data/scene.xml")
 RT_HZ = 60
 
 model = mujoco.MjModel.from_xml_path(str(SCENE))
