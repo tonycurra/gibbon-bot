@@ -56,7 +56,9 @@ capsule tree generator. Stable reference; `walk` adds 2 commits on top.
 ### `grove_scene` (= `bac08a2`, same as `main`)
 Where the procedural olive-grove work landed. The plan lives in
 [`GROVE_MASTERPLAN.md`](GROVE_MASTERPLAN.md). The tree generator
-package (`trees/`) and `gen_terrain.py` were finalised here.
+package (now at `archive/trees/` on `main`) and the
+`scripts/gen_terrain.py` / `scripts/gen_trees.py` helpers (now under
+`archive/scripts/`) were finalised here.
 
 ### `html_viewer`
 Tip: `a4c1136` — Browser-based MJPEG viewer (`serve_web.py` +

@@ -26,7 +26,7 @@ git push
 # 4. watch progress (any of these — separate terminals)
 ./remote.sh log                    # raw log tail
 ./pull_checkpoints.sh              # syncs checkpoints + mlruns + rollouts
-python view.py --env walk          # visual policy hot-swap
+python view.py          # visual policy hot-swap
 mlflow ui                          # http://localhost:5000 — reward curves
 
 # 5. when you're done
@@ -65,7 +65,7 @@ Pick whichever fits the moment. They're independent.
 **Visual** — does the policy actually look like it's walking?
 ```bash
 ./pull_checkpoints.sh        # leave running in one terminal
-python view.py --env walk    # hot-swaps to each new checkpoint
+python view.py    # hot-swaps to each new checkpoint
 ```
 
 **Metric curves** — is reward climbing? Is sps stable?
@@ -110,7 +110,7 @@ The `keepers/` subdir is the only place under `runs/` that **isn't** gitignored.
 If you don't have a remote GPU and just want to develop against `view.py`:
 
 ```bash
-python view.py --env walk     # POLICY="latest" loads newest checkpoint
+python view.py     # POLICY="latest" loads newest checkpoint
 ```
 
 Edit `POLICY` at the top of `view.py` to switch between `"zero"` / `"random"` /

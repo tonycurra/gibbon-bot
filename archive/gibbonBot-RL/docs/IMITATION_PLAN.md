@@ -56,7 +56,7 @@ is too sparse to feed it well.
    to-3D where needed, normalize to a canonical skeleton, slice into
    ~1-3s windows. Land in `data/motion_clips/`.
 3. **AMP integration** (~2 weeks). Add discriminator network, motion
-   clip sampler, and AMP reward term to `train_walk_mjx.py`. Keep
+   clip sampler, and AMP reward term to `train_mjx.py`. Keep
    task reward as the dominant signal; AMP as a style bonus.
 4. **Tune** (~1 week). The discriminator can collapse or dominate —
    needs entropy / loss tuning.

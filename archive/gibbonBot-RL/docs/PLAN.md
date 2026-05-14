@@ -105,7 +105,7 @@ State tracked in `runs/ape_walk_mjx/autopilot_state.json`:
 - `autopilot.log` (text, append-only) — one line per wakeup decision
 - `autopilot_state.json` — current state, machine-readable
 - mlflow UI — full metric curves
-- `view.py --best` or `view.py --env walk` — live policy
+- `view.py` (defaults to `--env stand`) or `view.py --best` — live policy
 
 ## How to start me
 - "run the plan" / "start autopilot" / "continue plan" → I begin cycle 1

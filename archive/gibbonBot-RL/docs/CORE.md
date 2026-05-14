@@ -2,7 +2,7 @@
 
 A multi-task gym for a 4-limbed robot with morphologically identical limbs,
 with per-limb dynamics readout, evaluation suite, and (later) ape pose
-similarity grading. Keeps current `train_walk_mjx.py` working while we
+similarity grading. Keeps current `train_mjx.py` working while we
 scaffold a cleaner foundation alongside.
 
 ## What "core" means

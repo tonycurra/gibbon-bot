@@ -50,7 +50,7 @@ pip install --upgrade pip "jax[cuda12]" mujoco mujoco-mjx flax optax numpy mlflo
 # === Start training in tmux ===
 export JAX_COMPILATION_CACHE_DIR=~/.jax_cache
 tmux new -s train
-python train_walk_mjx.py --no-watch --envs 8192
+python train_mjx.py --task walk --no-watch --envs 8192
 # Ctrl+B then D to detach. Reattach later: tmux a -t train
 ```
 
@@ -60,7 +60,7 @@ python train_walk_mjx.py --no-watch --envs 8192
 ./pull_checkpoints.sh
 
 # Terminal 2 (viewer hot-swaps to each new checkpoint):
-python view.py --env walk
+python view.py --env stand
 
 # Terminal 3 (live metric curves: sps, mean_rew, mean_dist):
 mlflow ui
@@ -133,7 +133,7 @@ Three independent lenses — pick whichever you need.
 ./pull_checkpoints.sh
 
 # Terminal 2 — viewer hot-swaps to each new checkpoint:
-python view.py --env walk
+python view.py --env stand
 
 # Terminal 3 — local mlflow UI on the synced runs:
 mlflow ui     # → http://localhost:5000
@@ -182,7 +182,7 @@ tuples the GPU produced — useful for offline RL, behavior cloning, or replay
 analysis later — opt in with:
 
 ```bash
-python train_walk_mjx.py --no-watch --envs 8192 \
+python train_mjx.py --task walk --no-watch --envs 8192 \
     --save-rollouts-every 50 \
     --rollout-envs 256 \
     --rollout-keep 100

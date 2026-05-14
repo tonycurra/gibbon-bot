@@ -17,7 +17,7 @@ Things proposed in conversation that weren't implemented inline. Priority is my 
 
 ## P2 — curriculum / training strategy
 
-- **Per-limb curriculum.** Train with one limb actuated at a time (others frozen at neutral), let the policy learn isolated arm/leg dynamics, then unfreeze and combine. Requires an actuator-mask hook in `walk_env_mjx.py` that zeros `ctrl[mask]` and a curriculum schedule in `train_walk_mjx.py`. User asked for this 2026-05-10; deferred because trapezoidal-motor + reward changes were higher-leverage first.
+- **Per-limb curriculum.** Train with one limb actuated at a time (others frozen at neutral), let the policy learn isolated arm/leg dynamics, then unfreeze and combine. Requires an actuator-mask hook in `walk_env_mjx.py` that zeros `ctrl[mask]` and a curriculum schedule in `train_mjx.py`. User asked for this 2026-05-10; deferred because trapezoidal-motor + reward changes were higher-leverage first.
 
 ## P2 — bigger lifts, do if motivation/PPO progress demands
 

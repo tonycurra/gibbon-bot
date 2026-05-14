@@ -1,5 +1,11 @@
 # Olive Grove Masterplan
 
+> **Parked.** The grove module lives at `archive/trees/` on `main` (paths
+> below are written as `trees/…` from when the module was in-tree). Active
+> grove development happens on the `grove_scene` branch — see
+> [BRANCHES.md](BRANCHES.md). Read this for the long-term vision; for
+> path-as-written, mentally remap `trees/` → `archive/trees/`.
+
 > Virtual olive grove for an ape robot to learn locomotion and climbing in,
 > rendered as realistically as MuJoCo's renderer allows, GPU-trained via MJX.
 
