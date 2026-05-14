@@ -54,7 +54,7 @@ case "$cmd" in
    JAX_PERSISTENT_CACHE_MIN_ENTRY_SIZE_BYTES=0 JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS=0 \
    XLA_PYTHON_CLIENT_MEM_FRACTION=0.75 MUJOCO_BACKEND=$BACKEND \
 && mkdir -p $RUN_DIR && : > $RUN_DIR/train.log \
-&& .venv/bin/python -u train_walk_mjx.py --no-watch --envs $ENVS \
+&& .venv/bin/python -u train_mjx.py --task walk --no-watch --envs $ENVS \
      --save-rollouts-every $ROLLOUT_EVERY --rollout-envs $ROLLOUT_ENVS $resume_flag; \
    ec=\$?; echo \"[remote.sh] python exited with code \$ec\" >> $RUN_DIR/train.log; \
    echo \"[remote.sh] tmux command finished — pane will close\""

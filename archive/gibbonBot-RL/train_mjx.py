@@ -309,8 +309,9 @@ def _install_log_tee(RUNS):
 # ── main ─────────────────────────────────────────────────────────────────────
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--task", default="walk",
-                        help="skill to train (walk, stand, walk_forward, turn_left, turn_right)")
+    parser.add_argument("--task", default="stand",
+                        help="skill to train (stand, walk, walk_forward, turn_left, turn_right). "
+                             "Default is `stand` — the currently-active training focus.")
     parser.add_argument("--envs", type=int, default=None)
     parser.add_argument("--resume", action="store_true",
                         help="force-resume even if training inputs changed")

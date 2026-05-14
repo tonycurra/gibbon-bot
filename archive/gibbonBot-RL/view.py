@@ -39,10 +39,11 @@ _parser.add_argument(
     help="ignore checkpoints saved before this unix timestamp",
 )
 _parser.add_argument(
-    "--env",
-    default="walk",
-    help="which task was trained (walk, stand, walk_forward, turn_left, turn_right). "
-    "Selects runs/ape_<env>_mjx/ as the checkpoint dir.",
+    "--env", "--task",
+    default="stand",
+    help="which task was trained (stand, walk, walk_forward, turn_left, turn_right). "
+    "Selects runs/ape_<env>_mjx/ as the checkpoint dir. Default is `stand` "
+    "since that's the currently-active training focus.",
 )
 _parser.add_argument(
     "--best",

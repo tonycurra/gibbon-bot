@@ -46,9 +46,6 @@ scripts/train_bg.sh stop            # TERM the whole process group, KILL after 5
 # viewers, GPU users, procs with cwd in this repo, log holders, zombies
 scripts/ape_audit.sh
 
-# legacy entry point (back-compat shim that calls train_mjx.py --task walk)
-python train_walk_mjx.py --auto-push --label "..."
-
 # train remote (ephemeral H100 — instance can be destroyed between sessions)
 scripts/remote.sh bootstrap     # prime fresh instance: pulls jax_cache + runs/ from Scaleway
 scripts/remote.sh start         # H100, walk task, autopilot, watchdog, all in one
@@ -66,8 +63,8 @@ scripts/remote.sh final_sync    # push EVERYTHING (jax_cache + runs + mlruns) to
 
 # pull artifacts down + watch policy
 scripts/pull_checkpoints.sh &   # syncs runs/ + mlruns/ from remote, every 30s
-python view.py --env walk        # viewer hot-swaps to newest checkpoint
-python view.py --env walk --best # loads best-by-mlflow-mean_rew checkpoint
+python view.py                   # default --env stand; hot-swaps to newest checkpoint
+python view.py --env walk --best # any task; --best loads best-by-mlflow-mean_rew checkpoint
 
 # evaluate
 python -m utils.eval --task walk         # cross-run summary
@@ -104,7 +101,7 @@ scripts/archive_runs.sh
 
 ```
 .
-├── train_walk_mjx.py    main PPO trainer (the script you actually run)
+├── train_mjx.py         main PPO trainer (the script you actually run; --task=stand by default)
 ├── view.py              live MuJoCo viewer (hot-swaps to newest checkpoint)
 ├── look.py              minimal viewer — load data/scene.xml, settle under gravity, no policy
 ├── README.md            this file
@@ -138,7 +135,7 @@ scripts/archive_runs.sh
 | Robot URDF meshes | `data/meshes/*.stl` | yes |
 | Scene XML | `data/scene.xml` | yes |
 
-**Auto-push**: when `--auto-push` is passed to `train_walk_mjx.py`, `scripts/sync.sh`
+**Auto-push**: when `--auto-push` is passed to `train_mjx.py`, `scripts/sync.sh`
 runs after every checkpoint save (~every 32K env steps, ~30 s on the 4070). It
 commits the data paths above and pushes to **every configured git remote**.
 Idempotent — bails if nothing changed. Worst-case data loss: ~30 s of training
@@ -179,9 +176,9 @@ reproducibility unit.
 
 | Script | Purpose |
 |---|---|
-| `train_walk_mjx.py --auto-push --label "..."` | Train walk-to-tree policy, push every save |
-| `view.py --env walk` | Live MuJoCo viewer (hot-swaps to newest checkpoint) |
-| `view.py --env walk --best` | View best-mean_rew checkpoint per MLflow |
+| `train_mjx.py --task <name> --auto-push --label "..."` | Train a single skill, push checkpoints every save |
+| `view.py` | Live MuJoCo viewer (defaults to `--env stand`, hot-swaps to newest checkpoint) |
+| `view.py --env <task> --best` | View best-mean_rew checkpoint per MLflow for any task |
 | `look.py` | Inspect the robot in a clean scene (`data/scene.xml`). Loads the pre-mk2 4-limb robot, floor + one light, settles under gravity with zero command. **Read [`data/SCENE_GEOMETRY.md`](data/SCENE_GEOMETRY.md) before editing scene dimensions** — it documents units, real roarm M3 mesh sizes, the "base-to-base = inner-face gap" formula, and the don't-use-`ref`-for-pose-offsets rule. |
 | `scripts/snapshot.py` | 5-view PNGs + 13-keypoint 3D landmarks JSON |
 | `scripts/calibrate_cpg.py` | Probe each joint, output direction-of-effect table |

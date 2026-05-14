@@ -77,7 +77,7 @@ def _restart_training():
     train_cmd = (
         f"cd {os.getcwd()} && export JAX_COMPILATION_CACHE_DIR=~/.jax_cache PYTHONUNBUFFERED=1 && "
         f"mkdir -p {RUN_DIR} && : > {LOG_PATH} && "
-        f"( stdbuf -oL -eL python3 -u train_walk_mjx.py --no-watch --envs {ENVS} "
+        f"( stdbuf -oL -eL python3 -u train_mjx.py --task walk --no-watch --envs {ENVS} "
         f"  --save-rollouts-every 50 --rollout-envs 256; "
         f"  ec=$?; echo \"[remote.sh] python exited with code $ec\" ) "
         f"2>&1 | tee {LOG_PATH}"
