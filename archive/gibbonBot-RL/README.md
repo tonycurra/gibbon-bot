@@ -107,7 +107,7 @@ scripts/archive_runs.sh
 ├── brain/               Bioinspired neural architecture (Neurotransmitters, Brainstem, Basal Ganglia, Cerebellum, Amygdala, Hippocampus, Prefrontal Cortex, Motor Cortex, ApeBrain integrator, Quantum-ready interface)
 ├── envs/                MJX environments + their hyperparams
 ├── data/                scene.xml, robot meshes, motor specs, terrain
-├── trees/               olive-tree generation pipeline
+├── archive/trees/       olive-tree generation pipeline (parked — see grove_scene branch for active dev)
 ├── utils/               autopilot, eval, best-checkpoint loader, limb dynamics
 ├── scripts/             remote.sh (drive remote GPU), monitor.py (watchdog),
 │                        pull_checkpoints.sh, archive_runs.sh, gen_terrain.py, gen_trees.py
@@ -128,8 +128,8 @@ scripts/archive_runs.sh
 | MLflow legacy filesystem store | `mlruns/` | **yes** (deprecated, kept for old runs) |
 | Per-run lineage | `runs/<task>/lineage.json` | yes |
 | Training log | `runs/<task>/train.log` | yes |
-| Lessons learned (prose) | `LESSONS.md` | yes |
-| Hypothesis backlog | `BACKLOG.md` | yes |
+| Lessons learned (prose) | `docs/LESSONS.md` | yes |
+| Hypothesis backlog | `docs/BACKLOG.md` | yes |
 | Robot URDF meshes | `data/meshes/*.stl` | yes |
 | Scene XML | `data/scene.xml` | yes |
 
@@ -162,8 +162,8 @@ reproducibility unit.
 - **[docs/IMITATION_PLAN.md](docs/IMITATION_PLAN.md)** — ape-pose imitation roadmap
 - **[docs/BRANCHES.md](docs/BRANCHES.md)** — branch atlas
 - **[docs/GROVE_MASTERPLAN.md](docs/GROVE_MASTERPLAN.md)** — olive-grove environment
-- **[BACKLOG.md](BACKLOG.md)** — prioritized list of unimplemented ideas
-- **[LESSONS.md](LESSONS.md)** — cumulative training insights (prose; numbers in MLflow)
+- **[docs/BACKLOG.md](docs/BACKLOG.md)** — prioritized list of unimplemented ideas
+- **[docs/LESSONS.md](docs/LESSONS.md)** — cumulative training insights (prose; numbers in MLflow)
 - **[docs/ROBOT_VS_APE.md](docs/ROBOT_VS_APE.md)** — joint-by-joint mapping from robot DOF to ape anatomy + what's missing
 - **[docs/BRAIN_CORE.md](docs/BRAIN_CORE.md)** — long-term vision for instinct + memory architecture (skill library, recurrent policy, world model)
 - **[docs/CURRICULUM.md](docs/CURRICULUM.md)** — multi-skill curriculum: stand → walk_forward → turn_left → turn_right
