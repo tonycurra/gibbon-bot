@@ -77,3 +77,10 @@ monitor.log
 autopilot.log
 autopilot_state.json
 live_stats.json
+
+# Runtime dumps (added 2026-05-14)
+_snapshots/
+__pycache__/
+*.log
+mlflow.db
+mlflow.db.remote

@@ -1,7 +1,7 @@
 # Scene geometry — facts, formulas, gotchas
 
 Source of truth for the robot's physical dimensions and how they map into
-`scene.xml` / `scene_minimal.xml`. Read this **before** editing any limb
+`data/scene.xml`. Read this **before** editing any limb
 position, quat, or joint range.
 
 ## Units
@@ -10,7 +10,7 @@ position, quat, or joint range.
 **meters**. STL files are authored in **millimeters**; the `<mesh scale="0.001 0.001 0.001">` on each mesh asset converts them. **Never** edit a position
 without remembering the world is in meters.
 
-The compiler is `angle="radian"` in `scene_minimal.xml`. All `range` and
+The compiler is `angle="radian"` in `scene.xml`. All `range` and
 `ctrlrange` values on joints/actuators are in radians. Conversion table:
 
 | Joint | Range (rad) | Range (deg) |
@@ -46,7 +46,7 @@ print(m.bounds, m.bounds[1] - m.bounds[0])
 ## Source of truth for the kinematic chain
 
 `data/scenes_archive/ape_early.urdf` is the **original URDF** from the design.
-The MJCF in `data/scene_minimal.xml` was derived from it. Whenever
+The MJCF in `data/scene.xml` was derived from it. Whenever
 joint-origin geometry is ambiguous, the URDF wins. Mount positions per URDF:
 
 | Limb | xyz (m) | rpy around Y (rad) |
@@ -57,7 +57,7 @@ joint-origin geometry is ambiguous, the URDF wins. Mount positions per URDF:
 | BR | `-0.12 -0.10 -0.05` | `-0.785` (same as BL) |
 
 In the URDF, **left and right are NOT mirrored** — every limb is the same
-real roarm M3 arm. The MJCF version in scene_minimal.xml uses different,
+real roarm M3 arm. The MJCF version in scene.xml uses different,
 hand-edited mount quats (90° axis-swaps + L/R mirroring on the arms), but
 the underlying physical limb is identical across all 4 mounts.
 
@@ -93,7 +93,7 @@ gap_between_inner_faces = 2 × (body_y − 0.0711)
 | 400              | 0.2711 | 542  |
 
 The **URDF default** (`body_y = ±0.10`) gives a 58 mm gap — the bases are
-almost touching. The current scene_minimal.xml uses **`body_y = ±0.1711`**
+almost touching. The current scene.xml uses **`body_y = ±0.1711`**
 for a clean **200 mm gap**. If you change one, recompute via the formula
 and update both this table and the XML comment.
 
@@ -108,7 +108,7 @@ default command. With a position actuator at `ctrl = 0` and `ref = π`, the
 scene loads at `qpos = ref = π`, but the controller immediately drives it
 to `qpos = 0` — you get a 180° yaw kick the moment the sim starts.
 
-The current scene_minimal.xml encodes the 180° back-leg rotation in the
+The current scene.xml encodes the 180° back-leg rotation in the
 `bl_link1` and `br_link1` body quats:
 
 - Original (URDF-derived) quat: `(0.7071068, 0, -0.7071068, 0)`
@@ -147,13 +147,14 @@ check (script lives inline in the commit that introduced this section).
 
 ## Files
 
-- `data/scene_minimal.xml` — inspect-only scene used by `look.py`. 4 limbs,
-  floor, one no-shadow light, no fog/haze/skybox/tree. Compiler in radians.
-- `data/scene.xml` — full training scene. Currently the **pre-mk2 (old
-  4-limb)** architecture. The mk2 torso-mesh variant is backed up at
-  `data/scene.xml.mk2_backup`.
+- `data/scene.xml` — **the canonical scene** for both `look.py` and the
+  MJX trainers. 4 limbs (URDF-derived chain), two-slab torso flush with
+  the base_link mounts, floor, one no-shadow directional light, no
+  fog/haze/skybox/tree. Compiler in radians.
 - `data/scenes_archive/` — historical scene variants. `ape_early.urdf` is
-  the URDF source of truth.
+  the URDF source of truth; `scene_mk2_torso.xml` is the mk2 single-mesh
+  torso variant; `scene_pre_mk2_walk.xml` is the previous walk-training
+  scene with the tree trunk.
 - `data/meshes/` — STL meshes, byte-identical to
   `data/roarm_ws/src/roarm_main/roarm_description/meshes/roarm_m3/`
   (verified by md5; do not modify).

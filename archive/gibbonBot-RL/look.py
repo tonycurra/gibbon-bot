@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Inspect the robot in a clean scene. Loads data/scene_minimal.xml (old
-4-limb architecture, floor + one no-shadow light, no fog/haze/skybox/tree),
-settles under gravity with zero actuator command. No policy, no checkpoint,
-no training — eyeball-only.
+"""Inspect the robot in the canonical scene. Loads data/scene.xml
+(4-limb architecture, floor + one no-shadow light, no fog/haze/skybox/tree)
+and settles under gravity with zero actuator command. No policy, no
+checkpoint, no training — eyeball-only.
 
 Usage:
     python look.py
@@ -13,7 +13,7 @@ import time
 import mujoco
 import mujoco.viewer
 
-SCENE = pathlib.Path("data/scene_minimal.xml")
+SCENE = pathlib.Path("data/scene.xml")
 RT_HZ = 60
 
 model = mujoco.MjModel.from_xml_path(str(SCENE))
