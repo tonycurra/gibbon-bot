@@ -1,229 +1,267 @@
 # gibbonBot-RL
 
-PPO + MuJoCo MJX (JAX, GPU-accelerated) for a 4-limbed robotic ape.
-**Current focus**: train `stand` on the new 4-limb scene
-(`data/scene.xml`). All other tasks (walk, turn) are parked but their
-envs remain in `envs/` for future curricula.
+Reinforcement-learning training stack for a 4-limbed robotic ape.
+4 × roarm-M3 arms (the same physical arm, repeated as front-left,
+front-right, back-left, back-right) on a shared torso, simulated in
+MuJoCo + MJX with a Warp physics backend on GPU.
 
-## 👉 Start here
+**Current focus**: `stand` — keep the torso upright on flat ground with
+all 4 limbs. Other tasks (`walk`, `walk_forward`, `turn_left`,
+`turn_right`) are parked but their env code remains in `envs/` for
+future curricula.
 
-**[docs/GET_STARTED.md](docs/GET_STARTED.md)** — the canonical workflow:
-one-time Docker setup, daily commands to start / monitor / stop a stand
-training run, where the checkpoints + MLflow data live, and how to
-inspect the live policy.
+---
 
-For scene-geometry edits, **[data/SCENE_GEOMETRY.md](data/SCENE_GEOMETRY.md)**
-is required reading (units, formulas, gotchas).
+## What's in the box
 
-## Power-user quickstart
+```
+┌────────────────────────────────────────────────────────────────┐
+│  data/scene.xml          ← robot + floor + light (the world)   │
+│  data/meshes/*.stl       ← roarm-M3 STL parts (real geometry)  │
+│  data/SCENE_GEOMETRY.md  ← required reading before scene edits │
+└────────────────────────────────────────────────────────────────┘
+                              ▲
+                              │ loaded by
+                              │
+┌────────────────────────────────────────────────────────────────┐
+│  envs/<task>_env_mjx.py       ← reset / step / reward / done   │
+│  envs/params_<task>_mjx.py    ← hyperparams (lr, n_envs, etc.) │
+│  envs/_shared_physics_backend ← MJX vs MJX-Warp dispatch       │
+└────────────────────────────────────────────────────────────────┘
+                              ▲
+                              │ stepped by
+                              │
+┌────────────────────────────────────────────────────────────────┐
+│  train_mjx.py            ← PPO trainer, task-parameterized     │
+│   • auto-resumes from runs/ape_<task>_mjx/mjx_*.npz            │
+│   • logs reward + losses to mlflow.db                          │
+│   • optional ApeBrain episodic memory (--brain-persist)        │
+└────────────────────────────────────────────────────────────────┘
+                              ▲
+                              │ optionally enriched by
+                              │
+┌────────────────────────────────────────────────────────────────┐
+│  brain/        ← bioinspired neural modules (8 + quantum stubs)│
+│  • neurotransmitters   • amygdala (fear, punishment signals)   │
+│  • brainstem (reflex)  • hippocampus (episodic + spatial mem)  │
+│  • basal_ganglia       • prefrontal_cortex (goals, planning)   │
+│  • cerebellum (motor)  • motor_cortex (motor primitives)       │
+│  • ape_brain.py integrates all 8 via a Basal-Ganglia router.   │
+└────────────────────────────────────────────────────────────────┘
+
+  look.py   ← static inspect (gravity-only, no policy, no checkpoint)
+  view.py   ← live MuJoCo viewer; hot-swaps to newest checkpoint
+```
+
+---
+
+## Quickstart — stand training in Docker
+
+We run training in Docker so the CUDA / JAX / MuJoCo / Warp versions are
+pinned to one known-good combination. Local Python in `.venv` is used
+only for the GUI viewer (`look.py`, `view.py`) and one-off scripts.
 
 ```bash
-# train a multi-skill curriculum (everyday flow)
-python scripts/curriculum.py
-# Trains stand → walk_forward → turn_left → turn_right in sequence,
-# each task transferring policy weights from the previous. See docs/CURRICULUM.md.
+# 1. ONE-TIME: build the image (~5 GB, ~10 min).
+docker build -t gibbonbot:latest .
 
-# train one task manually
-python train_mjx.py --task stand --no-resume --auto-push --label "what changed"
-python train_mjx.py --task walk --resume \
-    --resume-from runs/ape_stand_mjx/keepers/auto_*.npz   # cross-task transfer
-# --task        : walk, stand, walk_forward, turn_left, turn_right
-# --auto-push   : scripts/sync.sh fires after every checkpoint save → pushes to Codeberg
-# --label       : free-form note attached to the MLflow run as a tag
-# --resume-from : explicit checkpoint, even from a different task
+# 2. ONE-TIME: confirm the GPU shows up inside the container.
+docker run --rm --gpus all gibbonbot:latest nvidia-smi
 
-# train one task — detached background (use this when launching from a Claude/agent
-# session, so the shell never blocks and the trainer survives Ctrl-C / disconnect)
-scripts/train_bg.sh start walk      # nohup+setsid; pid → runs/.train.pid; log → train.log
-scripts/train_bg.sh status          # alive/dead + last 20 log lines (instant)
-scripts/train_bg.sh tail 80         # tail N log lines
-scripts/train_bg.sh stop            # TERM the whole process group, KILL after 5s
-# Refuses to start a 2nd trainer if any train_mjx.py is already running
-# (even one launched outside this wrapper). Refuses if the GPU is already in use;
-# override with ALLOW_GPU_SHARE=1.
+# 3. EVERY DAY: start a stand training run, detached.
+scripts/train_bg.sh docker stand           # auto-resumes from runs/ape_stand_mjx/
+# Warp backend is on by default (MUJOCO_BACKEND=mjwarp in docker-compose.yml).
 
-# audit "what's running on this box right now?" — claude sessions, trainers,
-# viewers, GPU users, procs with cwd in this repo, log holders, zombies
-scripts/ape_audit.sh
+# 4. Watch progress (separate terminal — Ctrl-C just stops the tail).
+scripts/train_bg.sh tail 100
+docker compose logs -f trainer
+docker compose up -d mlflow_ui             # then open http://localhost:5000
 
-# train remote (ephemeral H100 — instance can be destroyed between sessions)
-scripts/remote.sh bootstrap     # prime fresh instance: pulls jax_cache + runs/ from Scaleway
-scripts/remote.sh start         # H100, walk task, autopilot, watchdog, all in one
-scripts/remote.sh status        # GPU util + log tail + tmux state
-scripts/remote.sh log           # live tail of training log
-scripts/remote.sh stop          # graceful save + exit
-scripts/remote.sh final_sync    # push EVERYTHING (jax_cache + runs + mlruns) to Scaleway
-                                # — run before destroying instance
+# 5. Inspect the live policy in the GUI viewer (uses .venv, not Docker).
+python view.py                             # newest checkpoint, hot-swaps
+python view.py --best                      # best mean_rew per MLflow
 
-# while training runs, a background tmux session pushes runs/, mlruns/, and
-# ~/.jax_cache/ to scaleway:gibbonbot-training/ every 10 min. So the
-# expensive XLA autotune cache (~10-15min cold compile on a fresh instance)
-# is preserved across instance lifetimes — bootstrap pulls it back, and
-# subsequent starts go from cold-compile 15min → warm-restart ~1min.
-
-# pull artifacts down + watch policy
-scripts/pull_checkpoints.sh &   # syncs runs/ + mlruns/ from remote, every 30s
-python view.py                   # default --env stand; hot-swaps to newest checkpoint
-python view.py --env walk --best # any task; --best loads best-by-mlflow-mean_rew checkpoint
-
-# evaluate
-python -m utils.eval --task walk         # cross-run summary
-python -m utils.eval --task walk --plot  # writes reward.png
-mlflow ui --backend-store-uri sqlite:///mlflow.db   # http://localhost:5000
-
-# attach a free-form note to the latest MLflow run
-python scripts/note.py "rew jumped at update 200 — heading reward dominates"
-
-# compare metrics across recent training runs side-by-side
-python scripts/compare_runs.py --top 10
-python scripts/compare_runs.py --label CPG --plot cpg_runs.png
-
-# inspect the policy via offscreen renderer (works without GUI)
-python scripts/snapshot.py --frames 6 --gap 1.0 --policy latest
-# writes 5 views (side_L, side_R, front, back, top) per frame to _snapshots/,
-# plus _snapshots/landmarks.json with 3D xyz of 13 keypoints (torso + 4 limbs ×
-# shoulder/elbow/hand). Use to compare gait against ape pose datasets.
-
-# probe each joint to see which world direction +action moves the limb tip
-python scripts/calibrate_cpg.py
-# critical for tuning the CPG when the URDF has mirrored quaternions per limb.
-
-# audit physics + motors against data/motors.md
-python scripts/verify_dynamics.py
-# checks masses, damping, stall torque, floor friction, solref/solimp.
-# Run after any scene.xml change to catch drift.
-
-# back up before destroying instance
-scripts/archive_runs.sh
+# 6. Stop the trainer cleanly.
+docker compose stop trainer
 ```
+
+Just want to look at the rest pose, no training, no policy?
+
+```bash
+python look.py                             # data/scene.xml, gravity only
+```
+
+**Full Docker workflow + troubleshooting**: [docs/GET_STARTED.md](docs/GET_STARTED.md).
+
+---
 
 ## Layout
 
 ```
 .
-├── train_mjx.py         main PPO trainer (the script you actually run; --task=stand by default)
-├── view.py              live MuJoCo viewer (hot-swaps to newest checkpoint)
-├── look.py              minimal viewer — load data/scene.xml, settle under gravity, no policy
-├── README.md            this file
+├── train_mjx.py             PPO trainer; default --task=stand
+├── view.py                  live policy viewer; hot-swap; default --env=stand
+├── look.py                  static scene viewer (gravity only, no policy)
+├── Dockerfile               CUDA 12 + JAX-cuda + MuJoCo MJX + Warp
+├── docker-compose.yml       trainer + mlflow_ui services
 ├── requirements.txt
-├── brain/               Bioinspired neural architecture (Neurotransmitters, Brainstem, Basal Ganglia, Cerebellum, Amygdala, Hippocampus, Prefrontal Cortex, Motor Cortex, ApeBrain integrator, Quantum-ready interface)
-├── envs/                MJX environments + their hyperparams
-├── data/                scene.xml, robot meshes, motor specs, terrain
-├── archive/trees/       olive-tree generation pipeline (parked — see grove_scene branch for active dev)
-├── utils/               autopilot, eval, best-checkpoint loader, limb dynamics
-├── scripts/             remote.sh (drive remote GPU), monitor.py (watchdog),
-│                        pull_checkpoints.sh, archive_runs.sh, gen_terrain.py, gen_trees.py
-├── runs/                training output (mostly gitignored, except keepers/)
-├── mlruns/              mlflow tracking (gitignored, synced from remote)
-├── docs/                long-form: PLAN, CORE, BIOLOGY, REMOTE_GPU, BRANCHES, etc.
-└── archive/             defunct code paths kept for reference
+├── README.md                this file
+│
+├── data/
+│   ├── scene.xml            ← THE scene; flush-mounted two-slab torso
+│   ├── SCENE_GEOMETRY.md    ← required reading before edits
+│   ├── motors.md            ST3235 / ST3215 / ST3215-HS specs
+│   ├── controls.md          real-arm web-UI joint conventions
+│   ├── meshes/              roarm-M3 STL parts (byte-identical to URDF)
+│   └── scenes_archive/      historical scenes + ape_early.urdf (source of truth)
+│
+├── envs/                    one env+params pair per task
+│   ├── stand_env_mjx.py     ← current focus
+│   ├── walk_env_mjx.py      (parked)
+│   ├── turn_{left,right}_env_mjx.py, walk_forward_env_mjx.py
+│   ├── _shared_*.py         model load, obs builder, physics backend, dynamics
+│   └── params_*_mjx.py
+│
+├── brain/                   bioinspired neural architecture
+│   ├── ape_brain.py         integrator (Basal Ganglia routes between modules)
+│   ├── neurotransmitters.py, brainstem.py, basal_ganglia.py
+│   ├── cerebellum.py, amygdala.py, hippocampus.py
+│   ├── prefrontal_cortex.py, motor_cortex.py
+│   ├── episodic_store.py, semantic_map.py    (persistent memory)
+│   └── quantum.py           quantum-ready interface (classical fallback)
+│
+├── scripts/                 one-shot tools — see "Tooling" below
+├── utils/                   autopilot, eval, checkpoint, brain_hook
+├── tests/                   pytest suite (imports, MJWarp integration)
+├── runs/                    training output (gitignored; mirrored to Scaleway)
+├── mlruns/, mlflow.db       MLflow tracking (gitignored)
+├── docs/                    long-form documentation (see index below)
+└── archive/                 parked code paths kept for reference
+    ├── scripts/             train_walk_mjx.py shim, gen_terrain.py, gen_trees.py
+    └── trees/               procedural olive-tree generator (grove_scene branch)
 ```
 
-## What gets preserved
+---
 
-| What | Where | In git? |
-|---|---|---|
-| Auto-promoted curated checkpoints | `runs/<task>/keepers/auto_*.npz` + `.json` | **yes** |
-| Reproducibility sidecar (params + fingerprint) | `runs/<task>/keepers/auto_*.json` | **yes** |
-| Streaming/intermediate checkpoints | `runs/<task>/mjx_*.npz` | **yes** (auto-pushed to Codeberg) |
-| MLflow run/metric history (sqlite) | `mlflow.db` | **yes** |
-| MLflow legacy filesystem store | `mlruns/` | **yes** (deprecated, kept for old runs) |
-| Per-run lineage | `runs/<task>/lineage.json` | yes |
-| Training log | `runs/<task>/train.log` | yes |
-| Lessons learned (prose) | `docs/LESSONS.md` | yes |
-| Hypothesis backlog | `docs/BACKLOG.md` | yes |
-| Robot URDF meshes | `data/meshes/*.stl` | yes |
-| Scene XML | `data/scene.xml` | yes |
+## Docs index
 
-**Auto-push**: when `--auto-push` is passed to `train_mjx.py`, `scripts/sync.sh`
-runs after every checkpoint save (~every 32K env steps, ~30 s on the 4070). It
-commits the data paths above and pushes to **every configured git remote**.
-Idempotent — bails if nothing changed. Worst-case data loss: ~30 s of training
-compute.
+**Start here**
 
-**Adding a backup remote** (recommended — survives a single remote outage):
-```bash
-git remote add backup git@gitlab.com:USER/gibbonBot-RL.git
-# from now on, scripts/sync.sh pushes to both origin and backup automatically
-```
-Free EU options for the second remote: GitLab.com (EU regions), self-hosted
-Gitea on a Hetzner VPS (~€5/mo). Free non-EU: GitHub.
+- **[docs/GET_STARTED.md](docs/GET_STARTED.md)** — canonical Docker workflow for stand training
+- **[data/SCENE_GEOMETRY.md](data/SCENE_GEOMETRY.md)** — units, formulas, gotchas; required before editing `data/scene.xml`
 
-A keeper is auto-saved every PPO update where `min_dist < 1.5 m` OR
-`success_frac > 5 %` is achieved. Each keeper carries a sidecar JSON with
-the params, scene hash, and metric snapshot that produced it — full
-reproducibility unit.
+**Robot & physics**
 
-## Docs
+- **[data/motors.md](data/motors.md)** — Waveshare ST3235 / ST3215 / ST3215-HS specs and damping derivation
+- **[data/controls.md](data/controls.md)** — real-arm web-UI joint conventions (sim-to-real mapping)
+- **[docs/ROBOT_VS_APE.md](docs/ROBOT_VS_APE.md)** — joint-by-joint mapping from robot DOF to ape anatomy
+- **[docs/MJWARP_INTEGRATION.md](docs/MJWARP_INTEGRATION.md)** — how MJX-Warp is dispatched
 
-- **[docs/QUICKSTART.md](docs/QUICKSTART.md)** — paste-able commands, deeper reference
+**Training**
+
+- **[docs/QUICKSTART.md](docs/QUICKSTART.md)** — remote-GPU paste-able commands
+- **[docs/REMOTE_GPU.md](docs/REMOTE_GPU.md)** — H100 deep-dive (bootstrap, sync, teardown)
+- **[docs/CLOUD_DEPLOY.md](docs/CLOUD_DEPLOY.md)** — Docker + cloud GPU deployment notes
+- **[docs/OBJECT_STORAGE.md](docs/OBJECT_STORAGE.md)** — Scaleway sync for runs/, mlruns/, jax_cache/
+- **[docs/CURRICULUM.md](docs/CURRICULUM.md)** — multi-skill curriculum (stand → walk → turn)
 - **[docs/PLAN.md](docs/PLAN.md)** — autopilot training plan (phases A→D)
-- **[docs/CORE.md](docs/CORE.md)** — multi-task framework + per-limb diagnostics
-- **[docs/BIOLOGY.md](docs/BIOLOGY.md)** — evolutionary priors built into the policy
-- **[docs/REMOTE_GPU.md](docs/REMOTE_GPU.md)** — remote H100 deep-dive
 - **[docs/IMITATION_PLAN.md](docs/IMITATION_PLAN.md)** — ape-pose imitation roadmap
+- **[docs/OPENAPEPOSE_INTEGRATION.md](docs/OPENAPEPOSE_INTEGRATION.md)** — pose dataset integration
+- **[docs/PARAMS_HISTORY.md](docs/PARAMS_HISTORY.md)** — hyperparam evolution
+
+**Bioinspired brain**
+
+- **[docs/APEBRAIN.md](docs/APEBRAIN.md)** — 8-module overview
+- **[docs/BRAIN_CORE.md](docs/BRAIN_CORE.md)** — long-term vision (instinct + memory architecture)
+- **[docs/BIOLOGY.md](docs/BIOLOGY.md)** — evolutionary priors built into the policy
+- **[docs/QUANTUM.md](docs/QUANTUM.md)** — quantum interface (classical fallback today)
+
+**Future / world**
+
+- **[docs/CORE.md](docs/CORE.md)** — multi-task framework + per-limb diagnostics
+- **[docs/GROVE_MASTERPLAN.md](docs/GROVE_MASTERPLAN.md)** — virtual olive-grove environment
 - **[docs/BRANCHES.md](docs/BRANCHES.md)** — branch atlas
-- **[docs/GROVE_MASTERPLAN.md](docs/GROVE_MASTERPLAN.md)** — olive-grove environment
+
+**Notes**
+
+- **[docs/LESSONS.md](docs/LESSONS.md)** — cumulative training insights (prose; numbers are in MLflow)
 - **[docs/BACKLOG.md](docs/BACKLOG.md)** — prioritized list of unimplemented ideas
-- **[docs/LESSONS.md](docs/LESSONS.md)** — cumulative training insights (prose; numbers in MLflow)
-- **[docs/ROBOT_VS_APE.md](docs/ROBOT_VS_APE.md)** — joint-by-joint mapping from robot DOF to ape anatomy + what's missing
-- **[docs/BRAIN_CORE.md](docs/BRAIN_CORE.md)** — long-term vision for instinct + memory architecture (skill library, recurrent policy, world model)
-- **[docs/CURRICULUM.md](docs/CURRICULUM.md)** — multi-skill curriculum: stand → walk_forward → turn_left → turn_right
-- **[docs/CLOUD_DEPLOY.md](docs/CLOUD_DEPLOY.md)** — Dockerfile + docker-compose for local or cloud GPU training
-- **[docs/APEBRAIN.md](docs/APEBRAIN.md)** — Bioinspired neural architecture (Neurotransmitters, Brainstem, Basal Ganglia)
+
+---
 
 ## Tooling cheat sheet
 
 | Script | Purpose |
 |---|---|
-| `train_mjx.py --task <name> --auto-push --label "..."` | Train a single skill, push checkpoints every save |
-| `view.py` | Live MuJoCo viewer (defaults to `--env stand`, hot-swaps to newest checkpoint) |
+| `scripts/train_bg.sh docker stand` | Start stand training in Docker, detached, Warp backend |
+| `scripts/train_bg.sh status\|tail\|stop` | Inspect / stop the active trainer |
+| `look.py` | Static scene inspect (no policy, no checkpoint) |
+| `view.py` | Live policy viewer; hot-swaps to newest checkpoint; default `--env stand` |
 | `view.py --env <task> --best` | View best-mean_rew checkpoint per MLflow for any task |
-| `look.py` | Inspect the robot in a clean scene (`data/scene.xml`). Loads the pre-mk2 4-limb robot, floor + one light, settles under gravity with zero command. **Read [`data/SCENE_GEOMETRY.md`](data/SCENE_GEOMETRY.md) before editing scene dimensions** — it documents units, real roarm M3 mesh sizes, the "base-to-base = inner-face gap" formula, and the don't-use-`ref`-for-pose-offsets rule. |
+| `scripts/dashboard.sh` | Local web dashboard (log tail, metrics, start/stop) → http://127.0.0.1:8765 |
 | `scripts/snapshot.py` | 5-view PNGs + 13-keypoint 3D landmarks JSON |
-| `scripts/calibrate_cpg.py` | Probe each joint, output direction-of-effect table |
-| `scripts/verify_dynamics.py` | Audit physics + motors against motors.md |
+| `scripts/calibrate_cpg.py` | Probe each joint; output direction-of-effect table |
+| `scripts/verify_dynamics.py` | Audit physics + motors against `data/motors.md` |
 | `scripts/compare_runs.py` | MLflow cross-run metric comparison |
-| `scripts/note.py "..."` | Attach prose note to current MLflow run |
+| `scripts/note.py "msg"` | Attach prose note to current MLflow run |
+| `scripts/ape_audit.sh` | List everything running in this repo (procs, GPU users, zombies) |
+| `scripts/remote.sh {bootstrap\|start\|status\|log\|stop\|final_sync}` | Drive remote GPU training |
+| `scripts/pull_checkpoints.sh` | Sync remote `runs/` + `mlruns/` to local every 30 s |
 | `scripts/sync.sh` | One-shot push to all configured git remotes |
-| `scripts/dashboard.sh start` | Local web dashboard — log tail, metrics, start/stop trainer, toggle remote sync. → http://127.0.0.1:8765 |
 
-## Motor model
+---
 
-Per-actuator velocity & acceleration limits are derived from `data/motors.md`
-(Waveshare ST3235 / ST3215 / ST3215-HS specs):
+## Where things persist
 
-- ST3235 / ST3215: 4.71 rad/s (45 RPM), 2.94 N·m
-- ST3215-HS (gripper/foot): 11.10 rad/s (106 RPM), 1.96 N·m
+| What | Where | In git? |
+|---|---|---|
+| Streaming checkpoints | `runs/<task>/mjx_*.npz` | no (local + Scaleway only) |
+| Auto-promoted "keeper" checkpoints | `runs/<task>/keepers/auto_*.npz` + sidecar `.json` | no |
+| MLflow run/metric history | `mlflow.db` + `mlruns/` | no (auto-pushed to Scaleway) |
+| Per-run lineage | `runs/<task>/lineage.json` | no |
+| Training log | `train.log`, `runs/<task>/train.log` | no |
+| **Lessons learned (prose)** | `docs/LESSONS.md` | **yes** |
+| **Hypothesis backlog** | `docs/BACKLOG.md` | **yes** |
+| Robot meshes | `data/meshes/*.stl` | yes |
+| Scene XML | `data/scene.xml` | yes |
+| Source code | everything else under tracking | yes |
 
-Acceleration is bounded so each joint follows a trapezoidal velocity profile —
-smooth start *and* stop. Tunable in `envs/params_walk_mjx.py`:
+Training data is mirrored to **`scaleway:gibbonbot-training/`** (see
+[docs/OBJECT_STORAGE.md](docs/OBJECT_STORAGE.md)) on a 10-minute tmux
+loop while remote training is active. The expensive XLA autotune cache
+(`~/.jax_cache/`, ~15 min cold compile) is preserved across remote
+instance lifetimes via the same sync.
 
-- `MOTOR_SPEED_FRAC` (default 1.0) — global scale; <1 = slower than reality
-- `MOTOR_ACCEL_RATIO` (default 5.0/s) — how quickly joints reach max speed
+---
 
-## CPG (Central Pattern Generator)
+## Reference: motor model
 
-`envs/walk_env_mjx.py` injects a sinusoidal gait baseline into every action,
-so the policy learns *corrections* to a working gait instead of inventing one
-from scratch. Currently configured for **pace** (left + right pairs alternate;
-camel/giraffe-style), tuned via per-limb sign correction from
-`scripts/calibrate_cpg.py`.
+Per-actuator velocity & torque limits come from `data/motors.md`
+(Waveshare specs, derived as `damping = τ_stall / ω_no_load`):
 
-Knobs in `envs/params_walk_mjx.py`:
-- `W_CPG_PITCH` — propulsive sweep amplitude (front yaw + back pitch)
-- `W_CPG_ELBOW` — foot-lift amplitude during swing
-- `GAIT_PERIOD_STEPS` (in `walk_env_mjx.py`) — full stride period in env steps
+- **ST3235** (shoulders/hips yaw+pitch, elbow/knee, forearm/shin roll) —
+  2.94 N·m, 45 RPM (4.71 rad/s) → damping `0.62`
+- **ST3215** (wrist, ankle) — same 2.94 N·m / 45 RPM (different gearset) → damping `0.62`
+- **ST3215-HS** (gripper, foot) — 1.96 N·m, 106 RPM (11.10 rad/s) → damping `0.18`
 
-Phase pattern (`LIMB_PHASE` in `walk_env_mjx.py`):
-- Pace (current): `[0, π, 0, π]` — same-side limbs in phase
-- Trot (alternative): `[0, π, π, 0]` — diagonal pairs in phase
+Each joint follows a trapezoidal velocity profile (smooth start *and*
+stop). Tunable in `envs/params_<task>_mjx.py`:
 
-## Action mapping (rest pose)
+- `MOTOR_SPEED_FRAC` — global scale; `<1` = slower than real-hardware spec
+- `MOTOR_ACCEL_RATIO` — how quickly joints reach max speed
 
-Action `0` does not map to joint angle 0. Instead it maps to a configurable
-**rest pose** (knees/elbows pre-bent at 30° in the standing direction). This
-prevents the "dead spider" failure where joint=0 means all limbs splayed
-horizontally. `action=±1` reaches the joint limits relative to that rest pose.
+## Reference: action mapping (rest pose)
 
-See `envs/walk_env_mjx.py:load_model()` (`PER_LIMB_REST` array).
+Action `0` does **not** map to joint angle 0 — it maps to a configurable
+**rest pose** (knees/elbows pre-bent in the standing direction). This
+prevents the "dead spider" failure mode where all-zeros means all limbs
+splayed horizontally. `action=±1` reaches the joint limits relative to
+the rest pose. See `PER_LIMB_REST` in each `envs/<task>_env_mjx.py`.
+
+## Reference: CPG baseline (walk task only)
+
+`envs/walk_env_mjx.py` injects a sinusoidal gait baseline into every
+action, so the policy learns *corrections* to a working gait instead of
+inventing one from scratch. Currently pace gait
+(`LIMB_PHASE = [0, π, 0, π]`); switch to trot via `[0, π, π, 0]`.
+Tuned via per-limb sign correction from `scripts/calibrate_cpg.py`.
