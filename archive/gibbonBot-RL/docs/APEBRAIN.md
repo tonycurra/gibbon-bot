@@ -23,17 +23,17 @@ wired into PPO training in `train_mjx.py`:
 | Prefrontal Cortex | ✅ | ✅ | Goal-directed action blending + inhibition |
 | Cerebellum | ✅ | ✅ | Motor error correction in ApeBrain |
 | Motor cortex | ✅ | ✅ | Action smoothing in ApeBrain |
-| Brainstem | ✅ | ❌ | Scaffolding only |
-| Neurotransmitters | ✅ | ❌ | Scaffolding only |
-| `ApeBrain.step()` integrator | ✅ | ✅ | Orchestrates BG, Amygdala, PFC, Cerebellum, Motor Cortex |
+| Brainstem | ✅ | ✅ | Reflex preprocessing + attention filtering |
+| Neurotransmitters | ✅ | ✅ | Global modulation via BrainBus |
+| `ApeBrain.step()` integrator | ✅ | ✅ | Orchestrates all 8 modules |
 
 PPO action selection uses ApeBrain (via BrainHook) for episodic memory + bioinspired
-modulation. The **amygdala** now reduces BG dopamine based on fear level and applies
-action penalties for avoidance behavior. The **prefrontal cortex** provides goal-directed
-action suggestions and inhibition signals that blend with BG output. **Cerebellum** and
-**Motor cortex** provide motor correction and smoothing respectively.
-
-Brainstem and Neurotransmitters are defined but not yet wired into the PPO loop.
+modulation. The **amygdala** reduces BG dopamine based on fear level and applies action
+penalties for avoidance behavior. The **prefrontal cortex** provides goal-directed action
+suggestions and inhibition signals that blend with BG output. **Cerebellum** and **Motor
+cortex** provide motor correction and smoothing. **Brainstem** preprocesses observations
+through vestibular system, reflexes, and attention filtering. **Neurotransmitters** modulate
+learning rates, exploration, and thresholds across all modules via the global BrainBus.
 
 ## 🧠 Architecture Overview
 
@@ -359,8 +359,8 @@ python -m pytest tests_brain/ -v
 
 | Module | File | Status | Tests | LOC | Integration |
 |--------|------|--------|-------|-----|-------------|
-| Neurotransmitters | `brain/neurotransmitters.py` | ✅ **Done** | ✅ All pass | 448 | ❌ Scaffolding |
-| Brainstem | `brain/brainstem.py` | ✅ **Done** | ✅ All pass | 575 | ❌ Scaffolding |
+| Neurotransmitters | `brain/neurotransmitters.py` | ✅ **Done** | ✅ All pass | 448 | ✅ ApeBrain + BrainBus |
+| Brainstem | `brain/brainstem.py` | ✅ **Done** | ✅ All pass | 575 | ✅ ApeBrain |
 | Basal Ganglia | `brain/basal_ganglia.py` | ✅ **Done** | ✅ All pass | 520 | ✅ ApeBrain |
 | Cerebellum | `brain/cerebellum.py` | ✅ **Done** | ✅ All pass | N/A | ✅ ApeBrain |
 | Amygdala | `brain/amygdala.py` | ✅ **Done** | ✅ All pass | N/A | ✅ ApeBrain |
@@ -375,9 +375,10 @@ python -m pytest tests_brain/ -v
 
 | Module | File | Status | Priority | Dependencies |
 |--------|------|--------|----------|--------------|
-| Brainstem → ApeBrain integration | `brain/brainstem.py` | ⏳ TODO | **HIGH** | Test harness |
-| Neurotransmitters → ApeBrain integration | `brain/neurotransmitters.py` | ⏳ TODO | **HIGH** | Global modulation |
 | Training loop integration | `train_mjx.py` | ⏳ TODO | **HIGH** | Direct ApeBrain control |
+| Full brain state persistence | `brain/brain_state_persistence.py` | ⏳ TODO | **HIGH** | Extend policy_database |
+| Quantum basal ganglia | `brain/quantum.py` | ⏳ TODO | **MEDIUM** | PennyLane/Qiskit backend |
+| Multi-layer decision engine | `brain/decision_engine.py` | ⏳ TODO | **MEDIUM** | Safety, risk, priorities |
 
 ### 📋 Backlog
 
