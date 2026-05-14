@@ -135,6 +135,31 @@ class ApeBrain:
 
         self._step_count += 1
 
+        # === BRAINSTEM: Preprocess observation through reflexes and attention ===
+        brainstem = self.modules["brainstem"]
+
+        # Extract components from 88-dim observation vector
+        # See envs/_shared_obs.py for layout
+        torso_z = observation[0:1]  # [0]
+        torso_quat = observation[1:5]  # [1:5]
+        torso_vel = observation[5:8]  # [5:8]
+        torso_ang_vel = observation[8:11]  # [8:11]
+        joint_positions = observation[11:35]  # [11:35]
+        joint_velocities = observation[35:59]  # [35:59]
+        joint_torques = observation[59:83]  # [59:83]
+
+        # Process through brainstem
+        filtered_obs, bs_state = brainstem.preprocess_observation(
+            observation,
+            torso_quat=torso_quat,
+            torso_pos=jnp.array([0.0, 0.0, float(torso_z[0])]),
+            torso_vel=torso_vel,
+            torso_ang_vel=torso_ang_vel,
+            joint_positions=joint_positions,
+            joint_velocities=joint_velocities,
+            joint_torques=joint_torques,
+        )
+
         # Initialize modules
         bg = self.modules["basal_ganglia"]
         amygdala = self.modules["amygdala"]
@@ -146,7 +171,7 @@ class ApeBrain:
 
             # Amygdala: assess threat and apply fear modulation
             # Predict BG action first for amygdala to evaluate
-            pred_state = bg.process_cortical_input(observation, dopamine)
+            pred_state = bg.process_cortical_input(filtered_obs, dopamine)
             pred_action_idx = int(jnp.argmax(pred_state.thalamus_output))
             pred_action = jnp.zeros(self.config.act_dim)
             if pred_action_idx < self.config.act_dim:
@@ -154,15 +179,15 @@ class ApeBrain:
             pred_action = pred_action * 2.0 - 1.0
 
             # Process through amygdala
-            action_penalty, _ = amygdala.step(observation, pred_action, reward)
+            action_penalty, _ = amygdala.step(filtered_obs, pred_action, reward)
             fear_level = amygdala.get_fear_level()
 
             # Fear reduces dopamine (biological: fear suppresses dopamine release)
             dopamine = dopamine * (1.0 - fear_level * 0.7)
 
         # Get action from BG with fear-modulated dopamine
-        state = bg.process_cortical_input(observation, dopamine)
-        action_idx, _ = bg.select_action_deterministic(observation, dopamine)
+        state = bg.process_cortical_input(filtered_obs, dopamine)
+        action_idx, _ = bg.select_action_deterministic(filtered_obs, dopamine)
 
         # Convert action index to action vector
         action = jnp.zeros(self.config.act_dim)
@@ -178,7 +203,7 @@ class ApeBrain:
         hippo = self.modules["hippocampus"]
         context = hippo.get_context() if hasattr(hippo, "get_context") else None
         pfc_action, pfc_confidence, inhibition = pfc.step(
-            observation,
+            filtered_obs,
             context=context,
             action_values=bg.action_values,
             generate_new_plan=(reward is not None),
@@ -192,6 +217,9 @@ class ApeBrain:
         if pfc_confidence > 0.5:
             blend = pfc_confidence * 0.4  # Max 40% PFC influence
             action = action * (1.0 - blend) + pfc_action * blend
+
+        # Apply brainstem reflex corrections (withdrawal, stretch, joint limits)
+        action = brainstem.apply_reflex_correction(action)
 
         # Learn if training
         if reward is not None and next_observation is not None and self.config.training:
