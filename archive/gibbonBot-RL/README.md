@@ -101,6 +101,7 @@ scripts/archive_runs.sh
 .
 ├── train_walk_mjx.py    main PPO trainer (the script you actually run)
 ├── view.py              live MuJoCo viewer (hot-swaps to newest checkpoint)
+├── look.py              minimal viewer — load data/scene_minimal.xml, settle under gravity, no policy
 ├── README.md            this file
 ├── requirements.txt
 ├── brain/               Bioinspired neural architecture (Neurotransmitters, Brainstem, Basal Ganglia, Cerebellum, Amygdala, Hippocampus, Prefrontal Cortex, Motor Cortex, ApeBrain integrator, Quantum-ready interface)
@@ -176,6 +177,7 @@ reproducibility unit.
 | `train_walk_mjx.py --auto-push --label "..."` | Train walk-to-tree policy, push every save |
 | `view.py --env walk` | Live MuJoCo viewer (hot-swaps to newest checkpoint) |
 | `view.py --env walk --best` | View best-mean_rew checkpoint per MLflow |
+| `look.py` | Inspect the robot in a clean scene: loads `data/scene_minimal.xml` (old 4-limb architecture, floor + one light, no fog/haze/skybox/tree), zero actuator command, gravity-only settle. No policy, no checkpoint, no training. Use this to eyeball proportions/joints. |
 | `scripts/snapshot.py` | 5-view PNGs + 13-keypoint 3D landmarks JSON |
 | `scripts/calibrate_cpg.py` | Probe each joint, output direction-of-effect table |
 | `scripts/verify_dynamics.py` | Audit physics + motors against motors.md |
