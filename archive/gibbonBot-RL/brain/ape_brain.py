@@ -111,6 +111,7 @@ class ApeBrain:
             if hasattr(module, "reset"):
                 module.reset()
         self._step_count = 0
+        self._prev_predicted_reward = 0.0
 
     def step(
         self,
@@ -134,6 +135,30 @@ class ApeBrain:
         import jax.random as jr
 
         self._step_count += 1
+
+        # === NEUROTRANSMITTERS: Update global modulation state ===
+        neuro = self.modules["neurotransmitters"]
+        predicted_reward = getattr(self, "_prev_predicted_reward", 0.0)
+
+        # Update neurotransmitter levels based on current state
+        if reward is not None:
+            neuro.update(
+                reward=reward,
+                predicted_reward=predicted_reward,
+                state=observation,
+                done=False,
+            )
+            # Store reward prediction for next step
+            self._prev_predicted_reward = neuro.state.dopamine * 0.5 + reward * 0.5
+
+        # Publish to BrainBus so all modules can access
+        self.bus.set_neuromod(
+            dopamine=neuro.state.dopamine,
+            serotonin=neuro.state.serotonin,
+            gaba=neuro.state.gaba,
+            noradrenaline=neuro.state.noradrenaline,
+            acetylcholine=neuro.state.acetylcholine,
+        )
 
         # === BRAINSTEM: Preprocess observation through reflexes and attention ===
         brainstem = self.modules["brainstem"]
@@ -163,10 +188,23 @@ class ApeBrain:
         # Initialize modules
         bg = self.modules["basal_ganglia"]
         amygdala = self.modules["amygdala"]
+
+        # Apply neuromodulation to Basal Ganglia parameters
+        # Get current levels from BrainBus (updated above)
+        neuromod = self.bus.neuromod
+        bg.learning_rate = bg.learning_rate * (1.0 + neuromod.dopamine * 0.5)
+        bg.gamma = 0.99 * (
+            0.95 + neuromod.serotonin * 0.1
+        )  # Higher serotonin = more patient
+        bg.temperature = 0.5 * (
+            0.5 + neuromod.noradrenaline
+        )  # Higher noradrenaline = more exploratory
+
         dopamine = 0.0
         action_penalty = jnp.zeros(self.config.act_dim)
 
         if reward is not None:
+            # Override dopamine with reward-based calculation (more precise than NT dopamine)
             dopamine = min(max(reward, 0) * 2, 1.0)  # Convert reward to dopamine
 
             # Amygdala: assess threat and apply fear modulation
@@ -177,6 +215,14 @@ class ApeBrain:
             if pred_action_idx < self.config.act_dim:
                 pred_action = pred_action.at[pred_action_idx].set(1.0)
             pred_action = pred_action * 2.0 - 1.0
+
+            # Modulate Amygdala with neurotransmitters
+            amygdala.config.learning_rate = amygdala.config.learning_rate * (
+                1.0 + neuromod.acetylcholine * 0.5
+            )
+            amygdala.config.fear_threshold = 0.5 * (
+                0.3 + neuromod.gaba
+            )  # Higher GABA = higher threshold
 
             # Process through amygdala
             action_penalty, _ = amygdala.step(filtered_obs, pred_action, reward)
@@ -200,6 +246,15 @@ class ApeBrain:
 
         # Prefrontal Cortex: goal-directed modulation
         pfc = self.modules["prefrontal_cortex"]
+
+        # Modulate PFC with neurotransmitters
+        pfc.config.temperature = pfc.config.temperature * (
+            0.5 + neuromod.noradrenaline
+        )  # More arousal = more stochastic
+        pfc.config.plan_horizon = int(
+            pfc.config.plan_horizon * (0.8 + neuromod.serotonin * 0.5)
+        )  # More serotonin = longer planning
+
         hippo = self.modules["hippocampus"]
         context = hippo.get_context() if hasattr(hippo, "get_context") else None
         pfc_action, pfc_confidence, inhibition = pfc.step(
