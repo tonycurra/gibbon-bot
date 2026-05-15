@@ -122,6 +122,22 @@ the next integration step; for the demo we don't need it.
 
 That's the persistence model. Nothing else needs to move.
 
+## Library — named saved policies
+
+`runs/library/` holds policy snapshots with friendly names. Created by
+the **Library** card in the dashboard:
+
+- **Save**: name the current best keeper of the active task. The .npz
+  is copied into `runs/library/<slug>.npz` plus a `.json` sidecar with
+  succ / min_dist / source path.
+- **Use**: seed the active task's `runs/ape_<task>_mjx/` with a library
+  entry as the highest-step checkpoint, so the next training run
+  resumes from it.
+- **Delete**: remove the entry (npz + sidecar).
+
+Lets you preserve good poses across scenes / params resets / branching
+runs without leaning on git or remembering filenames.
+
 ## Comparing runs inside LIANA (no MLflow UI needed)
 
 The dashboard has a **Runs** card on the left column showing the last 20

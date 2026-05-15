@@ -357,6 +357,15 @@ select:focus, input:focus { outline: none; border-color: var(--accent); }
 
 
   <div class="card">
+    <h2>Library <span class="hint">named saved policies</span></h2>
+    <div class="row" style="margin-bottom:8px;">
+      <input id="lib-name-input" type="text" placeholder="give the current best a name" style="flex:1; padding:6px 8px; background:#000; color:var(--text); border:1px solid var(--line-2); border-radius:4px;"/>
+      <button class="btn" onclick="libSave()" title="snapshot current best keeper">Save</button>
+    </div>
+    <div id="library-list"><span class="loading">Loading…</span></div>
+  </div>
+
+  <div class="card">
     <h2>Runs <span class="hint">last 20</span></h2>
     <div id="runs-table"><span class="loading">Loading…</span></div>
   </div>
@@ -700,6 +709,55 @@ async function refreshLogs() {
     } catch(e) {}
 }
 
+// ── Library (named saved policies) ────────────────────────────────────
+async function refreshLibrary() {
+    try {
+        const r = await fetch(API + "/library/list");
+        const d = await r.json();
+        const el = document.getElementById("library-list");
+        const entries = d.entries || [];
+        if (!entries.length) { el.innerHTML = "<span class=\"loading\">empty — save the current best to name it</span>"; return; }
+        let html = "";
+        for (const e of entries) {
+            const succ = e.succ !== null && e.succ !== undefined ? `succ ${e.succ.toFixed(2)}` : "";
+            const md = e.min_dist !== null && e.min_dist !== undefined ? `d ${e.min_dist.toFixed(2)}` : "";
+            html += `<div class="task-row">
+              <span class="tname">${e.name}</span>
+              <span class="tprog">${e.saved_at} · ${succ} ${md}</span>
+              <button class="btn ghost" onclick="libUse('${e.name}')" title="seed next training run from this">Use</button>
+              <button class="btn ghost" onclick="libDelete('${e.name}')" style="color:var(--accent);">×</button>
+            </div>`;
+        }
+        el.innerHTML = html;
+    } catch(e) {}
+}
+async function libSave() {
+    const name = document.getElementById("lib-name-input").value.trim();
+    if (!name) { alert("name?"); return; }
+    const task = document.getElementById("task-select").value;
+    try {
+        const r = await fetch(API + `/library/save?name=${encodeURIComponent(name)}&task=${task}`, {method:"POST"});
+        const d = await r.json();
+        if (!r.ok) { alert("Save failed: " + (d.detail || r.statusText)); return; }
+        document.getElementById("lib-name-input").value = "";
+        refreshLibrary();
+    } catch(e) { alert(e.message); }
+}
+async function libDelete(name) {
+    if (!confirm(`Delete '${name}'?`)) return;
+    try { await fetch(API + `/library/delete?name=${encodeURIComponent(name)}`, {method:"POST"}); refreshLibrary(); }
+    catch(e) {}
+}
+async function libUse(name) {
+    const task = document.getElementById("task-select").value;
+    try {
+        const r = await fetch(API + `/library/use?name=${encodeURIComponent(name)}&task=${task}`, {method:"POST"});
+        const d = await r.json();
+        if (!r.ok) { alert("Load failed: " + (d.detail || r.statusText)); return; }
+        alert(`Seeded '${name}' as next training start.\nClick Start to train from it.`);
+    } catch(e) { alert(e.message); }
+}
+
 // ── Runs (MLflow inline) ──────────────────────────────────────────────
 async function refreshRuns() {
     try {
@@ -821,6 +879,7 @@ setInterval(refreshMetrics, 1000);
 setInterval(refreshLogs, 2000);
 setInterval(refreshWhatsHappening, 1000);
 setInterval(refreshRuns, 5000);
+setInterval(refreshLibrary, 10000);
 document.addEventListener("DOMContentLoaded", () => {
     refreshWhatsHappening();
     refreshMetrics();
@@ -829,6 +888,7 @@ document.addEventListener("DOMContentLoaded", () => {
     loadParams();
     loadScenes();
     refreshRuns();
+    refreshLibrary();
     document.getElementById("task-select").addEventListener("change", loadParams);
     document.getElementById("scene-select").addEventListener("change", selectScene);
 });

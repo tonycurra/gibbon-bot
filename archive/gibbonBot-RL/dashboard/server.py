@@ -35,6 +35,7 @@ class _AccessFilter(logging.Filter):
         "/api/system/stats", "/api/params/get", "/api/sim/joints",
         "/api/tasks/overview", "/api/whats-happening", "/api/sim/mode",
         "/api/runs", "/api/trial/info", "/api/trial/status",
+        "/api/library/list",
     )
     def filter(self, record):
         msg = record.getMessage()
@@ -300,6 +301,118 @@ def _params_path(task: str = "walk") -> Path:
     """All tasks share envs/env.py since the refactor; the file holds
     every reward/motor knob as a module-level constant."""
     return REPO_ROOT / "envs" / "env.py"
+
+
+LIBRARY_DIR = REPO_ROOT / "runs" / "library"
+
+
+@app.get("/api/library/list")
+def library_list():
+    """List all named policy snapshots.
+
+    Each entry has the form runs/library/<name>.npz + <name>.json
+    (sidecar with metadata copied from the source keeper).
+    """
+    LIBRARY_DIR.mkdir(parents=True, exist_ok=True)
+    out = []
+    for npz in sorted(LIBRARY_DIR.glob("*.npz")):
+        meta = {}
+        side = npz.with_suffix(".json")
+        if side.exists():
+            try: meta = __import__("json").loads(side.read_text())
+            except Exception: pass
+        out.append({
+            "name": npz.stem,
+            "saved_at": time.strftime("%Y-%m-%d %H:%M", time.localtime(npz.stat().st_mtime)),
+            "size_kb": int(npz.stat().st_size / 1024),
+            "task": meta.get("task"),
+            "succ": meta.get("best_succ"),
+            "min_dist": meta.get("min_dist"),
+            "source": meta.get("source"),
+        })
+    return {"entries": out}
+
+
+def _slug(name: str) -> str:
+    import re as _re
+    name = (name or "").strip().lower()
+    name = _re.sub(r"[^a-z0-9_-]+", "_", name)[:60]
+    return name or "untitled"
+
+
+@app.post("/api/library/save")
+def library_save(name: str, task: str = "walk"):
+    """Snapshot the current BEST keeper into the library under `name`.
+
+    Copies the .npz (and JSON sidecar if present) so the library entry
+    is decoupled from the live runs/ tree being overwritten later.
+    """
+    import json, shutil
+    runs = REPO_ROOT / "runs" / f"ape_{task}_mjx"
+    keepers = sorted((runs / "keepers").glob("*.npz")) if (runs / "keepers").exists() else []
+    if not keepers:
+        raise HTTPException(status_code=404, detail=f"no keepers in {runs}/keepers — train more first")
+    # Best by filename: highest succ then lowest min_d.
+    import re as _re
+    def score(p):
+        md = _re.search(r"min_d([\d.]+)", p.name)
+        sc = _re.search(r"succ([\d.]+)", p.name)
+        return (float(sc.group(1)) if sc else 0.0, -(float(md.group(1)) if md else 99.0))
+    best = max(keepers, key=score)
+    slug = _slug(name)
+    LIBRARY_DIR.mkdir(parents=True, exist_ok=True)
+    target = LIBRARY_DIR / f"{slug}.npz"
+    shutil.copy2(best, target)
+    md = _re.search(r"min_d([\d.]+)", best.name)
+    sc = _re.search(r"succ([\d.]+)", best.name)
+    meta = {
+        "name": slug,
+        "task": task,
+        "source": str(best.relative_to(REPO_ROOT)),
+        "best_succ": float(sc.group(1)) if sc else None,
+        "min_dist": float(md.group(1)) if md else None,
+        "saved_at": time.time(),
+    }
+    target.with_suffix(".json").write_text(json.dumps(meta, indent=2))
+    return {"ok": True, "name": slug, "saved": str(target.relative_to(REPO_ROOT))}
+
+
+@app.post("/api/library/delete")
+def library_delete(name: str):
+    slug = _slug(name)
+    LIBRARY_DIR.mkdir(parents=True, exist_ok=True)
+    p = LIBRARY_DIR / f"{slug}.npz"
+    if not p.exists():
+        raise HTTPException(status_code=404, detail=f"no library entry '{slug}'")
+    p.unlink()
+    p.with_suffix(".json").unlink(missing_ok=True)
+    return {"ok": True}
+
+
+@app.post("/api/library/use")
+def library_use(name: str, task: str = "walk"):
+    """Seed runs/ape_<task>_mjx/ with a library entry as the starting
+    checkpoint for the next training run. Refuses while training is
+    running so you don't clobber active state.
+    """
+    import json, shutil
+    if _trainer_pids():
+        raise HTTPException(status_code=400, detail="stop training first")
+    slug = _slug(name)
+    src = LIBRARY_DIR / f"{slug}.npz"
+    if not src.exists():
+        raise HTTPException(status_code=404, detail=f"no library entry '{slug}'")
+    runs = REPO_ROOT / "runs" / f"ape_{task}_mjx"
+    runs.mkdir(parents=True, exist_ok=True)
+    # Highest step we've seen so the trainer picks this as "latest" on next start.
+    next_step = 1_000_000_000
+    target = runs / f"mjx_{next_step:012d}.npz"
+    shutil.copy2(src, target)
+    # Drop a marker JSON so we can trace where this came from.
+    (runs / "library_origin.json").write_text(json.dumps({
+        "library_name": slug, "loaded_at": time.time(),
+    }, indent=2))
+    return {"ok": True, "seeded": str(target.relative_to(REPO_ROOT)), "from": slug}
 
 
 @app.get("/api/runs")
