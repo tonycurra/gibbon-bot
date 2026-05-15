@@ -16,6 +16,7 @@ import os
 os.environ.setdefault("MUJOCO_GL", "egl")
 os.environ.setdefault("PYOPENGL_PLATFORM", "egl")
 
+import logging
 import re
 import subprocess
 import sys
@@ -24,9 +25,26 @@ import time
 from io import BytesIO
 from pathlib import Path
 
+
+# Silence the firehose of GET /api/{frame,metrics,logs,status,system/stats}
+# access logs. Errors and warnings still print, plus state-changing POSTs.
+class _AccessFilter(logging.Filter):
+    SPAMMY = (
+        "/api/viewer/frame", "/api/viewer/stream", "/api/train/metrics",
+        "/api/train/logs", "/api/train/status", "/api/system/stats",
+        "/api/params/get", "/api/sim/joints",
+    )
+    def filter(self, record):
+        msg = record.getMessage()
+        return not any(p in msg for p in self.SPAMMY)
+
+
+logging.getLogger("uvicorn.access").addFilter(_AccessFilter())
+
 import numpy as np
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 # Serialize MuJoCo model/data/renderer access — FastAPI dispatches sync
@@ -628,6 +646,76 @@ def get_frame(width: int = 640, height: int = 480):
             content=_TRANSPARENT_PNG, media_type="image/png",
             headers={"X-Viewer-Error": err[:200]},
         )
+
+
+def _render_png_bytes() -> bytes:
+    """Single rendered frame as PNG bytes — used by both /frame and /stream."""
+    import mujoco
+    from PIL import Image
+    with _SIM_LOCK:
+        model, data = get_model()
+        renderer = get_renderer()
+        task = _read_active(ACTIVE_TASK_FILE, "walk")
+        live = _load_live_qpos(task) if _trainer_pids() else None
+        if live is not None and live.shape == data.qpos.shape:
+            data.qpos[:] = live
+            data.qvel[:] = 0.0
+            mujoco.mj_forward(model, data)
+        else:
+            _ensure_home()
+            global _LAST_STEP_TIME
+            now = time.time()
+            dt = min(0.1, now - _LAST_STEP_TIME) if _LAST_STEP_TIME else model.opt.timestep * 20
+            _LAST_STEP_TIME = now
+            n_steps = max(1, int(dt / model.opt.timestep))
+            for _ in range(min(n_steps, 50)):
+                mujoco.mj_step(model, data)
+        cam = mujoco.MjvCamera()
+        cam.distance = 3.0
+        cam.azimuth = 90
+        cam.elevation = -20
+        cam.lookat = [0, 0, 1]
+        renderer.update_scene(data, camera=cam)
+        img = renderer.render()
+    buf = BytesIO()
+    Image.fromarray(img).save(buf, format="JPEG", quality=80)
+    return buf.getvalue()
+
+
+@app.get("/api/viewer/stream")
+def viewer_stream(fps: int = 20):
+    """MJPEG stream — one connection, server pushes frames at `fps` Hz.
+
+    Browser sets <img src="/api/viewer/stream"> and the connection stays
+    open. Far cheaper than polling /api/viewer/frame every 100ms.
+    """
+    fps = max(1, min(60, int(fps)))
+    interval = 1.0 / fps
+    boundary = b"liana-frame"
+
+    def gen():
+        while True:
+            t0 = time.time()
+            try:
+                jpg = _render_png_bytes()
+            except Exception as e:
+                sys.stderr.write(f"[stream] render failed: {e}\n")
+                time.sleep(0.5)
+                continue
+            yield (
+                b"--" + boundary + b"\r\n"
+                b"Content-Type: image/jpeg\r\n"
+                b"Content-Length: " + str(len(jpg)).encode() + b"\r\n\r\n"
+                + jpg + b"\r\n"
+            )
+            sleep_for = interval - (time.time() - t0)
+            if sleep_for > 0:
+                time.sleep(sleep_for)
+
+    return StreamingResponse(
+        gen(),
+        media_type=f"multipart/x-mixed-replace; boundary={boundary.decode()}",
+    )
 
 
 @app.get("/api/viewer/state")

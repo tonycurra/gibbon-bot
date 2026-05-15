@@ -235,7 +235,7 @@ select:focus, input:focus { outline: none; border-color: var(--accent); }
 
   <div class="card">
     <h2>Viewer</h2>
-    <div id="viewer-container"><img id="frame" src="/api/viewer/frame" alt="robot"/></div>
+    <div id="viewer-container"><img id="frame" src="/api/viewer/stream?fps=20" alt="robot"/></div>
     <div class="viewer-info" id="viewer-info">—</div>
   </div>
 
@@ -389,7 +389,11 @@ async function simZero() {
 
 // ── Viewer / metrics / logs ───────────────────────────────────────────
 function refreshFrame() {
-    document.getElementById("frame").src = "/api/viewer/frame?" + Date.now();
+    // MJPEG stream is persistent; only restart if it died.
+    const img = document.getElementById("frame");
+    if (img.complete && img.naturalWidth === 0) {
+        img.src = "/api/viewer/stream?fps=20&_=" + Date.now();
+    }
 }
 async function refreshMetrics() {
     try {
@@ -464,11 +468,11 @@ async function selectScene() {
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────
-setInterval(refreshFrame, 100);
-setInterval(refreshMetrics, 500);
-setInterval(refreshLogs, 1000);
-setInterval(refreshStatus, 2000);
-setInterval(refreshSystem, 1000);
+setInterval(refreshFrame, 3000);    // stream is persistent; just probe for dead connections
+setInterval(refreshMetrics, 1000);
+setInterval(refreshLogs, 2000);
+setInterval(refreshStatus, 3000);
+setInterval(refreshSystem, 1500);
 document.addEventListener("DOMContentLoaded", () => {
     refreshStatus();
     refreshSystem();
