@@ -390,6 +390,9 @@ def _load_live_qpos(task: str):
 # ───── Manual joint control (used when no training is running) ─────
 _HOME_CTRL = None
 _LAST_STEP_TIME = None
+# pose | physics — pose drives joints kinematically (no gravity, won't blow up
+# when you drag a slider). physics runs mj_step with current ctrl as target.
+_SIM_MODE = "pose"
 
 
 def _ensure_home():
@@ -401,6 +404,41 @@ def _ensure_home():
         hi = model.actuator_ctrlrange[:, 1]
         _HOME_CTRL = ((lo + hi) / 2.0).copy()
         data.ctrl[:] = _HOME_CTRL
+
+
+def _apply_pose_from_ctrl():
+    """Set qpos directly from ctrl so dragging sliders shows the pose instantly.
+    Skips actuators that aren't bound to a single hinge/slide joint."""
+    import mujoco
+    model, data = get_model()
+    for i in range(model.nu):
+        # actuator_trntype[i] == 0 (TRNTYPE_JOINT) means it drives one joint
+        if model.actuator_trntype[i] != 0:
+            continue
+        jid = int(model.actuator_trnid[i, 0])
+        if jid < 0:
+            continue
+        adr = int(model.jnt_qposadr[jid])
+        # Only set for hinge (3) or slide (2) joints — single qpos.
+        if model.jnt_type[jid] in (2, 3):
+            data.qpos[adr] = float(data.ctrl[i])
+    data.qvel[:] = 0.0
+    mujoco.mj_forward(model, data)
+
+
+@app.post("/api/sim/mode")
+def sim_set_mode(mode: str):
+    """Switch manual-sim mode: 'pose' (kinematic) or 'physics' (mj_step)."""
+    global _SIM_MODE
+    if mode not in ("pose", "physics"):
+        raise HTTPException(status_code=400, detail="mode must be 'pose' or 'physics'")
+    _SIM_MODE = mode
+    return {"ok": True, "mode": _SIM_MODE}
+
+
+@app.get("/api/sim/mode")
+def sim_get_mode():
+    return {"mode": _SIM_MODE}
 
 
 @app.get("/api/sim/joints")
@@ -651,7 +689,7 @@ def get_frame(width: int = 640, height: int = 480):
 
 
 def _render_png_bytes() -> bytes:
-    """Single rendered frame as PNG bytes — used by both /frame and /stream."""
+    """Single rendered frame as JPEG bytes — used by /frame and /stream."""
     import mujoco
     from PIL import Image
     with _SIM_LOCK:
@@ -663,7 +701,13 @@ def _render_png_bytes() -> bytes:
             data.qpos[:] = live
             data.qvel[:] = 0.0
             mujoco.mj_forward(model, data)
+        elif _SIM_MODE == "pose":
+            # Pose mode: qpos ← ctrl directly. No gravity, won't blow up while
+            # you drag sliders. Instant visual feedback.
+            _ensure_home()
+            _apply_pose_from_ctrl()
         else:
+            # Physics mode: actually simulate with current ctrl as target.
             _ensure_home()
             global _LAST_STEP_TIME
             now = time.time()
@@ -672,6 +716,10 @@ def _render_png_bytes() -> bytes:
             n_steps = max(1, int(dt / model.opt.timestep))
             for _ in range(min(n_steps, 50)):
                 mujoco.mj_step(model, data)
+            # Recover if integration blew up.
+            if not np.all(np.isfinite(data.qpos)):
+                mujoco.mj_resetData(model, data)
+                _apply_pose_from_ctrl()
         cam = mujoco.MjvCamera()
         cam.distance = 3.0
         cam.azimuth = 90
@@ -695,21 +743,26 @@ def viewer_stream(fps: int = 20):
     interval = 1.0 / fps
     boundary = b"liana-frame"
 
+    last_good = [None]
+
     def gen():
         while True:
             t0 = time.time()
             try:
                 jpg = _render_png_bytes()
+                last_good[0] = jpg
             except Exception as e:
                 sys.stderr.write(f"[stream] render failed: {e}\n")
-                time.sleep(0.5)
-                continue
-            yield (
-                b"--" + boundary + b"\r\n"
-                b"Content-Type: image/jpeg\r\n"
-                b"Content-Length: " + str(len(jpg)).encode() + b"\r\n\r\n"
-                + jpg + b"\r\n"
-            )
+                # Keep the connection alive — push the last good frame (or a
+                # 1x1 placeholder) so the <img> doesn't show as broken.
+                jpg = last_good[0] or b""
+            if jpg:
+                yield (
+                    b"--" + boundary + b"\r\n"
+                    b"Content-Type: image/jpeg\r\n"
+                    b"Content-Length: " + str(len(jpg)).encode() + b"\r\n\r\n"
+                    + jpg + b"\r\n"
+                )
             sleep_for = interval - (time.time() - t0)
             if sleep_for > 0:
                 time.sleep(sleep_for)

@@ -231,6 +231,12 @@ select:focus, input:focus { outline: none; border-color: var(--accent); }
     <div class="row" style="margin-top:10px;">
       <button class="btn" onclick="simReset()">Reset Pose</button>
       <button class="btn ghost" onclick="simZero()">Zero Ctrl</button>
+      <label class="field" style="margin-left:auto;">Mode
+        <select id="sim-mode" onchange="setSimMode(this.value)">
+          <option value="pose">pose (kinematic)</option>
+          <option value="physics">physics (gravity)</option>
+        </select>
+      </label>
     </div>
   </div>
 
@@ -397,6 +403,16 @@ async function simReset() {
 async function simZero() {
     try { await fetch(API + "/sim/zero", {method:"POST"}); loadJoints(); } catch(e) { console.error(e); }
 }
+async function setSimMode(mode) {
+    try { await fetch(API + "/sim/mode?mode=" + mode, {method:"POST"}); } catch(e) { console.error(e); }
+}
+async function loadSimMode() {
+    try {
+        const r = await fetch(API + "/sim/mode");
+        const d = await r.json();
+        document.getElementById("sim-mode").value = d.mode;
+    } catch(e) {}
+}
 
 // ── Viewer / metrics / logs ───────────────────────────────────────────
 function refreshFrame() {
@@ -490,6 +506,7 @@ document.addEventListener("DOMContentLoaded", () => {
     loadParams();
     loadJoints();
     loadScenes();
+    loadSimMode();
     refreshMetrics();
     refreshLogs();
     document.getElementById("task-select").addEventListener("change", loadParams);
