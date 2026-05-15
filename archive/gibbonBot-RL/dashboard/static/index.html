@@ -345,11 +345,15 @@ select:focus, input:focus { outline: none; border-color: var(--accent); }
       <label class="field">Trial s
         <input id="trial-seconds-input" type="number" min="2" max="120" step="1" value="20"/>
       </label>
+      <label class="field">Speed
+        <input id="realtime-input" type="number" min="0.1" max="2" step="0.1" value="0.5" title="1.0 = real time. 0.5 = half speed (more visible)."/>
+      </label>
     </div>
     <div class="row" style="margin-top:10px;">
       <button class="btn primary" onclick="startTraining()">Start</button>
-      <button class="btn" onclick="stopTraining()">Stop</button>
+      <button class="btn" onclick="stopTraining()">Stop train</button>
       <button class="btn ghost" onclick="runTrial()" title="replay the best policy so far">Replay</button>
+      <button class="btn ghost" onclick="stopTrial()" title="stop the trial loop">Stop trial</button>
       <button class="btn ghost" onclick="runDemoWalk()" title="hand-coded sine-wave gait — what 'good' looks like, no RL">Demo walk</button>
     </div>
     <input type="hidden" id="steps-input" value=""/>
@@ -662,8 +666,9 @@ async function refreshViewerInfo() {
 async function runTrial() {
     const task = document.getElementById("task-select").value;
     const secs = document.getElementById("trial-seconds-input").value || 20;
+    const rt = document.getElementById("realtime-input").value || 0.5;
     try {
-        const r = await fetch(API + `/trial/start?task=${task}&seconds=${secs}`, {method:"POST"});
+        const r = await fetch(API + `/trial/start?task=${task}&seconds=${secs}&realtime=${rt}`, {method:"POST"});
         const d = await r.json();
         if (!r.ok) alert("Trial failed: " + (d.detail || r.statusText));
     } catch(e) { alert(e.message); }

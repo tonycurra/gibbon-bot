@@ -208,25 +208,22 @@ def start_training(task: str = "walk", envs: int | None = None,
     ACTIVE_TASK_FILE.write_text(task)
     if envs:
         ACTIVE_ENVS_FILE.write_text(str(envs))
-    # Auto-start looping trial so the viewer shows smooth real-time
-    # playback of the latest checkpoint while the trainer churns.
+    # Auto-start looping trial so the viewer shows real-time playback
+    # of the latest checkpoint while the trainer churns. Default to
+    # 0.5x speed — more realistic / less jerky to watch.
     global _trial_proc
     if _trial_proc is None or _trial_proc.poll() is not None:
-        try: _spawn_trial(task, _DEFAULT_TRIAL_STEPS, 1.0, loop=True)
+        try: _spawn_trial(task, _DEFAULT_TRIAL_STEPS, 0.5, loop=True)
         except Exception as e: sys.stderr.write(f"[liana] auto-trial failed to start: {e}\n")
     return {"status": "started", "task": task, "envs": envs, "detail": res["stdout"].strip()}
 
 
 @app.post("/api/train/stop")
 def stop_training():
+    """Stops only the trainer. The trial subprocess keeps running so the
+    viewer continues to show the last-known-best policy. Use /api/trial/stop
+    explicitly to kill the trial."""
     res = _bg("stop")
-    # Stop the trial AND any stragglers from previous sessions.
-    global _trial_proc
-    if _trial_proc is not None and _trial_proc.poll() is None:
-        _trial_proc.terminate()
-        try: _trial_proc.wait(timeout=3)
-        except subprocess.TimeoutExpired: _trial_proc.kill()
-    _kill_stray_trials()
     return {"status": "stopped" if res["ok"] else "error", "detail": (res["stdout"] or res["stderr"]).strip()}
 
 
@@ -742,18 +739,20 @@ def _spawn_trial(task: str, max_steps: int, realtime: float, loop: bool,
 
 
 @app.post("/api/trial/start")
-def trial_start(task: str = "walk", seconds: float = 20.0, realtime: float = 1.0, loop: bool = True):
-    """Run real-time playback of the latest policy in a CPU subprocess.
+def trial_start(task: str = "walk", seconds: float = 20.0, realtime: float = 0.5, loop: bool = True):
+    """Run playback of the latest policy in a CPU subprocess.
 
-    `seconds`: max wall-clock per episode before forced reset.
-    Loop=true (default): reload latest checkpoint between episodes."""
+    realtime: 1.0 = real time, 0.5 = half speed (default, more visible),
+              0.25 = quarter speed. Independent of MOTOR_SPEED_FRAC,
+              this just paces the wall-clock per step.
+    seconds: max episode duration in wall-clock seconds.
+    loop=true (default): reload latest checkpoint between episodes."""
     global _trial_proc
     if _trial_proc is not None and _trial_proc.poll() is None:
         raise HTTPException(status_code=400, detail="trial already running — stop it first")
-    # 1 action step = PHYSICS_STEPS_PER_ACTION * dt ≈ 0.032s.
     max_steps = max(30, int(seconds / 0.032))
     pid = _spawn_trial(task, max_steps, realtime, loop)
-    return {"ok": True, "pid": pid, "loop": loop, "max_steps": max_steps, "seconds": seconds}
+    return {"ok": True, "pid": pid, "loop": loop, "max_steps": max_steps, "seconds": seconds, "realtime": realtime}
 
 
 @app.post("/api/trial/stop")
