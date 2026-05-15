@@ -247,12 +247,88 @@ bg.learn(reward=10.0, next_cortical_input=cortical_input, selected_action=action
 print(f"Action values: {bg.action_values}")
 ```
 
+### 4. Hippocampus (`brain/hippocampus.py` + `brain/episodic_store.py`)
+
+**Biological Role**: Episodic memory storage, spatial navigation, context-based learning, and memory consolidation.
+
+**Components**:
+
+#### Memory Architecture
+- **Dentate Gyrus analogue**: Input gatekeeping and sparsification via spatial encoding
+- **CA3 analogue**: Autoassociative pattern completion through similarity-based retrieval
+- **CA1 analogue**: Context generation output layer
+- **Entorhinal Cortex analogue**: Main input/output interface for observations and actions
+
+#### Memory Storage
+- **In-RAM working memory**: Fast access to recent episodes (capacity: 1000 by default)
+- **SQLite persistent store**: Long-term consolidation via `EpisodicStore` (capacity: 10,000+)
+- **Dual-store design**: Working memory for fast retrieval, persistent store for long-term retention
+
+#### Memory Retrieval
+- **Similarity-based recall**: Uses cosine similarity to find matching past experiences
+- **Context-aware retrieval**: Combines observation similarity (70% weight) and action similarity (30% weight)
+- **Pattern completion**: Retrieves full memories from partial cues (state-action pairs)
+- **Priority replay**: Emotionally salient episodes (high reward/punishment) are replayed more frequently
+
+**Key Methods**:
+- `encode_spatial(observation)` - Generate place-cell-like spatial representation
+- `encode_context(observation, action)` - Create contextual embedding
+- `store_memory(obs, action, next_obs, reward, punishment)` - Store episodic memory
+- `retrieve_memory(observation, action)` - Retrieve most similar past experience
+- `generate_context(observation, action)` - Generate contextual representation blending current state and retrieved memory
+- `get_next_state_prediction(observation, action)` - Predict next state from memory
+
+**Memory Retrieval Process** (How the robot retrieves past training memories):
+
+1. **Encoding**: Each experience (state, action, next_state, reward, punishment) is encoded into a `Memory` object with a spatial code (compressed representation)
+
+2. **Storage**: Memories are stored in two places:
+   - In-RAM list for fast access (working memory)
+   - SQLite database via `EpisodicStore` for persistence across sessions
+
+3. **Retrieval**: When the robot needs to recall past experiences:
+   - Compute cosine similarity between current observation and all stored memory observations
+   - If action is provided, add weighted action similarity (30%)
+   - Return the memory with highest similarity score above threshold
+
+4. **Context Generation**: Retrieved memories are blended with current context:
+   - Spatial code from current observation
+   - Context code from current state-action pair
+   - Retrieved memory's spatial code (weighted by `retrieval_strength` parameter)
+   - This blended context informs decision-making in PFC and BG
+
+5. **Consolidation**: During sleep/replay phases:
+   - High-valence episodes (high reward or punishment) are prioritized
+   - Memories are replayed to reinforce learning
+   - Long-term storage in SQLite ensures memories persist across training sessions
+
+**Example**:
+```python
+from brain import Hippocampus
+import jax.numpy as jnp
+
+hippo = Hippocampus(obs_dim=88, act_dim=24)
+
+# Store a memory
+obs = jnp.zeros(88).at[0].set(1.0)
+action = jnp.zeros(24).at[0].set(0.5)
+next_obs = jnp.zeros(88).at[1].set(1.0)
+hippo.store_memory(obs, action, next_obs, reward=10.0)
+
+# Retrieve similar memory
+retrieved, similarity = hippo.retrieve_memory(obs)
+print(f"Retrieved memory with similarity: {similarity}")
+
+# Generate context for decision making
+context = hippo.generate_context(obs, action)
+print(f"Context shape: {context.shape}")
+```
+
 ## 🧩 TODO Modules
 
 | Module | Status | Description |
 |--------|--------|-------------|
 | Cerebellum | ⏳ TODO | Motor error correction, fine-tuning |
-| Hippocampus | ⏳ TODO | Episodic memory storage and retrieval |
 | Amygdala | ⏳ TODO | Fear conditioning, threat detection |
 | Prefrontal Cortex | ⏳ TODO | High-level planning, working memory |
 | Motor Cortex | ⏳ TODO | Motor command execution |
