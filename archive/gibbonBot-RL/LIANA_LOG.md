@@ -82,3 +82,12 @@ started: dashboard only (no trainer)  → http://localhost:8000/static/index.htm
 - Trial loop honors `ACTION_SMOOTH_ALPHA` + `MOTOR_SPEED_FRAC`.
 - Trial default speed → 0.5× wall clock; survives Stop train.
 - `read_params(task)` switches walk vs stand rewards.
+
+## 2026-05-15 15:15
+started: dashboard only (no trainer)  → http://localhost:8000/static/index.html
+
+## 2026-05-15 15:40
+started: dashboard only (no trainer)  → http://localhost:8000/static/index.html
+
+## 2026-05-15 15:56
+started: dashboard only (no trainer)  → http://localhost:8000/static/index.html

@@ -13,22 +13,22 @@ _The GibbonBot's running notebook + control interface._
 ```
 
 Then from the dashboard:
-- **Task** dropdown — `walk` or `stand`
+- **Task** dropdown — populated from `envs/tasks.py`
 - **Scene** dropdown — pick from `data/scene*.xml` + archive
-- **Envs** — parallel envs on GPU (default 2048)
-- **Trial s** + **Speed** — how long each playback episode runs / how fast
-- **Start** → trainer + auto-trial spawn. **Stop train** kills only the
-  trainer; the trial loop keeps showing the best policy
-- **Replay** / **Stop trial** — manual control of the playback loop
-- **Demo walk** — scripted sine-wave gait (no RL) as a sanity reference
-- **Library** — save the current best with a name, recall it later
-- **Env Params** — read-only live dump of every active constant in
-  `envs/env.py`
-- **Runs** — last 20 training runs from `mlflow.db` (succ, rew, scene
-  fingerprint, headline params)
+- **Envs** — parallel envs on GPU (default 512)
+- **Trial s** — optional override; defaults to the task's `trial_seconds`
+- **▶ Train / ⏹ Stop** — one toggle. Changing task while running asks
+  to switch; same task just stops.
 
-Ctrl-C in the terminal tears down all subprocesses (dashboard, trainer,
-trial).
+Cards (left to right after the viewer):
+- **Progress hero** under the viewer — big % bar + goal text + best%
+- **Tasks** — per-task best progress (stand vs walk at a glance)
+- **Notes** — free-form per-task notes stored in `runs/notes.sqlite`
+- **Library** — save the current best with a name, recall it later
+- **Env Params** — read-only dump of constants in `envs/env.py`
+- **Runs** — last 20 MLflow runs (succ, rew, scene fingerprint, params)
+
+Ctrl-C in the terminal tears down all subprocesses.
 
 ## Sync with object storage
 
