@@ -1,22 +1,31 @@
-# gibbonBot-RL
+# GibbonBot-RL
 
 > **Demo north star:** Robot walks to the olive tree on command, reliably.
 > Locked 2026-05-15. Anything that doesn't move this forward is a tangent.
 >
-> **Quick start:** `./liana go` — trainer + dashboard + tail in one terminal.
-> **LIANA** = *Live Interactive Ape Neural Architecture*.
-> See [LIANA.md](LIANA.md) for the running notebook, [BACKLOG.md](BACKLOG.md)
-> for parked ideas.
+> **LIANA** = *Live Interactive Ape Neural Architecture* — the user-facing
+> dashboard + control layer over the training stack.
+>
+> **Quick start:**
+> ```
+> ./liana go
+> # → http://localhost:8000/static/index.html
+> ```
+> One command launches the dashboard, lets you start training, watch
+> a real-time playback of the best policy, and review every past run
+> (params + scene fingerprint + success rate) in one screen.
+>
+> See [LIANA.md](LIANA.md) for the running notebook, [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+> for where data lives, [BACKLOG.md](BACKLOG.md) for parked ideas.
 
 Reinforcement-learning training stack for a 4-limbed robotic ape.
 4 × roarm-M3 arms (the same physical arm, repeated as front-left,
 front-right, back-left, back-right) on a shared torso, simulated in
 MuJoCo + MJX with a Warp physics backend on GPU.
 
-**Current focus**: `stand` — keep the torso upright on flat ground with
-all 4 limbs. Other tasks (`walk`, `walk_forward`, `turn_left`,
-`turn_right`) are parked but their env code remains in `envs/` for
-future curricula.
+**Current focus**: `walk` — train the robot to walk from its spawn at
+(0, 0) to the olive tree at (3, 0). Single env file at `envs/env.py`;
+per-task env variants have been archived to `envs/_archive/`.
 
 ---
 

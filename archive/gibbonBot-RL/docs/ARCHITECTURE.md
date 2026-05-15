@@ -121,3 +121,26 @@ the next integration step; for the demo we don't need it.
    the keeper itself stays on disk (Scaleway-mirrored).
 
 That's the persistence model. Nothing else needs to move.
+
+## Comparing runs inside LIANA (no MLflow UI needed)
+
+The dashboard has a **Runs** card on the left column showing the last 20
+training runs. It reads `mlflow.db` directly (no separate UI server) and
+displays:
+
+| Column | What it tells you |
+|---|---|
+| when | start time (newest first) + status dot |
+| task | walk / stand label |
+| scene | first 8 chars of the scene+code fingerprint |
+| succ | last `success_frac` (fraction of envs reaching the tree) |
+| rew | last `mean_rew` |
+| W_PROG, SPEED, FLIP | the headline reward / motor params |
+| envs | parallel env count |
+
+Pick two rows with similar `scene` fingerprints and you can see which
+**params** made a difference. Different fingerprint = different
+scene/code, so direct comparison is invalid (the trainer flags this).
+
+Backed by `/api/runs?limit=20` which queries `mlflow.db` via the MLflow
+Python client. No external MLflow server is launched.

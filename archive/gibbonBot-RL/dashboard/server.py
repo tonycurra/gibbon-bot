@@ -34,6 +34,7 @@ class _AccessFilter(logging.Filter):
         "/api/train/metrics", "/api/train/logs", "/api/train/status",
         "/api/system/stats", "/api/params/get", "/api/sim/joints",
         "/api/tasks/overview", "/api/whats-happening", "/api/sim/mode",
+        "/api/runs",
     )
     def filter(self, record):
         msg = record.getMessage()
@@ -300,10 +301,54 @@ def _params_path(task: str = "walk") -> Path:
     return REPO_ROOT / "envs" / "env.py"
 
 
-@app.get("/api/mlflow/url")
-def mlflow_url():
-    """The URL the LIANA dashboard links to for run comparison."""
-    return {"url": "http://localhost:5000"}
+@app.get("/api/runs")
+def runs_list(limit: int = 20):
+    """Compact, in-dashboard run history. Reads MLflow's SQLite store
+    directly so we don't need to launch the mlflow UI as a separate
+    process.
+
+    Returns the last `limit` runs across all experiments, sorted newest
+    first. Each entry shows the few columns that matter for comparison:
+    when, status, best success_frac / mean_rew, scene fingerprint,
+    and the headline params.
+    """
+    try:
+        import mlflow
+        mlflow.set_tracking_uri(f"sqlite:///{REPO_ROOT/'mlflow.db'}")
+        client = mlflow.MlflowClient()
+        exps = client.search_experiments()
+        if not exps:
+            return {"runs": [], "note": "no MLflow experiments yet"}
+        exp_ids = [e.experiment_id for e in exps]
+        mlruns = client.search_runs(
+            experiment_ids=exp_ids,
+            order_by=["attributes.start_time DESC"],
+            max_results=int(limit),
+        )
+    except Exception as e:
+        return {"runs": [], "error": str(e)}
+
+    HEADLINE_PARAMS = ("W_PROGRESS", "W_UPRIGHT", "MOTOR_SPEED_FRAC",
+                       "ACTION_SMOOTH_ALPHA", "FLIP_PENALTY", "N_ENVS")
+    out = []
+    for r in mlruns:
+        params = r.data.params or {}
+        metrics = r.data.metrics or {}
+        tags = r.data.tags or {}
+        out.append({
+            "id": r.info.run_id[:8],
+            "name": r.info.run_name,
+            "started": time.strftime("%Y-%m-%d %H:%M", time.localtime(r.info.start_time / 1000)),
+            "status": r.info.status,
+            "task": tags.get("task", "?"),
+            "scene_fp": (tags.get("scene_fingerprint", "") or tags.get("fingerprint", ""))[:8],
+            "best_succ": metrics.get("success_frac"),
+            "best_rew": metrics.get("mean_rew"),
+            "min_dist": metrics.get("mean_dist"),
+            "steps": metrics.get("update", 0) * int(params.get("N_STEPS", 0) or 0) * int(params.get("N_ENVS", 0) or 0),
+            "params": {k: params.get(k) for k in HEADLINE_PARAMS if k in params},
+        })
+    return {"runs": out}
 
 
 @app.get("/api/params/get")

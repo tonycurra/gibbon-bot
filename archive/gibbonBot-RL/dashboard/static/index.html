@@ -294,6 +294,14 @@ select:focus, input:focus { outline: none; border-color: var(--accent); }
 .task-row .num.ckpts { color: var(--muted); }
 .task-row .num.none { color: var(--line-2); }
 
+/* Inline MLflow runs table — small, dense, scrollable */
+.runs-tbl { width: 100%; border-collapse: collapse; font-family: ui-monospace, Menlo, monospace; font-size: 0.72em; }
+.runs-tbl th, .runs-tbl td { padding: 4px 6px; text-align: left; border-bottom: 1px solid var(--line); }
+.runs-tbl th { color: var(--muted); font-weight: 400; letter-spacing: 0.08em; text-transform: uppercase; font-size: 0.85em; }
+.runs-tbl td { color: var(--text); }
+.runs-tbl td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.runs-tbl tr:last-child td { border-bottom: 0; }
+
 .sys-procs { font-family: ui-monospace, Menlo, monospace; font-size: 0.78em; }
 .proc-row { display: grid; grid-template-columns: 36px 70px 1fr 60px 60px; gap: 8px; padding: 3px 0; align-items: center; }
 .proc-row.head { color: var(--muted); border-bottom: 1px solid var(--line); padding-bottom: 6px; margin-bottom: 4px; letter-spacing: 0.06em; }
@@ -355,9 +363,8 @@ select:focus, input:focus { outline: none; border-color: var(--accent); }
   </div>
 
   <div class="card">
-    <h2>History</h2>
-    <a class="btn" target="_blank" id="mlflow-link" href="http://localhost:5000">Open MLflow ↗</a>
-    <div class="state-det" style="margin-top:8px;">Every Start is a run with params, metrics, scene fingerprint. Compare across runs to see what works.</div>
+    <h2>Runs <span class="hint">last 20</span></h2>
+    <div id="runs-table"><span class="loading">Loading…</span></div>
   </div>
 
 </div>
@@ -690,6 +697,41 @@ async function refreshLogs() {
     } catch(e) {}
 }
 
+// ── Runs (MLflow inline) ──────────────────────────────────────────────
+async function refreshRuns() {
+    try {
+        const r = await fetch(API + "/runs?limit=20");
+        const d = await r.json();
+        const el = document.getElementById("runs-table");
+        if (!el) return;
+        if (d.error) { el.innerHTML = `<span class="error">${d.error}</span>`; return; }
+        const runs = d.runs || [];
+        if (!runs.length) { el.innerHTML = "<span class=\"loading\">no runs yet — hit Start</span>"; return; }
+        let html = `<table class="runs-tbl"><thead><tr>
+            <th>when</th><th>task</th><th>scene</th><th>succ</th><th>rew</th>
+            <th>W_PROG</th><th>SPEED</th><th>FLIP</th><th>envs</th>
+        </tr></thead><tbody>`;
+        for (const r of runs) {
+            const p = r.params || {};
+            const fmt = (v, n=2) => v === null || v === undefined ? "—" : Number(v).toFixed(n);
+            const status_dot = r.status === "RUNNING" ? "🟢" : (r.status === "FAILED" || r.status === "KILLED" ? "🔴" : "·");
+            html += `<tr>
+                <td>${status_dot} ${r.started}</td>
+                <td>${r.task}</td>
+                <td title="${r.scene_fp}">${r.scene_fp || "—"}</td>
+                <td class="num">${fmt(r.best_succ, 2)}</td>
+                <td class="num">${fmt(r.best_rew, 1)}</td>
+                <td class="num">${fmt(p.W_PROGRESS, 0)}</td>
+                <td class="num">${fmt(p.MOTOR_SPEED_FRAC, 2)}</td>
+                <td class="num">${fmt(p.FLIP_PENALTY, 0)}</td>
+                <td class="num">${p.N_ENVS || "—"}</td>
+            </tr>`;
+        }
+        html += "</tbody></table>";
+        el.innerHTML = html;
+    } catch(e) { /* swallow */ }
+}
+
 // ── Tasks overview ────────────────────────────────────────────────────
 async function refreshTasks() {
     try {
@@ -775,6 +817,7 @@ setInterval(refreshFrame, 3000);     // probe for dead MJPEG connections
 setInterval(refreshMetrics, 1000);
 setInterval(refreshLogs, 2000);
 setInterval(refreshWhatsHappening, 1000);
+setInterval(refreshRuns, 5000);
 document.addEventListener("DOMContentLoaded", () => {
     refreshWhatsHappening();
     refreshMetrics();
@@ -782,6 +825,7 @@ document.addEventListener("DOMContentLoaded", () => {
     loadViews();
     loadParams();
     loadScenes();
+    refreshRuns();
     document.getElementById("task-select").addEventListener("change", loadParams);
     document.getElementById("scene-select").addEventListener("change", selectScene);
 });
