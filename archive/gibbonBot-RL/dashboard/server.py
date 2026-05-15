@@ -435,6 +435,139 @@ def sim_zero():
     return {"ok": True}
 
 
+# ───── System stats ─────
+def _liana_pids():
+    """All pids that belong to this LIANA stack: dashboard, trainer, viewers."""
+    import psutil
+    pids = []
+    for proc in psutil.process_iter(["pid", "name", "cmdline"]):
+        try:
+            cmd = " ".join(proc.info.get("cmdline") or [])
+            if any(k in cmd for k in ("dashboard.server", "train_mjx.py", "uvicorn dashboard")):
+                pids.append(proc)
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
+    return pids
+
+
+def _gpu_stats():
+    """Parse nvidia-smi for util / mem / per-process memory."""
+    try:
+        out = subprocess.check_output(
+            ["nvidia-smi",
+             "--query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu",
+             "--format=csv,noheader,nounits"],
+            text=True, timeout=2,
+        ).strip().splitlines()[0]
+        def _num(s):
+            s = s.strip()
+            if not s or s.startswith("[") or s.lower() == "n/a":
+                return None
+            try: return int(s)
+            except ValueError:
+                try: return int(float(s))
+                except ValueError: return None
+        util, mem_used, mem_total, temp = [_num(x) for x in out.split(",")]
+        proc_out = subprocess.check_output(
+            ["nvidia-smi",
+             "--query-compute-apps=pid,process_name,used_memory",
+             "--format=csv,noheader,nounits"],
+            text=True, timeout=2,
+        ).strip()
+        procs = []
+        if proc_out:
+            for line in proc_out.splitlines():
+                parts = [p.strip() for p in line.split(",")]
+                if len(parts) >= 3:
+                    pid = _num(parts[0])
+                    mem = _num(parts[2])
+                    if pid is None:
+                        continue
+                    procs.append({"pid": pid, "name": parts[1], "mem_mb": mem or 0})
+        return {
+            "util_pct": util, "mem_used_mb": mem_used,
+            "mem_total_mb": mem_total, "temp_c": temp,
+            "processes": procs,
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get("/api/system/stats")
+def system_stats():
+    import psutil
+    gpu = _gpu_stats()
+    total_cpu = psutil.cpu_percent(interval=None)
+    total_mem = psutil.virtual_memory()
+    liana = []
+    for proc in _liana_pids():
+        try:
+            with proc.oneshot():
+                cmd = " ".join(proc.info.get("cmdline") or [])
+                role = "dashboard" if "uvicorn" in cmd or "dashboard.server" in cmd else (
+                    "trainer" if "train_mjx" in cmd else "other"
+                )
+                liana.append({
+                    "pid": proc.pid,
+                    "role": role,
+                    "cpu_pct": proc.cpu_percent(interval=None),
+                    "mem_mb": int(proc.memory_info().rss / 1_048_576),
+                    "cmd": cmd[:120],
+                })
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
+    return {
+        "gpu": gpu,
+        "cpu_pct": total_cpu,
+        "mem_used_gb": round(total_mem.used / 1e9, 1),
+        "mem_total_gb": round(total_mem.total / 1e9, 1),
+        "liana_processes": liana,
+        "active_task": _read_active(ACTIVE_TASK_FILE, "walk"),
+        "active_envs": _read_active(ACTIVE_ENVS_FILE, "auto"),
+    }
+
+
+# ───── Scene selection ─────
+SCENES_DIR = REPO_ROOT / "data"
+SCENES_ARCHIVE = REPO_ROOT / "data" / "scenes_archive"
+ACTIVE_SCENE_FILE = REPO_ROOT / "runs" / ".active_scene"
+
+
+@app.get("/api/scenes/list")
+def scenes_list():
+    """List all scene*.xml files in data/ and data/scenes_archive/."""
+    items = []
+    for p in sorted(SCENES_DIR.glob("scene*.xml")):
+        items.append({"name": p.name, "path": str(p.relative_to(REPO_ROOT)), "active": p == SCENES_DIR / "scene.xml"})
+    for p in sorted(SCENES_ARCHIVE.glob("scene*.xml")):
+        items.append({"name": "archive/" + p.name, "path": str(p.relative_to(REPO_ROOT)), "active": False})
+    return {"scenes": items, "current": _read_active(ACTIVE_SCENE_FILE, "data/scene.xml")}
+
+
+@app.post("/api/scenes/select")
+def scenes_select(path: str):
+    """Switch the active scene. Refuses while training is running."""
+    import shutil
+    if _trainer_pids():
+        raise HTTPException(status_code=400, detail="stop training first — scene swap would corrupt the trainer's view")
+    src = REPO_ROOT / path
+    if not src.exists() or src.suffix != ".xml":
+        raise HTTPException(status_code=404, detail=f"scene not found: {path}")
+    target = SCENES_DIR / "scene.xml"
+    if src.resolve() != target.resolve():
+        shutil.copy2(src, target)
+    ACTIVE_SCENE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    ACTIVE_SCENE_FILE.write_text(str(target.relative_to(REPO_ROOT)))
+    # Invalidate the cached model so next /api/viewer/frame reloads.
+    global _model_cache, _data_cache, _renderer_cache, _HOME_CTRL
+    with _SIM_LOCK:
+        _model_cache = None
+        _data_cache = None
+        _renderer_cache = None
+        _HOME_CTRL = None
+    return {"ok": True, "active": path}
+
+
 @app.get("/api/viewer/frame")
 def get_frame(width: int = 640, height: int = 480):
     """Get frame as PNG showing the current trained robot.

@@ -142,6 +142,27 @@ select:focus, input:focus { outline: none; border-color: var(--accent); }
 .loading { color: var(--muted); font-style: italic; font-size: 0.85em; }
 .error { color: var(--accent); }
 .divider { height: 1px; background: var(--line); margin: 12px 0; }
+
+/* System stats panel */
+.sys-overview {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    gap: 10px;
+    font-size: 0.82em;
+}
+.stat { display: flex; flex-direction: column; }
+.stat .k { color: var(--muted); font-size: 0.85em; letter-spacing: 0.06em; text-transform: uppercase; }
+.stat .v { color: var(--text); font-variant-numeric: tabular-nums; font-size: 1.3em; font-weight: 600; }
+.stat .bar { height: 4px; background: var(--line-2); border-radius: 2px; margin-top: 4px; overflow: hidden; }
+.stat .bar .fill { height: 100%; background: var(--accent); transition: width 0.2s; }
+
+.sys-procs { font-family: ui-monospace, Menlo, monospace; font-size: 0.78em; }
+.proc-row { display: grid; grid-template-columns: 36px 70px 1fr 60px 60px; gap: 8px; padding: 3px 0; align-items: center; }
+.proc-row.head { color: var(--muted); border-bottom: 1px solid var(--line); padding-bottom: 6px; margin-bottom: 4px; letter-spacing: 0.06em; }
+.proc-row .pid { color: var(--muted); }
+.proc-row .role { color: var(--text); }
+.proc-row .cmd { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.proc-row .num { color: var(--text); text-align: right; font-variant-numeric: tabular-nums; }
 </style>
 </head>
 <body>
@@ -172,6 +193,9 @@ select:focus, input:focus { outline: none; border-color: var(--accent); }
       </label>
       <label class="field">Envs
         <input id="envs-input" type="number" min="1" max="4096" step="1" value="1" title="1 = real-time viewing; raise for faster learning"/>
+      </label>
+      <label class="field" style="flex:1;min-width:140px;">Scene
+        <select id="scene-select" title="switch model XML (stop training first)"></select>
       </label>
     </div>
     <div class="row" style="margin-top:10px;">
@@ -206,13 +230,20 @@ select:focus, input:focus { outline: none; border-color: var(--accent); }
 
 </div>
 
-<!-- RIGHT: viewer + metrics + logs -->
+<!-- RIGHT: viewer + system + metrics + logs -->
 <div class="col">
 
   <div class="card">
     <h2>Viewer</h2>
     <div id="viewer-container"><img id="frame" src="/api/viewer/frame" alt="robot"/></div>
     <div class="viewer-info" id="viewer-info">—</div>
+  </div>
+
+  <div class="card">
+    <h2>System <span class="hint">live</span></h2>
+    <div id="sys-overview" class="sys-overview">—</div>
+    <div class="divider"></div>
+    <div id="sys-procs" class="sys-procs"><span class="loading">no processes</span></div>
   </div>
 
   <div class="card"><h2>Metrics</h2><pre id="metrics">—</pre></div>
@@ -377,18 +408,77 @@ async function refreshLogs() {
     } catch(e) {}
 }
 
+// ── System stats ──────────────────────────────────────────────────────
+async function refreshSystem() {
+    try {
+        const r = await fetch(API + "/system/stats");
+        const d = await r.json();
+        const gpu = d.gpu || {};
+        const memPct = gpu.mem_total_mb ? Math.round(100 * gpu.mem_used_mb / gpu.mem_total_mb) : 0;
+        const ramPct = d.mem_total_gb ? Math.round(100 * d.mem_used_gb / d.mem_total_gb) : 0;
+        document.getElementById("sys-overview").innerHTML = `
+            <div class="stat"><span class="k">GPU</span><span class="v">${gpu.util_pct ?? "—"}%</span>
+                <div class="bar"><div class="fill" style="width:${gpu.util_pct ?? 0}%"></div></div></div>
+            <div class="stat"><span class="k">VRAM</span><span class="v">${gpu.mem_used_mb ?? 0} / ${gpu.mem_total_mb ?? 0} MB</span>
+                <div class="bar"><div class="fill" style="width:${memPct}%"></div></div></div>
+            <div class="stat"><span class="k">GPU °C</span><span class="v">${gpu.temp_c ?? "—"}</span></div>
+            <div class="stat"><span class="k">CPU</span><span class="v">${d.cpu_pct?.toFixed(0) ?? "—"}%</span>
+                <div class="bar"><div class="fill" style="width:${d.cpu_pct ?? 0}%"></div></div></div>
+            <div class="stat"><span class="k">RAM</span><span class="v">${d.mem_used_gb} / ${d.mem_total_gb} GB</span>
+                <div class="bar"><div class="fill" style="width:${ramPct}%"></div></div></div>
+            <div class="stat"><span class="k">Envs</span><span class="v">${d.active_envs}</span></div>
+        `;
+        const procs = d.liana_processes || [];
+        let html = "<div class=\"proc-row head\"><span class=\"pid\">PID</span><span class=\"role\">ROLE</span><span class=\"cmd\">CMD</span><span class=\"num\">CPU%</span><span class=\"num\">MEM MB</span></div>";
+        if (procs.length === 0) {
+            html += "<span class=\"loading\">no liana processes</span>";
+        } else {
+            for (const p of procs) {
+                html += `<div class="proc-row"><span class="pid">${p.pid}</span><span class="role">${p.role}</span><span class="cmd" title="${p.cmd}">${p.cmd}</span><span class="num">${p.cpu_pct.toFixed(0)}</span><span class="num">${p.mem_mb}</span></div>`;
+            }
+        }
+        document.getElementById("sys-procs").innerHTML = html;
+    } catch(e) {}
+}
+
+// ── Scenes ────────────────────────────────────────────────────────────
+async function loadScenes() {
+    try {
+        const r = await fetch(API + "/scenes/list");
+        const d = await r.json();
+        const sel = document.getElementById("scene-select");
+        sel.innerHTML = (d.scenes || []).map(s =>
+            `<option value="${s.path}" ${s.active ? "selected" : ""}>${s.name}</option>`
+        ).join("");
+    } catch(e) { console.error(e); }
+}
+async function selectScene() {
+    const path = document.getElementById("scene-select").value;
+    if (!path) return;
+    try {
+        const r = await fetch(API + "/scenes/select?path=" + encodeURIComponent(path), {method:"POST"});
+        const d = await r.json();
+        if (!r.ok) { alert("Scene swap failed: " + (d.detail || r.statusText)); loadScenes(); return; }
+        loadJoints();  // model changed → joints may differ
+    } catch(e) { alert(e.message); }
+}
+
 // ── Boot ──────────────────────────────────────────────────────────────
 setInterval(refreshFrame, 100);
 setInterval(refreshMetrics, 500);
 setInterval(refreshLogs, 1000);
 setInterval(refreshStatus, 2000);
+setInterval(refreshSystem, 1000);
 document.addEventListener("DOMContentLoaded", () => {
     refreshStatus();
+    refreshSystem();
     loadParams();
     loadJoints();
+    loadScenes();
     refreshMetrics();
     refreshLogs();
     document.getElementById("task-select").addEventListener("change", loadParams);
+    document.getElementById("scene-select").addEventListener("change", selectScene);
 });
 </script>
 </body>

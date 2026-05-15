@@ -76,12 +76,22 @@ case "$cmd" in
         echo "[liana] dashboard running. No trainer started — start it from the web UI."
         echo "[liana]   url → http://localhost:$DASH_PORT/static/index.html"
         echo "[liana]   tip → leave Envs=1 to watch a single env in real time"
-        echo "[liana]   Ctrl-C stops the dashboard."
+        echo "[liana]   Ctrl-C stops EVERYTHING (dashboard + any trainer)."
         echo "[liana] ─────────────────────────────────────────────────────"
 
-        trap '_stop_all; exit 0' INT TERM
-        # Tail dashboard log so user sees server output / errors. If a training
-        # session is later started from the UI, switch to tailing train.log too.
+        # Trap any way of dying so children never outlive the script.
+        # EXIT covers normal exits, errors and `set -e` failures;
+        # INT/TERM/HUP cover Ctrl-C, kill, terminal close.
+        cleanup() {
+            # Guard against re-entry — if trap fires multiple times during teardown.
+            [[ -n "${_LIANA_CLEANED:-}" ]] && return 0
+            _LIANA_CLEANED=1
+            echo
+            echo "[liana] caught signal — stopping everything..."
+            _stop_all
+        }
+        trap cleanup EXIT INT TERM HUP
+
         tail -F "$ROOT/runs/dashboard.log" 2>/dev/null || true
         ;;
 
