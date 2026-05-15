@@ -112,10 +112,12 @@ def get_model():
 
 
 def get_renderer():
-    """Get cached renderer."""
+    """Get cached renderer; rebuild if it was invalidated for thread/EGL reasons."""
     global _renderer_cache
     if _renderer_cache is None:
-        get_model()  # This will initialize the renderer
+        import mujoco
+        model, _ = get_model()
+        _renderer_cache = mujoco.Renderer(model, height=960, width=1280)
     return _renderer_cache
 
 
