@@ -1,5 +1,13 @@
 # gibbonBot-RL
 
+> **Demo north star:** Customer sees the robot in MuJoCo, doing increasingly
+> complex stuff (stand → walk → reach tree). You can pause and tell Claude
+> to change something on the spot; the change shows up within seconds.
+>
+> **Quick start:** `./liana go` — trainer + viewer + tail in one terminal.
+> See [LIANA.md](LIANA.md) for the running notebook, [BACKLOG.md](BACKLOG.md)
+> for parked ideas.
+
 Reinforcement-learning training stack for a 4-limbed robotic ape.
 4 × roarm-M3 arms (the same physical arm, repeated as front-left,
 front-right, back-left, back-right) on a shared torso, simulated in

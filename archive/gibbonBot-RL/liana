@@ -1,0 +1,115 @@
+#!/usr/bin/env bash
+# Liana — one command to start training + viewer + log tail.
+# Ctrl-C tears everything down cleanly.
+#
+# Usage:
+#   ./liana go [task]          start trainer + viewer for <task> (default: walk)
+#   ./liana stop               stop trainer + viewer
+#   ./liana status             show what's running + tail of log
+#   ./liana log "message"      append a dated entry to LIANA.md
+#
+# Tasks: walk (default — phase A is stand-and-survive), stand, walk_forward,
+# turn_left, turn_right. The autopilot drives walk through phases A→D.
+
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")" && pwd)"
+cd "$ROOT"
+
+TRAIN_LOG="$ROOT/train.log"
+VIEW_PID_FILE="$ROOT/runs/.view.pid"
+
+_view_alive() {
+    [[ -f "$VIEW_PID_FILE" ]] || return 1
+    local pid; pid="$(cat "$VIEW_PID_FILE")"
+    [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null
+}
+
+_stop_viewer() {
+    if _view_alive; then
+        kill -TERM "$(cat "$VIEW_PID_FILE")" 2>/dev/null || true
+        sleep 1
+        kill -KILL "$(cat "$VIEW_PID_FILE")" 2>/dev/null || true
+    fi
+    pkill -f "[v]iew\.py" 2>/dev/null || true
+    rm -f "$VIEW_PID_FILE"
+}
+
+_stop_all() {
+    echo "[liana] stopping viewer..."
+    _stop_viewer
+    echo "[liana] stopping trainer..."
+    "$ROOT/scripts/train_bg.sh" stop || true
+}
+
+cmd="${1:-go}"; shift || true
+
+case "$cmd" in
+    go)
+        task="${1:-walk}"; shift || true
+        echo "[liana] task=$task — cleaning any previous run"
+        _stop_all
+
+        echo "[liana] starting trainer..."
+        "$ROOT/scripts/train_bg.sh" start "$task" "$@"
+
+        # Wait for log to appear so view.py has something to hot-swap from.
+        for _ in 1 2 3 4 5; do
+            [[ -s "$TRAIN_LOG" ]] && break
+            sleep 1
+        done
+
+        echo "[liana] launching viewer (task=$task)..."
+        # view.py opens a MuJoCo GUI window. Run in background; tee its stderr
+        # so a missing DISPLAY shows up here without blocking.
+        nohup "$ROOT/.venv/bin/python" view.py --task "$task" \
+            >"$ROOT/runs/view.log" 2>&1 </dev/null &
+        echo $! >"$VIEW_PID_FILE"
+        disown || true
+
+        # Append a Liana entry so we can see this session later.
+        "$0" log "started: task=$task"
+
+        echo "[liana] ─────────────────────────────────────────────────────"
+        echo "[liana] trainer + viewer running. Tailing $TRAIN_LOG."
+        echo "[liana] Ctrl-C stops everything."
+        echo "[liana] ─────────────────────────────────────────────────────"
+
+        trap '_stop_all; exit 0' INT TERM
+        # -F follows even if the file is rotated.
+        tail -F "$TRAIN_LOG" 2>/dev/null || true
+        ;;
+
+    stop)
+        _stop_all
+        ;;
+
+    status)
+        echo "── trainer ──"
+        "$ROOT/scripts/train_bg.sh" status || true
+        echo
+        echo "── viewer ──"
+        if _view_alive; then
+            echo "RUNNING  pid=$(cat "$VIEW_PID_FILE")  log=$ROOT/runs/view.log"
+        else
+            echo "STOPPED"
+        fi
+        ;;
+
+    log)
+        msg="${1:-}"
+        if [[ -z "$msg" ]]; then
+            echo "usage: $0 log \"message\"" >&2
+            exit 2
+        fi
+        ts="$(date '+%Y-%m-%d %H:%M')"
+        {
+            printf '\n## %s\n%s\n' "$ts" "$msg"
+        } >> "$ROOT/LIANA.md"
+        echo "[liana] logged → LIANA.md"
+        ;;
+
+    *)
+        echo "usage: $0 {go [task]|stop|status|log \"msg\"}" >&2
+        exit 2
+        ;;
+esac
