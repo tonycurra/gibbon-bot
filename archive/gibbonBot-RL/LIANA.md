@@ -57,3 +57,9 @@ started: task=walk  (dashboard http://localhost:8000/static/index.html)
 
 ## 2026-05-15 12:46
 fixed: re-injected t0_trunk capsule into data/scene.xml at (3,0) — walk env was failing on missing tree geom
+
+## 2026-05-15 12:46
+started: task=walk  (dashboard http://localhost:8000/static/index.html)
+
+## 2026-05-15 12:49
+flow change: ./liana go now launches dashboard only. Training is started from the web UI. Default envs=1 for real-time viewing; trainer dumps qpos every step when envs<=8.

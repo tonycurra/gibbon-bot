@@ -632,6 +632,16 @@ def main():
                 dx_batch, actions, motor_pos_batch, motor_vel_batch, prev_action_batch, prev_dist_batch, step_idx_batch
             )
             step_counts = step_counts + 1
+
+            # Real-time viewer feed: when running few envs (visualization mode),
+            # dump env-0 qpos every action step so the dashboard sees live motion.
+            # Skipped for many envs — the GPU→CPU sync would tank throughput.
+            if N_ENVS <= 8:
+                try:
+                    np.save(str(RUNS / "live_qpos.npy"),
+                            np.asarray(jax.device_get(dx_batch.qpos[0])))
+                except Exception:
+                    pass
             done_mask = dones | (step_counts >= MAX_STEPS)
 
             if jnp.any(done_mask):

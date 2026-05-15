@@ -52,22 +52,14 @@ cmd="${1:-go}"; shift || true
 
 case "$cmd" in
     go)
-        task="${1:-walk}"; shift || true
-        echo "[liana] task=$task — cleaning any previous run"
+        # Minimum-settings start: dashboard only, no trainer.
+        # User triggers training (and picks env count) from the web UI.
+        echo "[liana] cleaning any previous run..."
         _stop_all
 
-        # Record active task so the dashboard knows what to render.
+        # Default active task so the dashboard / viewer have something to read.
         mkdir -p "$ROOT/runs"
-        echo -n "$task" > "$ROOT/runs/.active_task"
-
-        echo "[liana] starting trainer..."
-        "$ROOT/scripts/train_bg.sh" start "$task" "$@"
-
-        # Wait for log to appear.
-        for _ in 1 2 3 4 5; do
-            [[ -s "$TRAIN_LOG" ]] && break
-            sleep 1
-        done
+        [[ -f "$ROOT/runs/.active_task" ]] || echo -n "walk" > "$ROOT/runs/.active_task"
 
         echo "[liana] launching dashboard on :$DASH_PORT..."
         nohup "$ROOT/.venv/bin/python" -m uvicorn dashboard.server:app \
@@ -76,20 +68,21 @@ case "$cmd" in
         echo $! >"$DASH_PID_FILE"
         disown || true
 
-        # Try to open the browser (no-op if no GUI / no xdg-open).
         ( sleep 2 && xdg-open "http://localhost:$DASH_PORT/static/index.html" >/dev/null 2>&1 ) &
 
-        "$0" log "started: task=$task  (dashboard http://localhost:$DASH_PORT/static/index.html)"
+        "$0" log "started: dashboard only (no trainer)  → http://localhost:$DASH_PORT/static/index.html"
 
         echo "[liana] ─────────────────────────────────────────────────────"
-        echo "[liana] trainer + dashboard running."
-        echo "[liana]   dashboard → http://localhost:$DASH_PORT/static/index.html"
-        echo "[liana]   tailing  → $TRAIN_LOG"
-        echo "[liana]   Ctrl-C stops everything."
+        echo "[liana] dashboard running. No trainer started — start it from the web UI."
+        echo "[liana]   url → http://localhost:$DASH_PORT/static/index.html"
+        echo "[liana]   tip → leave Envs=1 to watch a single env in real time"
+        echo "[liana]   Ctrl-C stops the dashboard."
         echo "[liana] ─────────────────────────────────────────────────────"
 
         trap '_stop_all; exit 0' INT TERM
-        tail -F "$TRAIN_LOG" 2>/dev/null || true
+        # Tail dashboard log so user sees server output / errors. If a training
+        # session is later started from the UI, switch to tailing train.log too.
+        tail -F "$ROOT/runs/dashboard.log" 2>/dev/null || true
         ;;
 
     stop)
