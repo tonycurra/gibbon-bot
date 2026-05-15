@@ -358,26 +358,6 @@ select:focus, input:focus { outline: none; border-color: var(--accent); }
     </div>
   </div>
 
-  <div class="card">
-    <h2>Joint Control <span class="hint">drives sim when no training active</span></h2>
-    <div class="joint-tabs" id="joint-tabs"></div>
-    <div id="joint-sliders"><span class="loading">Loading…</span></div>
-    <div class="row" style="margin-top:10px;">
-      <button class="btn" onclick="simReset()">Reset Pose</button>
-      <button class="btn ghost" onclick="simZero()">Zero Ctrl</button>
-      <label class="field" style="margin-left:auto;">Mode
-        <select id="sim-mode" onchange="setSimMode(this.value)">
-          <option value="pose">pose (kinematic)</option>
-          <option value="physics">physics (gravity)</option>
-        </select>
-      </label>
-    </div>
-  </div>
-
-  <div class="card">
-    <h2>Live Tuning <span class="hint">applied next episode</span></h2>
-    <div id="param-sliders"><span class="loading">Loading…</span></div>
-  </div>
 
 </div>
 
@@ -443,7 +423,7 @@ async function startTraining() {
         const r = await fetch(API + "/train/start?" + _qs(), {method:"POST"});
         const d = await r.json();
         if (!r.ok) { alert("Start failed: " + (d.detail || r.statusText)); return; }
-        refreshStatus(); loadParams();
+        refreshStatus();
     } catch(e) { alert("Network error: " + e.message); }
 }
 async function stopTraining() {
@@ -455,7 +435,7 @@ async function restartTraining() {
         const r = await fetch(API + "/train/restart?" + _qs(), {method:"POST"});
         const d = await r.json();
         if (!r.ok) { alert("Restart failed: " + (d.detail || r.statusText)); return; }
-        refreshStatus(); loadParams();
+        refreshStatus();
     } catch(e) { alert(e.message); }
 }
 async function refreshStatus() {
@@ -796,7 +776,6 @@ async function selectScene() {
         const r = await fetch(API + "/scenes/select?path=" + encodeURIComponent(path), {method:"POST"});
         const d = await r.json();
         if (!r.ok) { alert("Scene swap failed: " + (d.detail || r.statusText)); loadScenes(); return; }
-        loadJoints();  // model changed → joints may differ
     } catch(e) { alert(e.message); }
 }
 
@@ -806,24 +785,20 @@ setInterval(refreshMetrics, 1000);
 setInterval(refreshLogs, 2000);
 setInterval(refreshStatus, 3000);
 setInterval(refreshSystem, 2000);
-setInterval(refreshJoints, 250);    // live-follow slider positions to robot state
+// setInterval(refreshJoints, 250);  // joint card removed from UI
 setInterval(refreshViewerInfo, 1000);
 setInterval(refreshWhatsHappening, 1000);
 setInterval(refreshTasks, 5000);
 document.addEventListener("DOMContentLoaded", () => {
     refreshStatus();
     refreshSystem();
-    loadParams();
-    loadJoints();
     loadScenes();
-    loadSimMode();
     refreshViewerInfo();
     refreshWhatsHappening();
     refreshTasks();
     loadViews();
     refreshMetrics();
     refreshLogs();
-    document.getElementById("task-select").addEventListener("change", loadParams);
     document.getElementById("scene-select").addEventListener("change", selectScene);
 });
 </script>
