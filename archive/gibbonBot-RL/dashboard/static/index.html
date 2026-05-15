@@ -503,6 +503,14 @@ async function setParam(key, value) {
     catch(e) { console.error(e); }
 }
 
+async function resetParams() {
+    const task = document.getElementById("task-select").value;
+    try {
+        await fetch(API + "/params/reset?task=" + task, {method:"POST"});
+        loadParams();
+    } catch(e) { alert(e.message); }
+}
+
 // ── Joint sliders (live-following + target setting) ──────────────────
 let JOINTS = [];
 let JOINT_GROUP = "FL";

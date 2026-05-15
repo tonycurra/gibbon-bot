@@ -262,16 +262,31 @@ def get_status():
 
 
 # ───── Params editor (hot-reloaded per-episode by trainer) ─────
+# (lo, hi, sane_default) — tight ranges that produce sensible motion.
+# Maxing any of these gives garbage (jerky motors, exploding rewards).
 _PARAM_KEYS = {
-    "MOTOR_SPEED_FRAC": (0.05, 1.5),
-    "MOTOR_ACCEL_RATIO": (0.5, 5.0),
-    "ACTION_SMOOTH_ALPHA": (0.0, 1.0),
-    "W_UPRIGHT": (0.0, 50.0),
-    "W_HEIGHT": (0.0, 50.0),
-    "W_PROGRESS": (0.0, 500.0),
-    "W_SMOOTH": (0.0, 5.0),
-    "FLIP_PENALTY": (0.0, 500.0),
+    "MOTOR_SPEED_FRAC":    (0.15, 0.80, 0.40),
+    "MOTOR_ACCEL_RATIO":   (0.8,  3.0,  1.5),
+    "ACTION_SMOOTH_ALPHA": (0.05, 0.50, 0.15),  # lower = smoother (EMA pole)
+    "W_UPRIGHT":           (0.0,  10.0, 3.0),
+    "W_HEIGHT":            (0.0,  5.0,  0.5),
+    "W_PROGRESS":          (10.0, 200.0, 80.0),
+    "W_SMOOTH":            (0.0,  2.0,  0.30),
+    "FLIP_PENALTY":        (0.0,  150.0, 60.0),
 }
+
+
+@app.post("/api/params/reset")
+def params_reset(task: str = "walk"):
+    """Reset every tuning slider to its known-good default."""
+    out = {}
+    for key, (lo, hi, default) in _PARAM_KEYS.items():
+        try:
+            params_set(task=task, key=key, value=default)
+            out[key] = default
+        except Exception as e:
+            out[key] = f"error: {e}"
+    return {"ok": True, "applied": out}
 
 
 def _params_path(task: str) -> Path:
@@ -289,14 +304,16 @@ def params_get(task: str = "walk"):
         m = re.search(rf"^{key}\s*=\s*([0-9.+\-eE]+)", src, re.MULTILINE)
         if m:
             out[key] = float(m.group(1))
-    return {"task": task, "params": out, "bounds": _PARAM_KEYS}
+    # Pass (lo, hi) pairs to the UI; default lives server-side via /api/params/reset.
+    bounds = {k: (v[0], v[1]) for k, v in _PARAM_KEYS.items()}
+    return {"task": task, "params": out, "bounds": bounds}
 
 
 @app.post("/api/params/set")
 def params_set(task: str = "walk", key: str = "", value: float = 0.0):
     if key not in _PARAM_KEYS:
         raise HTTPException(status_code=400, detail=f"Key '{key}' not editable. Allowed: {list(_PARAM_KEYS)}")
-    lo, hi = _PARAM_KEYS[key]
+    lo, hi, _default = _PARAM_KEYS[key]
     if not (lo <= value <= hi):
         raise HTTPException(status_code=400, detail=f"{key}={value} out of bounds [{lo}, {hi}]")
     path = _params_path(task)

@@ -5,10 +5,13 @@ MOTOR_MAX_SPEED = (
     0.10  # legacy — unused; per-joint limits derived from data/motors.md at env load
 )
 MOTOR_MAX_ACCEL = 0.025  # legacy — unused
-# Slowed for visibility (was 0.8). Raise via dashboard slider.
-MOTOR_SPEED_FRAC = 0.4
-MOTOR_ACCEL_RATIO = 1.5  # gentler acceleration (was 2.0) — smoother visible motion.
-ACTION_SMOOTH_ALPHA = 0.20  # stronger lowpass — smoother movement, less shake (was 0.10).
+# Smooth-motor defaults. Slower + gentler + heavier EMA = visible, not jerky.
+# ACTION_SMOOTH_ALPHA is the EMA pole on policy output — LOWER = smoother.
+# Past experiments converged on these values; anything higher than ~0.6
+# alpha or 5.0 accel makes the limbs snap.
+MOTOR_SPEED_FRAC = 0.40
+MOTOR_ACCEL_RATIO = 0.5
+ACTION_SMOOTH_ALPHA = 0.15
 
 # Central Pattern Generator baseline — built-in trot rhythm added to policy
 # output before motor mapping. Lets policy learn corrections to a working gait
@@ -22,10 +25,10 @@ MOTOR_KP = 8.0
 # ─── Goal: walk toward tree without dragging torso ───────────────────────────
 TARGET_Z = 0.30  # desired torso height while walking
 TARGET_TOL = 0.10  # Gaussian sigma around target_z
-W_HEIGHT = 0.5  # cut hard — standing pays minimal. Was anchoring policy to "do nothing".
-W_UPRIGHT = 3.0  # bonus when w > 0
+W_HEIGHT = 0.5      # standing pays minimal — don't anchor to "do nothing"
+W_UPRIGHT = 3.0     # mild upright bonus
 
-W_PROGRESS = 80.0  # main signal: reward each meter closer per step
+W_PROGRESS = 80.0   # main signal: meters closer to tree per step
 W_FWD_VEL = 25.0  # 3x bumped — direct reward for moving toward tree dominates standing
 W_PROXIMITY_TREE = 1.0  # smooth bonus near goal
 W_HEADING = (
@@ -40,10 +43,10 @@ W_GROUND = 25.0  # quadratic penalty for dipping below
 
 # ─── Survival ────────────────────────────────────────────────────────────────
 W_ALIVE = 0.2
-FLIP_PENALTY = 60.0  # bumped — stability matters now that gait baseline exists
+FLIP_PENALTY = 60.0  # discourages flips without crushing exploration
 
 # ─── Smoothness ──────────────────────────────────────────────────────────────
-W_SMOOTH = 0.30  # penalize jerky commands — encourages stable gait
+W_SMOOTH = 0.30  # mild jerk penalty — encourages stable gait
 W_JVEL = 0.05  # mild joint thrashing penalty (0.15 was crushing exploration)
 W_SYMMETRY = 0.0  # off until policy walks. Then re-enable for polish.
 W_ENERGY = 0.02  # dialed back from 0.10 — enough to prefer cheaper actions without preventing exploration
