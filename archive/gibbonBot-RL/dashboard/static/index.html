@@ -318,46 +318,23 @@ select:focus, input:focus { outline: none; border-color: var(--accent); }
 <div class="col">
 
   <div class="card">
-    <h2>Training</h2>
+    <h2>Train</h2>
     <div class="row">
-      <label class="field">Task
-        <select id="task-select" title="walk = main demo target. stand = sanity check.">
-          <option value="walk">walk</option>
-          <option value="stand">stand (sanity)</option>
-        </select>
+      <label class="field">Envs <span class="hint">parallel</span>
+        <input id="envs-input" type="number" min="1" max="4096" step="1" value="2048" title="parallel envs on GPU; higher = faster learning"/>
       </label>
-      <label class="field">Envs
-        <input id="envs-input" type="number" min="1" max="4096" step="1" value="1" title="1 = real-time viewing; raise for faster learning"/>
-      </label>
-      <label class="field">Steps
-        <input id="steps-input" type="number" min="0" step="10000" placeholder="∞ (auto-stop on goal)" title="leave empty for infinite — training auto-stops at 90% success or when you hit Stop"/>
-      </label>
-      <label class="field" style="flex:1;min-width:140px;">Scene
-        <select id="scene-select" title="switch model XML (stop training first)"></select>
+      <label class="field">Trial s
+        <input id="trial-seconds-input" type="number" min="2" max="120" step="1" value="20" title="seconds per playback episode"/>
       </label>
     </div>
     <div class="row" style="margin-top:10px;">
       <button class="btn primary" onclick="startTraining()">Start</button>
       <button class="btn" onclick="stopTraining()">Stop</button>
-      <button class="btn" onclick="restartTraining()">Restart</button>
-      <button class="btn ghost" onclick="refreshStatus()" title="refresh">↻</button>
+      <button class="btn ghost" onclick="runTrial()" title="replay one episode of the current best policy">Replay</button>
     </div>
-    <div class="row" style="margin-top:10px;">
-      <label class="field">Trial s
-        <input id="trial-seconds-input" type="number" min="2" max="120" step="1" value="20" title="how long each trial episode runs before forced reset"/>
-      </label>
-      <button class="btn" onclick="runTrial()" title="play one real-time episode of the latest policy">Run Trial</button>
-      <button class="btn ghost" onclick="stopTrial()">Stop Trial</button>
-    </div>
-    <div class="divider"></div>
-    <div class="status">
-      <div class="k">Status</div><div class="v off" id="status-value">—</div>
-      <div class="k">PID</div><div class="v" id="pid-value">—</div>
-      <div class="k">Active task</div><div class="v" id="active-task">—</div>
-      <div class="k">Active envs</div><div class="v" id="active-envs">—</div>
-    </div>
+    <input type="hidden" id="task-select" value="walk"/>
+    <input type="hidden" id="steps-input" value=""/>
   </div>
-
 
 </div>
 
@@ -385,20 +362,10 @@ select:focus, input:focus { outline: none; border-color: var(--accent); }
     </div>
   </div>
 
-  <div class="card">
-    <h2>Tasks <span class="hint">progress per skill</span></h2>
-    <div id="tasks-overview">—</div>
+  <div class="two-up">
+    <div class="card"><h2>Metrics</h2><pre id="metrics">—</pre></div>
+    <div class="card"><h2>Logs</h2><div id="logs">—</div></div>
   </div>
-
-  <div class="card">
-    <h2>System <span class="hint">live</span></h2>
-    <div id="sys-overview" class="sys-overview">—</div>
-    <div class="divider"></div>
-    <div id="sys-procs" class="sys-procs"><span class="loading">no processes</span></div>
-  </div>
-
-  <div class="card"><h2>Metrics</h2><pre id="metrics">—</pre></div>
-  <div class="card"><h2>Logs</h2><div id="logs">—</div></div>
 
 </div>
 
@@ -780,26 +747,15 @@ async function selectScene() {
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────
-setInterval(refreshFrame, 3000);    // stream is persistent; just probe for dead connections
+setInterval(refreshFrame, 3000);     // probe for dead MJPEG connections
 setInterval(refreshMetrics, 1000);
 setInterval(refreshLogs, 2000);
-setInterval(refreshStatus, 3000);
-setInterval(refreshSystem, 2000);
-// setInterval(refreshJoints, 250);  // joint card removed from UI
-setInterval(refreshViewerInfo, 1000);
 setInterval(refreshWhatsHappening, 1000);
-setInterval(refreshTasks, 5000);
 document.addEventListener("DOMContentLoaded", () => {
-    refreshStatus();
-    refreshSystem();
-    loadScenes();
-    refreshViewerInfo();
     refreshWhatsHappening();
-    refreshTasks();
-    loadViews();
     refreshMetrics();
     refreshLogs();
-    document.getElementById("scene-select").addEventListener("change", selectScene);
+    loadViews();
 });
 </script>
 </body>

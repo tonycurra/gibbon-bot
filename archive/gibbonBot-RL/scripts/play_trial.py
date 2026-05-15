@@ -33,15 +33,31 @@ PHYSICS_STEPS_PER_ACTION = 16
 
 
 def latest_checkpoint(task: str) -> pathlib.Path | None:
-    """Newest .npz under runs/ape_<task>_mjx/ (keepers or rolling)."""
+    """Pick the BEST checkpoint we have.
+
+    Priority:
+      1. Keepers/*.npz whose filename encodes the highest success rate
+         (tie-broken by lowest min-distance to tree).
+      2. Newest rolling mjx_*.npz.
+    """
     runs = ROOT / "runs" / f"ape_{task}_mjx"
     if not runs.exists():
         return None
-    candidates = list(runs.glob("mjx_*.npz")) + list((runs / "keepers").glob("*.npz")
-        if (runs / "keepers").exists() else [])
-    if not candidates:
-        return None
-    return max(candidates, key=lambda p: p.stat().st_mtime)
+    keepers = list((runs / "keepers").glob("*.npz")) if (runs / "keepers").exists() else []
+    if keepers:
+        # Filename pattern: auto_min_d0.07_succ1.00_step4416.npz
+        import re as _re
+        def score(p):
+            md = _re.search(r"min_d([\d.]+)", p.name)
+            sc = _re.search(r"succ([\d.]+)", p.name)
+            succ = float(sc.group(1)) if sc else 0.0
+            mind = float(md.group(1)) if md else 99.0
+            return (succ, -mind)  # higher = better
+        return max(keepers, key=score)
+    rolling = list(runs.glob("mjx_*.npz"))
+    if rolling:
+        return max(rolling, key=lambda p: p.stat().st_mtime)
+    return None
 
 
 def build_predict(npz_path: pathlib.Path):
