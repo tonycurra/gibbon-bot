@@ -5,120 +5,228 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>GibbonBot Dashboard</title>
 <style>
+:root {
+    --bg: #1a1a2e;
+    --panel: #16213e;
+    --border: #0f3460;
+    --text: #eaeaea;
+    --muted: #888;
+    --accent: #e94560;
+    --ok: #28a745;
+    --warn: #ffc107;
+    --gap: clamp(8px, 1.2vw, 20px);
+    --pad: clamp(10px, 1.4vw, 20px);
+    --radius: 10px;
+}
 * { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
 body {
     font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;
-    background: #1a1a2e;
-    color: #eaeaea;
+    background: var(--bg);
+    color: var(--text);
     min-height: 100vh;
+    font-size: clamp(13px, 0.95vw, 15px);
+    line-height: 1.4;
 }
-.container { max-width: 1400px; margin: 0 auto; padding: 20px; }
-header { margin-bottom: 30px; }
-h1 { font-size: 2em; color: #eaeaea; }
-.subtitle { color: #888; margin-top: 5px; }
-.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-.full-width { grid-column: 1 / -1; }
+.container {
+    width: 100%;
+    max-width: 1800px;
+    margin: 0 auto;
+    padding: var(--pad);
+}
+header {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: var(--gap);
+}
+h1 { font-size: clamp(1.4em, 2.4vw, 2em); color: var(--text); letter-spacing: 0.05em; }
+.subtitle { color: var(--muted); font-size: 0.85em; }
+
+/* Two-column app layout: viewer dominant on the left, controls stack on right.
+   Auto-collapses to single column when there's no horizontal room. */
+.app {
+    display: grid;
+    gap: var(--gap);
+    grid-template-columns: minmax(0, 1fr);
+}
+@media (min-width: 1000px) {
+    .app { grid-template-columns: minmax(0, 2.1fr) minmax(320px, 1fr); }
+}
+@media (min-width: 1500px) {
+    .app { grid-template-columns: minmax(0, 2.4fr) minmax(360px, 1fr); }
+}
+
+.col { display: flex; flex-direction: column; gap: var(--gap); min-width: 0; }
+
 .card {
-    background: #16213e;
-    border-radius: 12px;
-    padding: 20px;
-    border: 1px solid #0f3460;
-    margin-bottom: 20px;
+    background: var(--panel);
+    border-radius: var(--radius);
+    padding: var(--pad);
+    border: 1px solid var(--border);
+    min-width: 0;
 }
-.card h2 { color: #0f3460; margin-bottom: 15px; font-size: 1.2em; }
-.controls { display: flex; gap: 10px; flex-wrap: wrap; }
+.card h2 {
+    color: var(--text);
+    margin-bottom: 12px;
+    font-size: 1em;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 8px;
+}
+.card h2 .hint { color: var(--muted); font-weight: 400; font-size: 0.75em; text-transform: none; letter-spacing: 0; margin-left: 6px; }
+
+/* Two-up grid that collapses on small panes */
+.two-up { display: grid; gap: var(--gap); grid-template-columns: 1fr; }
+@media (min-width: 700px) { .two-up { grid-template-columns: 1fr 1fr; } }
+
+.controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.controls label { display: inline-flex; align-items: center; gap: 6px; font-size: 0.9em; color: var(--muted); }
+.controls select, .controls input[type=number], .controls input[type=text] {
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-size: 0.9em;
+    min-width: 0;
+}
+.controls input[type=number] { width: 90px; }
+
 .btn {
-    padding: 10px 20px;
-    background: #0f3460;
-    color: #eaeaea;
+    padding: 8px 14px;
+    background: var(--border);
+    color: var(--text);
     border: none;
-    border-radius: 8px;
+    border-radius: 6px;
     cursor: pointer;
-    font-size: 14px;
+    font-size: 0.9em;
+    transition: filter 0.1s;
 }
-.btn:hover { background: #1a1a2e; }
-.btn.primary { background: #e94560; }
-.btn.warning { background: #ffc107; color: #000; }
-#viewer-container { background: #000; border-radius: 8px; overflow: hidden; aspect-ratio: 4/3; }
-#viewer-container img { width: 100%; height: 100%; object-fit: contain; background: #111; }
-.viewer-controls { display: flex; gap: 10px; margin-top: 10px; justify-content: center; }
+.btn:hover { filter: brightness(1.2); }
+.btn.primary { background: var(--accent); }
+.btn.warning { background: var(--warn); color: #000; }
+
+/* Viewer — fills its column, capped so it never pushes everything else off-screen */
+#viewer-container {
+    background: #000;
+    border-radius: 8px;
+    overflow: hidden;
+    width: 100%;
+    aspect-ratio: 4/3;
+    max-height: 70vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+#viewer-container img { width: 100%; height: 100%; object-fit: contain; }
+.viewer-controls { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+
+/* Mono blocks */
 #metrics, #logs {
-    background: #000; padding: 15px; border-radius: 8px; font-family: Courier New, monospace;
-    font-size: 12px; max-height: 400px; overflow-y: auto; white-space: pre-wrap;
+    background: #000;
+    padding: 12px;
+    border-radius: 8px;
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size: 0.8em;
+    max-height: 38vh;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
 }
-#logs { max-height: 300px; }
-.status-item { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #0f3460; }
-.status-value { color: #e94560; }
-.memory-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
-.memory-item { background: #0f3460; padding: 10px; border-radius: 6px; font-size: 12px; }
-.loading { color: #888; font-style: italic; }
-.error { color: #e94560; }
-@media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
+
+.status-item { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 0.9em; }
+.status-item:last-child { border-bottom: 0; }
+.status-value { color: var(--accent); font-variant-numeric: tabular-nums; }
+
+.memory-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; }
+.memory-item { background: var(--border); padding: 8px; border-radius: 6px; font-size: 0.8em; }
+
+.loading { color: var(--muted); font-style: italic; }
+.error { color: var(--accent); }
+
+/* Slider rows */
+.param-row { margin: 6px 0; }
+.param-row label { display: flex; justify-content: space-between; font-size: 0.8em; color: var(--muted); }
+.param-row .val { color: var(--accent); font-variant-numeric: tabular-nums; }
+.param-row input[type=range] { width: 100%; accent-color: var(--accent); }
 </style>
 </head>
 <body>
 <div class="container">
 <header>
 <h1>LIANA</h1>
-<p class="subtitle">Live Interactive Ape Neural Architecture</p>
+<span class="subtitle">Live Interactive Ape Neural Architecture</span>
 </header>
-<div class="grid">
-<div class="card">
-<h2>Training Controls</h2>
-<div class="controls" style="margin-bottom:10px;">
-<label>Task:
-<select id="task-select" style="padding:6px;border-radius:6px;">
-<option value="walk">walk</option>
-<option value="stand">stand</option>
-<option value="walk_forward">walk_forward</option>
-<option value="turn_left">turn_left</option>
-<option value="turn_right">turn_right</option>
-</select></label>
-<label style="margin-left:10px;">Envs:
-<input id="envs-input" type="number" min="16" max="4096" step="16" placeholder="auto" style="padding:6px;border-radius:6px;width:90px;"/>
-</label>
-</div>
-<div class="controls">
-<button class="btn primary" onclick="startTraining()">Start</button>
-<button class="btn warning" onclick="stopTraining()">Stop</button>
-<button class="btn" onclick="restartTraining()">Restart (apply task/envs)</button>
-<button class="btn" onclick="refreshStatus()">Refresh</button>
-</div>
-<div class="status-item"><span>Status:</span><span class="status-value" id="status-value">Unknown</span></div>
-<div class="status-item"><span>PID:</span><span class="status-value" id="pid-value">-</span></div>
-<div class="status-item"><span>Active task:</span><span class="status-value" id="active-task">-</span></div>
-<div class="status-item"><span>Active envs:</span><span class="status-value" id="active-envs">-</span></div>
-</div>
-<div class="card">
-<h2>Live Tuning <span style="font-weight:normal;color:#888;font-size:0.7em;">(hot-applied next episode)</span></h2>
-<div id="param-sliders"></div>
-</div>
-<div class="card">
-<h2>Brain State</h2>
-<div class="controls">
-<button class="btn" onclick="loadBrainState()">Load State</button>
-<button class="btn" onclick="loadMemory()">Load Memory</button>
-<button class="btn" onclick="listModules()">List Modules</button>
-</div>
-<div id="modules-list"></div>
-</div>
-</div>
-<div class="card full-width">
-<h2>MuJoCo Viewer</h2>
-<div id="viewer-container"><img id="frame" src="/api/viewer/frame"/></div>
-<div class="viewer-controls">
-<button class="btn" onclick="refreshFrame()">Refresh Frame</button>
-<button class="btn" onclick="getViewerState()">Get State</button>
-</div>
-<div id="viewer-state" style="margin-top:10px;font-size:12px;"></div>
-</div>
-<div class="grid">
-<div class="card"><h2>Training Metrics</h2><pre id="metrics">Loading...</pre></div>
-<div class="card"><h2>Training Logs</h2><div id="logs">Loading...</div></div>
-</div>
-<div class="grid">
-<div class="card"><h2>Recent Memories</h2><div id="memory-container" class="memory-grid"><span class="loading">Loading...</span></div></div>
-<div class="card"><h2>System Info</h2><div id="system-info"></div></div>
+
+<div class="app">
+  <!-- Left column: viewer + telemetry -->
+  <div class="col">
+    <div class="card">
+      <h2>Viewer <span class="hint">env-0 qpos, refreshed each PPO batch</span></h2>
+      <div id="viewer-container"><img id="frame" src="/api/viewer/frame" alt="robot"/></div>
+      <div class="viewer-controls">
+        <button class="btn" onclick="refreshFrame()">Refresh Frame</button>
+        <button class="btn" onclick="getViewerState()">Get State</button>
+      </div>
+      <div id="viewer-state" style="margin-top:10px;font-size:0.8em;color:var(--muted);"></div>
+    </div>
+
+    <div class="two-up">
+      <div class="card"><h2>Metrics</h2><pre id="metrics">Loading...</pre></div>
+      <div class="card"><h2>Logs</h2><div id="logs">Loading...</div></div>
+    </div>
+  </div>
+
+  <!-- Right column: controls + brain -->
+  <div class="col">
+    <div class="card">
+      <h2>Training</h2>
+      <div class="controls" style="margin-bottom:10px;">
+        <label>Task
+          <select id="task-select">
+            <option value="walk">walk</option>
+            <option value="stand">stand</option>
+            <option value="walk_forward">walk_forward</option>
+            <option value="turn_left">turn_left</option>
+            <option value="turn_right">turn_right</option>
+          </select>
+        </label>
+        <label>Envs
+          <input id="envs-input" type="number" min="16" max="4096" step="16" placeholder="auto"/>
+        </label>
+      </div>
+      <div class="controls" style="margin-bottom:12px;">
+        <button class="btn primary" onclick="startTraining()">Start</button>
+        <button class="btn warning" onclick="stopTraining()">Stop</button>
+        <button class="btn" onclick="restartTraining()">Restart</button>
+        <button class="btn" onclick="refreshStatus()">↻</button>
+      </div>
+      <div class="status-item"><span>Status</span><span class="status-value" id="status-value">Unknown</span></div>
+      <div class="status-item"><span>PID</span><span class="status-value" id="pid-value">-</span></div>
+      <div class="status-item"><span>Active task</span><span class="status-value" id="active-task">-</span></div>
+      <div class="status-item"><span>Active envs</span><span class="status-value" id="active-envs">-</span></div>
+    </div>
+
+    <div class="card">
+      <h2>Live Tuning <span class="hint">applied next episode</span></h2>
+      <div id="param-sliders"></div>
+    </div>
+
+    <div class="card">
+      <h2>Brain</h2>
+      <div class="controls">
+        <button class="btn" onclick="loadBrainState()">State</button>
+        <button class="btn" onclick="loadMemory()">Memory</button>
+        <button class="btn" onclick="listModules()">Modules</button>
+      </div>
+      <div id="modules-list" style="margin-top:8px;font-size:0.85em;color:var(--muted);"></div>
+      <div id="memory-container" class="memory-grid" style="margin-top:10px;"><span class="loading">Memory not loaded</span></div>
+    </div>
+  </div>
 </div>
 </div>
 <script>
@@ -185,9 +293,9 @@ async function loadParams() {
         for (const [key, val] of Object.entries(data.params)) {
             const [lo, hi] = data.bounds[key];
             const step = (hi - lo) / 200;
-            html += "<div style=\"margin:8px 0;\">";
-            html += "<label style=\"display:flex;justify-content:space-between;font-size:12px;\"><span>" + key + "</span><span id=\"v-" + key + "\" style=\"color:#e94560;\">" + val.toFixed(3) + "</span></label>";
-            html += "<input type=\"range\" min=\"" + lo + "\" max=\"" + hi + "\" step=\"" + step + "\" value=\"" + val + "\" style=\"width:100%;\" oninput=\"document.getElementById('v-" + key + "').textContent=parseFloat(this.value).toFixed(3)\" onchange=\"setParam('" + key + "', this.value)\"/>";
+            html += "<div class=\"param-row\">";
+            html += "<label><span>" + key + "</span><span class=\"val\" id=\"v-" + key + "\">" + val.toFixed(3) + "</span></label>";
+            html += "<input type=\"range\" min=\"" + lo + "\" max=\"" + hi + "\" step=\"" + step + "\" value=\"" + val + "\" oninput=\"document.getElementById('v-" + key + "').textContent=parseFloat(this.value).toFixed(3)\" onchange=\"setParam('" + key + "', this.value)\"/>";
             html += "</div>";
         }
         document.getElementById("param-sliders").innerHTML = html;
