@@ -123,8 +123,8 @@ case "$cmd" in
         ts="$(date '+%Y-%m-%d %H:%M')"
         {
             printf '\n## %s\n%s\n' "$ts" "$msg"
-        } >> "$ROOT/LIANA.md"
-        echo "[liana] logged → LIANA.md"
+        } >> "$ROOT/LIANA_LOG.md"
+        echo "[liana] logged → LIANA_LOG.md"
         ;;
 
     *)
