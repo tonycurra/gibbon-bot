@@ -539,16 +539,39 @@ _trial_proc: subprocess.Popen | None = None
 
 
 def _kill_stray_trials():
-    """Reap any play_trial.py processes from previous sessions BEFORE
-    spawning a new one. If two of these run at once they both write to
-    runs/.trial_qpos.npy and the viewer flips between robot states (the
-    'many robots, fast' bug)."""
+    """Reap any play_trial.py / demo_walk.py processes from previous
+    sessions BEFORE spawning a new one. If two of these run at once they
+    both write to runs/.trial_qpos.npy and the viewer flips between
+    robot states (the 'many robots, fast' bug)."""
     try:
         subprocess.run(["pkill", "-f", "scripts/play_trial.py"],
+                       check=False, timeout=3)
+        subprocess.run(["pkill", "-f", "scripts/demo_walk.py"],
                        check=False, timeout=3)
         time.sleep(0.3)
     except Exception:
         pass
+
+
+@app.post("/api/demo/walk")
+def demo_walk(freq: float = 1.2, amp: float = 0.40, seconds: float = 20.0, loop: bool = True):
+    """Run the scripted sinusoidal walk demo — NO policy, just a hand-coded
+    gait. Visual reference for 'what walking SHOULD look like'."""
+    global _trial_proc
+    _kill_stray_trials()
+    max_steps = max(30, int(seconds / 0.032))
+    cmd = [
+        str(REPO_ROOT / ".venv" / "bin" / "python"),
+        str(REPO_ROOT / "scripts" / "demo_walk.py"),
+        "--max-steps", str(max_steps),
+        "--freq", str(freq),
+        "--amp", str(amp),
+    ]
+    if loop:
+        cmd.append("--loop")
+    log = open(REPO_ROOT / "runs" / "demo.log", "w")
+    _trial_proc = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT, cwd=str(REPO_ROOT))
+    return {"ok": True, "pid": _trial_proc.pid, "freq": freq, "amp": amp, "seconds": seconds}
 
 
 def _spawn_trial(task: str, max_steps: int, realtime: float, loop: bool,

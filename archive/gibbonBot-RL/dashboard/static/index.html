@@ -349,7 +349,8 @@ select:focus, input:focus { outline: none; border-color: var(--accent); }
     <div class="row" style="margin-top:10px;">
       <button class="btn primary" onclick="startTraining()">Start</button>
       <button class="btn" onclick="stopTraining()">Stop</button>
-      <button class="btn ghost" onclick="runTrial()" title="replay one episode of the best policy so far">Replay</button>
+      <button class="btn ghost" onclick="runTrial()" title="replay the best policy so far">Replay</button>
+      <button class="btn ghost" onclick="runDemoWalk()" title="hand-coded sine-wave gait — what 'good' looks like, no RL">Demo walk</button>
     </div>
     <input type="hidden" id="steps-input" value=""/>
   </div>
@@ -668,6 +669,15 @@ async function runTrial() {
 }
 async function stopTrial() {
     try { await fetch(API + "/trial/stop", {method:"POST"}); } catch(e) {}
+}
+
+async function runDemoWalk() {
+    const secs = document.getElementById("trial-seconds-input").value || 20;
+    try {
+        const r = await fetch(API + `/demo/walk?seconds=${secs}&freq=1.2&amp=0.40`, {method:"POST"});
+        const d = await r.json();
+        if (!r.ok) alert("Demo failed: " + (d.detail || r.statusText));
+    } catch(e) { alert(e.message); }
 }
 
 async function loadSimMode() {
