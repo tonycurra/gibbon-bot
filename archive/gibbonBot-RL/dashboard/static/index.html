@@ -363,14 +363,6 @@ select:focus, input:focus { outline: none; border-color: var(--accent); }
     <div class="row" style="margin-top:10px;">
       <button class="btn primary" onclick="trainToggle()" id="train-toggle-btn">▶ Train</button>
     </div>
-    <details style="margin-top:10px;">
-      <summary style="cursor:pointer; color:var(--muted); font-size:0.78em; letter-spacing:0.08em; text-transform:uppercase;">advanced</summary>
-      <div class="row" style="margin-top:10px;">
-        <button class="btn ghost" onclick="runTrial()" title="replay the best policy so far">Replay</button>
-        <button class="btn ghost" onclick="stopTrial()" title="stop the trial loop">Stop trial</button>
-        <button class="btn ghost" onclick="runDemoWalk()" title="hand-coded sine-wave gait">Demo walk</button>
-      </div>
-    </details>
     <input type="hidden" id="steps-input" value=""/>
   </div>
 
@@ -378,6 +370,20 @@ select:focus, input:focus { outline: none; border-color: var(--accent); }
   <div class="card">
     <h2>Env Params <span class="hint">live · envs/env.py</span></h2>
     <div id="env-params"><span class="loading">Loading…</span></div>
+  </div>
+
+  <div class="card">
+    <h2>Tasks <span class="hint">best progress per task</span></h2>
+    <div id="tasks-progress-all"><span class="loading">Loading…</span></div>
+  </div>
+
+  <div class="card">
+    <h2>Notes <span class="hint">per task · stored in runs/notes.sqlite</span></h2>
+    <div class="row" style="margin-bottom:8px;">
+      <input id="note-text-input" type="text" placeholder="observation, idea, or todo for the current task" style="flex:1; padding:6px 8px; background:#000; color:var(--text); border:1px solid var(--line-2); border-radius:4px;"/>
+      <button class="btn" onclick="addNote()">Add</button>
+    </div>
+    <div id="notes-list"><span class="loading">no notes yet</span></div>
   </div>
 
   <div class="card">
@@ -509,8 +515,19 @@ async function refreshTrainState() {
 }
 
 async function trainToggle() {
+    const wanted = document.getElementById("task-select").value;
     if (TRAINING_RUNNING) {
-        await stopTraining();
+        // If user picked a different task while training: switch (restart). Same task: just stop.
+        try {
+            const r = await fetch(API + "/train/status");
+            const d = await r.json();
+            if (d.task && d.task !== wanted) {
+                if (!confirm(`Currently training '${d.task}'. Switch to '${wanted}' (stops + starts a new run)?`)) return;
+                await fetch(API + "/train/restart?" + _qs(), {method:"POST"});
+            } else {
+                await stopTraining();
+            }
+        } catch(e) { alert(e.message); }
     } else {
         await startTraining();
     }
@@ -841,6 +858,64 @@ async function refreshEnvParams() {
     } catch(e) {}
 }
 
+// ── Per-task progress overview ────────────────────────────────────────
+async function refreshTasksProgressAll() {
+    try {
+        const r = await fetch(API + "/tasks/progress_all");
+        const d = await r.json();
+        const el = document.getElementById("tasks-progress-all");
+        const tasks = d.tasks || [];
+        if (!tasks.length) { el.innerHTML = "<span class=\"loading\">no runs yet</span>"; return; }
+        let html = "";
+        for (const t of tasks) {
+            const best = t.best === null || t.best === undefined ? null : Math.round(t.best * 100);
+            const latest = t.latest === null || t.latest === undefined ? null : Math.round(t.latest * 100);
+            html += `<div style="margin:8px 0;">
+                <div style="display:flex; justify-content:space-between; font-size:0.85em; margin-bottom:4px;">
+                  <span style="color:var(--text); font-weight:600;">${t.label}</span>
+                  <span style="color:${best !== null ? 'var(--ok)' : 'var(--muted)'}; font-variant-numeric:tabular-nums;">${best !== null ? best + '%' : '—'}</span>
+                </div>
+                <div class="progress-bar" style="height:6px;"><div class="progress-fill" style="width:${best || 0}%;"></div></div>
+                <div class="state-det" style="margin-top:2px;">${t.criterion}${latest !== null ? ' · last ' + latest + '%' : ''}</div>
+            </div>`;
+        }
+        el.innerHTML = html;
+    } catch(e) {}
+}
+
+// ── Notes (SQLite) ────────────────────────────────────────────────────
+async function refreshNotes() {
+    try {
+        const task = document.getElementById("task-select").value || "walk";
+        const r = await fetch(API + "/notes?task=" + encodeURIComponent(task));
+        const d = await r.json();
+        const notes = d.notes || [];
+        const el = document.getElementById("notes-list");
+        if (!notes.length) { el.innerHTML = "<span class=\"loading\">no notes for this task</span>"; return; }
+        el.innerHTML = notes.map(n => `<div class="task-row">
+            <span class="tprog" style="font-size:0.75em;">${n.ts_iso}</span>
+            <span style="color:var(--text); font-size:0.85em;">${n.text}</span>
+            <button class="btn ghost" onclick="deleteNote(${n.id})" style="color:var(--accent);">×</button>
+        </div>`).join("");
+    } catch(e) {}
+}
+async function addNote() {
+    const task = document.getElementById("task-select").value;
+    const txt = document.getElementById("note-text-input").value.trim();
+    if (!txt) return;
+    try {
+        await fetch(API + `/notes?task=${encodeURIComponent(task)}&text=${encodeURIComponent(txt)}`, {method:"POST"});
+        document.getElementById("note-text-input").value = "";
+        refreshNotes();
+    } catch(e) { alert(e.message); }
+}
+async function deleteNote(id) {
+    try {
+        await fetch(API + "/notes/delete?id=" + id, {method:"POST"});
+        refreshNotes();
+    } catch(e) {}
+}
+
 // ── Library (named saved policies) ────────────────────────────────────
 async function refreshLibrary() {
     try {
@@ -1012,6 +1087,8 @@ setInterval(refreshLogs, 2000);
 setInterval(refreshWhatsHappening, 1000);
 setInterval(refreshProgress, 2000);
 setInterval(refreshTrainState, 2000);
+setInterval(refreshTasksProgressAll, 5000);
+setInterval(refreshNotes, 5000);
 setInterval(refreshRuns, 5000);
 setInterval(refreshLibrary, 10000);
 setInterval(refreshEnvParams, 5000);
@@ -1026,7 +1103,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     loadScenes();
     refreshRuns();
     refreshLibrary();
-    document.getElementById("task-select").addEventListener("change", () => { refreshProgress(); applyTaskDefaults(); });
+    refreshTasksProgressAll();
+    refreshNotes();
+    document.getElementById("task-select").addEventListener("change", () => { refreshProgress(); applyTaskDefaults(); refreshNotes(); });
     document.getElementById("scene-select").addEventListener("change", selectScene);
 });
 </script>

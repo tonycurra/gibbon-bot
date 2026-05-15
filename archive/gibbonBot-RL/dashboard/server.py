@@ -37,6 +37,7 @@ class _AccessFilter(logging.Filter):
         "/api/runs", "/api/trial/info", "/api/trial/status",
         "/api/library/list", "/api/env/params",
         "/api/task/progress", "/api/tasks/registry",
+        "/api/notes", "/api/tasks/progress_all",
     )
     def filter(self, record):
         msg = record.getMessage()
@@ -392,6 +393,89 @@ def env_params():
 
 
 LIBRARY_DIR = REPO_ROOT / "runs" / "library"
+NOTES_DB = REPO_ROOT / "runs" / "notes.sqlite"
+
+
+def _notes_conn():
+    import sqlite3
+    NOTES_DB.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(NOTES_DB))
+    conn.execute("CREATE TABLE IF NOT EXISTS notes ("
+                 " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                 " task TEXT NOT NULL,"
+                 " text TEXT NOT NULL,"
+                 " ts REAL NOT NULL)")
+    return conn
+
+
+@app.get("/api/notes")
+def notes_list(task: str | None = None, limit: int = 50):
+    """Notes for a task (or all if task omitted), newest first."""
+    conn = _notes_conn()
+    if task:
+        cur = conn.execute("SELECT id, task, text, ts FROM notes WHERE task=? ORDER BY ts DESC LIMIT ?", (task, limit))
+    else:
+        cur = conn.execute("SELECT id, task, text, ts FROM notes ORDER BY ts DESC LIMIT ?", (limit,))
+    rows = [{"id": r[0], "task": r[1], "text": r[2],
+             "ts": r[3], "ts_iso": time.strftime("%Y-%m-%d %H:%M", time.localtime(r[3]))}
+            for r in cur.fetchall()]
+    conn.close()
+    return {"notes": rows}
+
+
+@app.post("/api/notes")
+def notes_add(task: str, text: str):
+    if not text.strip():
+        raise HTTPException(status_code=400, detail="empty note")
+    conn = _notes_conn()
+    conn.execute("INSERT INTO notes(task, text, ts) VALUES(?, ?, ?)", (task, text.strip(), time.time()))
+    conn.commit(); conn.close()
+    return {"ok": True}
+
+
+@app.post("/api/notes/delete")
+def notes_delete(id: int):
+    conn = _notes_conn()
+    conn.execute("DELETE FROM notes WHERE id=?", (id,))
+    conn.commit(); conn.close()
+    return {"ok": True}
+
+
+@app.get("/api/tasks/progress_all")
+def tasks_progress_all():
+    """Best task_progress per task across MLflow runs. One row per
+    task — the headline 'how far have we gotten on stand vs walk' view."""
+    from envs.tasks import list_tasks
+    out = []
+    try:
+        import mlflow
+        mlflow.set_tracking_uri(f"sqlite:///{REPO_ROOT/'mlflow.db'}")
+        client = mlflow.MlflowClient()
+        for t in list_tasks():
+            tid = t["id"]
+            best = None; latest = None
+            exp = client.get_experiment_by_name(f"ape_{tid}_mjx")
+            if exp is not None:
+                runs = client.search_runs(
+                    experiment_ids=[exp.experiment_id],
+                    order_by=["attributes.start_time DESC"],
+                    max_results=10,
+                )
+                for r in runs:
+                    history = client.get_metric_history(r.info.run_id, "task_progress")
+                    if history:
+                        for h in history:
+                            if best is None or h.value > best:
+                                best = h.value
+                        if latest is None:
+                            latest = history[-1].value
+            out.append({
+                "id": tid, "label": t["label"], "criterion": t["criterion"],
+                "best": best, "latest": latest,
+            })
+    except Exception as e:
+        return {"tasks": [], "error": str(e)}
+    return {"tasks": out}
 
 
 @app.get("/api/library/list")

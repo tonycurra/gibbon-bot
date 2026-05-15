@@ -94,7 +94,8 @@ case "$cmd" in
 
         ( sleep 2 && xdg-open "http://localhost:$DASH_PORT/static/index.html" >/dev/null 2>&1 ) &
 
-        "$0" log "started: dashboard only (no trainer)  → http://localhost:$DASH_PORT/static/index.html"
+        # (suppressed dashboard-start spam in LIANA_LOG.md — only real
+        # events get logged now; see ./liana log "..." for manual entries.)
 
         echo "[liana] ─────────────────────────────────────────────────────"
         echo "[liana] services up:"
