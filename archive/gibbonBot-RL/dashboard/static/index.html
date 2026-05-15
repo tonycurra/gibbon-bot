@@ -357,6 +357,11 @@ select:focus, input:focus { outline: none; border-color: var(--accent); }
 
 
   <div class="card">
+    <h2>Env Params <span class="hint">live · envs/env.py</span></h2>
+    <div id="env-params"><span class="loading">Loading…</span></div>
+  </div>
+
+  <div class="card">
     <h2>Library <span class="hint">named saved policies</span></h2>
     <div class="row" style="margin-bottom:8px;">
       <input id="lib-name-input" type="text" placeholder="give the current best a name" style="flex:1; padding:6px 8px; background:#000; color:var(--text); border:1px solid var(--line-2); border-radius:4px;"/>
@@ -709,6 +714,28 @@ async function refreshLogs() {
     } catch(e) {}
 }
 
+// ── Env params (read-only) ────────────────────────────────────────────
+async function refreshEnvParams() {
+    try {
+        const r = await fetch(API + "/env/params");
+        const d = await r.json();
+        let html = "";
+        for (const g of (d.groups || [])) {
+            html += `<div style="margin-top:8px;"><div style="color:var(--muted); font-size:0.7em; letter-spacing:0.1em; text-transform:uppercase; margin-bottom:4px;">${g.group}</div>`;
+            for (const r of g.rows) {
+                const v = typeof r.value === "number" ? r.value.toFixed(r.value < 1 ? 3 : 2) : r.value;
+                html += `<div style="display:flex; justify-content:space-between; font-family:ui-monospace,Menlo,monospace; font-size:0.78em; padding:2px 0;">
+                    <span style="color:var(--muted);">${r.key}</span>
+                    <span style="color:var(--text);">${v}</span>
+                </div>`;
+            }
+            html += "</div>";
+        }
+        html += `<div class="state-det" style="margin-top:10px;">Edit envs/env.py and Restart training to apply.</div>`;
+        document.getElementById("env-params").innerHTML = html;
+    } catch(e) {}
+}
+
 // ── Library (named saved policies) ────────────────────────────────────
 async function refreshLibrary() {
     try {
@@ -880,6 +907,7 @@ setInterval(refreshLogs, 2000);
 setInterval(refreshWhatsHappening, 1000);
 setInterval(refreshRuns, 5000);
 setInterval(refreshLibrary, 10000);
+setInterval(refreshEnvParams, 5000);
 document.addEventListener("DOMContentLoaded", () => {
     refreshWhatsHappening();
     refreshMetrics();

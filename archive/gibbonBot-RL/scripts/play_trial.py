@@ -138,6 +138,18 @@ def main():
     data.qpos[7:7 + ACT_DIM] += rng.normal(0, 0.02, ACT_DIM)
     mujoco.mj_forward(model, data)
 
+    # Pull motor / smoothness knobs from envs/env.py so changes there
+    # actually affect what the user sees in the viewer.
+    try:
+        import envs.env as _e
+        action_alpha = float(getattr(_e, "ACTION_SMOOTH_ALPHA", 1.0))
+        speed_frac = float(getattr(_e, "MOTOR_SPEED_FRAC", 1.0))
+    except Exception:
+        action_alpha = 1.0
+        speed_frac = 1.0
+    print(f"[trial] using ACTION_SMOOTH_ALPHA={action_alpha}, MOTOR_SPEED_FRAC={speed_frac}", flush=True)
+    filt_action = np.zeros(ACT_DIM, dtype=np.float32)
+
     try:
         gid = model.geom("t0_trunk").id
         tree_xy = np.array(model.geom_pos[gid][:2], dtype=np.float32)
@@ -199,9 +211,13 @@ def main():
             else:
                 action = rng.uniform(-1, 1, size=ACT_DIM).astype(np.float32)
 
+            # EMA lowpass on action (matches trainer's contract). LOWER alpha = smoother.
+            filt_action = action_alpha * action + (1.0 - action_alpha) * filt_action
+            # Scale by MOTOR_SPEED_FRAC so the env.py value visibly slows the robot.
+            scaled = speed_frac * filt_action
             lo = model.actuator_ctrlrange[:, 0]
             hi = model.actuator_ctrlrange[:, 1]
-            data.ctrl[:] = lo + 0.5 * (action + 1.0) * (hi - lo)
+            data.ctrl[:] = lo + 0.5 * (scaled + 1.0) * (hi - lo)
 
             for _ in range(PHYSICS_STEPS_PER_ACTION):
                 mujoco.mj_step(model, data)

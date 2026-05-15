@@ -35,7 +35,7 @@ class _AccessFilter(logging.Filter):
         "/api/system/stats", "/api/params/get", "/api/sim/joints",
         "/api/tasks/overview", "/api/whats-happening", "/api/sim/mode",
         "/api/runs", "/api/trial/info", "/api/trial/status",
-        "/api/library/list",
+        "/api/library/list", "/api/env/params",
     )
     def filter(self, record):
         msg = record.getMessage()
@@ -301,6 +301,39 @@ def _params_path(task: str = "walk") -> Path:
     """All tasks share envs/env.py since the refactor; the file holds
     every reward/motor knob as a module-level constant."""
     return REPO_ROOT / "envs" / "env.py"
+
+
+@app.get("/api/env/params")
+def env_params():
+    """Read-only dump of every active constant in envs/env.py, grouped
+    by purpose. Lets the user see exactly what the trainer is using
+    without opening the file."""
+    import importlib
+    import envs.env as e
+    importlib.reload(e)  # pick up edits without restarting the dashboard
+    groups = {
+        "Motor & action": ["MOTOR_SPEED_FRAC", "MOTOR_ACCEL_RATIO",
+                            "ACTION_SMOOTH_ALPHA", "MOTOR_KP"],
+        "Reward · progress to tree": ["W_PROGRESS", "W_FWD_VEL",
+                            "W_PROXIMITY_TREE", "W_HEADING",
+                            "SUCCESS_DIST", "W_SUCCESS"],
+        "Reward · posture": ["TARGET_Z", "TARGET_TOL", "W_HEIGHT", "W_UPRIGHT"],
+        "Reward · penalties": ["GROUND_CLEARANCE", "W_GROUND",
+                            "FLIP_PENALTY", "W_ALIVE", "W_SMOOTH",
+                            "W_JVEL", "W_SYMMETRY", "W_ENERGY"],
+        "PPO": ["LEARNING_RATE", "ENT_COEF", "CLIP_EPS"],
+        "CPG (disabled)": ["W_CPG_PITCH", "W_CPG_ELBOW"],
+    }
+    out = []
+    for gname, keys in groups.items():
+        rows = []
+        for k in keys:
+            if hasattr(e, k):
+                v = getattr(e, k)
+                if isinstance(v, (int, float, str, bool)):
+                    rows.append({"key": k, "value": v})
+        out.append({"group": gname, "rows": rows})
+    return {"groups": out, "source_file": "envs/env.py"}
 
 
 LIBRARY_DIR = REPO_ROOT / "runs" / "library"

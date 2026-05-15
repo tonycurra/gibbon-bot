@@ -19,63 +19,56 @@ _ROOT = pathlib.Path(__file__).parent.parent
 SCENE = _ROOT / "data" / "scene.xml"
 
 # ──────────────────────────────────────────────────────────────────────
-# Inlined params (was envs/params_walk_mjx.py)
+# Active parameters — everything the trainer reads lives here.
+# Edit values, restart training (Stop + Start) for them to take effect.
+# Sections grouped by purpose. See /api/env/params in the dashboard for
+# a read-only live view of these.
 # ──────────────────────────────────────────────────────────────────────
-# ─── Motor & action shaping ──────────────────────────────────────────────────
-MOTOR_MAX_SPEED = (
-    0.10  # legacy — unused; per-joint limits derived from data/motors.md at env load
-)
-MOTOR_MAX_ACCEL = 0.025  # legacy — unused
-# Smooth-motor defaults. Slower + gentler + heavier EMA = visible, not jerky.
-# ACTION_SMOOTH_ALPHA is the EMA pole on policy output — LOWER = smoother.
-# Past experiments converged on these values; anything higher than ~0.6
-# alpha or 5.0 accel makes the limbs snap.
-MOTOR_SPEED_FRAC = 0.4
-MOTOR_ACCEL_RATIO = 1.5
-ACTION_SMOOTH_ALPHA = 0.15
 
-# Central Pattern Generator baseline — built-in trot rhythm added to policy
-# output before motor mapping. Lets policy learn corrections to a working gait
-# instead of inventing gait from scratch. 0.0 disables.
-W_CPG_PITCH = 0.0  # DISABLED - propulsive sweep amplitude
-W_CPG_ELBOW = 0.0  # DISABLED - foot lift during swing
-GAIT_TYPE = "pace"  # Gait pattern: pace, trot, walk, alt_arm_leg, mirror_arm_leg
-FRACTAL_OFFSET = 0.0  # Phase offset (0.0 to 1.0) for additional variation
-MOTOR_KP = 8.0
+# Motor & action shaping (affect TRAINER and TRIAL when restarted) ────────
+MOTOR_SPEED_FRAC    = 0.40   # 0.05–1.0  — fraction of real motor max speed (lower = slower, smoother)
+MOTOR_ACCEL_RATIO   = 1.5    # 0.5–5.0   — how aggressive motors can accelerate (lower = gentler)
+ACTION_SMOOTH_ALPHA = 0.15   # 0.05–1.0  — EMA pole on policy actions (LOWER = smoother lowpass)
+MOTOR_KP            = 8.0    # actuator stiffness (kp). Higher = tracks targets faster.
 
-# ─── Goal: walk toward tree without dragging torso ───────────────────────────
-TARGET_Z = 0.30  # desired torso height while walking
-TARGET_TOL = 0.10  # Gaussian sigma around target_z
-W_HEIGHT = 0.5
-W_UPRIGHT = 3.0
+# Reward: progress toward tree (the main signal) ──────────────────────────
+W_PROGRESS         = 80.0    # reward per metre closer to tree per step (dominant signal)
+W_FWD_VEL          = 25.0    # direct forward-velocity bonus
+W_PROXIMITY_TREE   = 1.0     # smooth bonus when near goal
+W_HEADING          = 8.0     # body forward axis aligned with tree direction
+SUCCESS_DIST       = 0.6     # within this radius (m) of tree → episode wins
+W_SUCCESS          = 200.0   # one-shot reward on success
 
-W_PROGRESS = 80.0
-W_FWD_VEL = 25.0  # 3x bumped — direct reward for moving toward tree dominates standing
-W_PROXIMITY_TREE = 1.0  # smooth bonus near goal
-W_HEADING = (
-    8.0  # body forward axis aligned with tree direction — kills squirm/turn-in-place
-)
-SUCCESS_DIST = 0.6  # within this radius of tree → episode wins
-W_SUCCESS = 200.0  # one-shot reward on success — make it the obvious winning move
+# Reward: posture (height, uprightness) ───────────────────────────────────
+TARGET_Z           = 0.30    # desired torso height (m) while walking
+TARGET_TOL         = 0.10    # Gaussian sigma around target_z
+W_HEIGHT           = 0.5     # weight on height bonus
+W_UPRIGHT          = 3.0     # weight on uprightness bonus (quat_w > 0)
 
-# ─── Ground avoidance ────────────────────────────────────────────────────────
-GROUND_CLEARANCE = 0.18  # torso must stay above this z
-W_GROUND = 25.0  # quadratic penalty for dipping below
+# Reward: penalties (ground touch, flip, jerk, energy) ────────────────────
+GROUND_CLEARANCE   = 0.18    # torso must stay above this z; below = quadratic penalty
+W_GROUND           = 25.0    # ground-dipping penalty weight
+FLIP_PENALTY       = 60.0    # per-step penalty when robot has flipped
+W_ALIVE            = 0.2     # small bonus per step alive
+W_SMOOTH           = 0.30    # penalty on action jerk
+W_JVEL             = 0.05    # mild joint thrashing penalty
+W_SYMMETRY         = 0.0     # left/right symmetry bonus (off until walks)
+W_ENERGY           = 0.02    # weight on action-magnitude penalty
 
-# ─── Survival ────────────────────────────────────────────────────────────────
-W_ALIVE = 0.2
-FLIP_PENALTY = 60.0
+# Central Pattern Generator (disabled — values=0 → no CPG influence) ──────
+W_CPG_PITCH        = 0.0
+W_CPG_ELBOW        = 0.0
 
-# ─── Smoothness ──────────────────────────────────────────────────────────────
-W_SMOOTH = 0.3
-W_JVEL = 0.05  # mild joint thrashing penalty (0.15 was crushing exploration)
-W_SYMMETRY = 0.0  # off until policy walks. Then re-enable for polish.
-W_ENERGY = 0.02  # dialed back from 0.10 — enough to prefer cheaper actions without preventing exploration
+# PPO hyper-parameters ────────────────────────────────────────────────────
+LEARNING_RATE      = 0.00037
+ENT_COEF           = 0.05    # policy entropy bonus (LOWER = commits to best strategy)
+CLIP_EPS           = 0.15    # PPO clipping range
 
-# ─── PPO ─────────────────────────────────────────────────────────────────────
-LEARNING_RATE = 0.00037
-ENT_COEF = 0.05  # low entropy — policy commits to its best strategy instead of randomly probing (was 0.20, too noisy at this stage)
-CLIP_EPS = 0.15
+# Legacy positional placeholders (kept for trainer's tuple unpacking).
+# The actual motor limits used are MOTOR_SPEED_FRAC × per-joint speeds
+# computed in load_model(). These constants are NOT read for any physics.
+MOTOR_MAX_SPEED    = 0.10    # placeholder
+MOTOR_MAX_ACCEL    = 0.025   # placeholder
 
 # ─── Physics (requires restart) ──────────────────────────────────────────────
 PHYSICS_STEPS_PER_ACTION = 16
