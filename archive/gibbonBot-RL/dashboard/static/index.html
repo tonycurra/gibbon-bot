@@ -187,6 +187,21 @@ select:focus, input:focus { outline: none; border-color: var(--accent); }
 .state-lbl.warn { color: var(--warn); }
 .state-lbl.muted { color: var(--muted); }
 .state-det { color: var(--muted); font-size: 0.75em; margin-top: 3px; }
+
+/* Progress hero — big % bar under the viewer */
+.progress-hero {
+    margin-top: 10px;
+    padding: 10px 12px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+}
+.progress-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+.progress-task { color: var(--text); font-size: 0.85em; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
+.progress-value { color: var(--ok); font-size: 1.4em; font-weight: 600; font-variant-numeric: tabular-nums; }
+.progress-bar { height: 8px; background: var(--line-2); border-radius: 4px; overflow: hidden; }
+.progress-fill { height: 100%; background: linear-gradient(90deg, var(--ok), #4af68c); transition: width 0.6s ease; width: 0%; }
+.progress-foot { display: flex; justify-content: space-between; margin-top: 6px; font-size: 0.75em; color: var(--muted); }
 .viewer-info { margin-top: 8px; font-size: 0.75em; color: var(--muted); }
 
 #metrics, #logs {
@@ -330,8 +345,7 @@ select:focus, input:focus { outline: none; border-color: var(--accent); }
     <div class="row">
       <label class="field">Task
         <select id="task-select">
-          <option value="walk">walk to tree</option>
-          <option value="stand">stand (sanity)</option>
+          <!-- options populated from /api/tasks/registry on load -->
         </select>
       </label>
       <label class="field">Scene
@@ -350,12 +364,16 @@ select:focus, input:focus { outline: none; border-color: var(--accent); }
       </label>
     </div>
     <div class="row" style="margin-top:10px;">
-      <button class="btn primary" onclick="startTraining()">Start</button>
-      <button class="btn" onclick="stopTraining()">Stop train</button>
-      <button class="btn ghost" onclick="runTrial()" title="replay the best policy so far">Replay</button>
-      <button class="btn ghost" onclick="stopTrial()" title="stop the trial loop">Stop trial</button>
-      <button class="btn ghost" onclick="runDemoWalk()" title="hand-coded sine-wave gait — what 'good' looks like, no RL">Demo walk</button>
+      <button class="btn primary" onclick="trainToggle()" id="train-toggle-btn">▶ Train</button>
     </div>
+    <details style="margin-top:10px;">
+      <summary style="cursor:pointer; color:var(--muted); font-size:0.78em; letter-spacing:0.08em; text-transform:uppercase;">advanced</summary>
+      <div class="row" style="margin-top:10px;">
+        <button class="btn ghost" onclick="runTrial()" title="replay the best policy so far">Replay</button>
+        <button class="btn ghost" onclick="stopTrial()" title="stop the trial loop">Stop trial</button>
+        <button class="btn ghost" onclick="runDemoWalk()" title="hand-coded sine-wave gait">Demo walk</button>
+      </div>
+    </details>
     <input type="hidden" id="steps-input" value=""/>
   </div>
 
@@ -391,6 +409,18 @@ select:focus, input:focus { outline: none; border-color: var(--accent); }
       <div id="viewer-badge" class="viewer-badge">MANUAL</div>
       <div id="view-buttons" class="view-buttons"></div>
     </div>
+    <div id="progress-hero" class="progress-hero">
+      <div class="progress-head">
+        <span class="progress-task" id="progress-task">—</span>
+        <span class="progress-value" id="progress-value">—</span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+      <div class="progress-foot">
+        <span class="progress-goal" id="progress-goal">goal: —</span>
+        <span class="progress-best" id="progress-best">best —</span>
+      </div>
+    </div>
+
     <div class="state-strip">
       <div class="state-cell">
         <div class="state-cap">VIEWER · what you see</div>
@@ -417,6 +447,65 @@ select:focus, input:focus { outline: none; border-color: var(--accent); }
 
 <script>
 const API = window.location.origin + "/api";
+
+// ── Task registry & progress ──────────────────────────────────────────
+let TRAINING_RUNNING = false;
+async function loadTaskRegistry() {
+    try {
+        const r = await fetch(API + "/tasks/registry");
+        const d = await r.json();
+        const sel = document.getElementById("task-select");
+        sel.innerHTML = (d.tasks || []).map(t => `<option value="${t.id}" title="${t.criterion}">${t.label}</option>`).join("");
+    } catch(e) {}
+}
+
+async function refreshProgress() {
+    try {
+        const task = document.getElementById("task-select").value || "walk";
+        const r = await fetch(API + "/task/progress?task=" + encodeURIComponent(task));
+        const d = await r.json();
+        document.getElementById("progress-task").textContent = d.label || d.task || "—";
+        document.getElementById("progress-goal").textContent = "goal: " + (d.criterion || "—");
+        const v = d.value;
+        const pv = document.getElementById("progress-value");
+        const pf = document.getElementById("progress-fill");
+        if (v === null || v === undefined) {
+            pv.textContent = "—";
+            pf.style.width = "0%";
+        } else {
+            pv.textContent = (v * 100).toFixed(0) + "%";
+            pf.style.width = (Math.max(0, Math.min(1, v)) * 100).toFixed(0) + "%";
+        }
+        const best = d.best_so_far;
+        document.getElementById("progress-best").textContent =
+            (best === null || best === undefined) ? "best —" : "best " + (best * 100).toFixed(0) + "%";
+    } catch(e) {}
+}
+
+async function refreshTrainState() {
+    try {
+        const r = await fetch(API + "/train/status");
+        const d = await r.json();
+        TRAINING_RUNNING = !!d.running;
+        const btn = document.getElementById("train-toggle-btn");
+        if (TRAINING_RUNNING) {
+            btn.textContent = "⏹ Stop";
+            btn.classList.remove("primary");
+        } else {
+            btn.textContent = "▶ Train";
+            btn.classList.add("primary");
+        }
+    } catch(e) {}
+}
+
+async function trainToggle() {
+    if (TRAINING_RUNNING) {
+        await stopTraining();
+    } else {
+        await startTraining();
+    }
+    refreshTrainState();
+}
 
 // ── Training ──────────────────────────────────────────────────────────
 function _qs() {
@@ -910,19 +999,23 @@ setInterval(refreshFrame, 3000);     // probe for dead MJPEG connections
 setInterval(refreshMetrics, 1000);
 setInterval(refreshLogs, 2000);
 setInterval(refreshWhatsHappening, 1000);
+setInterval(refreshProgress, 2000);
+setInterval(refreshTrainState, 2000);
 setInterval(refreshRuns, 5000);
 setInterval(refreshLibrary, 10000);
 setInterval(refreshEnvParams, 5000);
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
+    await loadTaskRegistry();
+    refreshTrainState();
+    refreshProgress();
     refreshWhatsHappening();
     refreshMetrics();
     refreshLogs();
     loadViews();
-    loadParams();
     loadScenes();
     refreshRuns();
     refreshLibrary();
-    document.getElementById("task-select").addEventListener("change", loadParams);
+    document.getElementById("task-select").addEventListener("change", refreshProgress);
     document.getElementById("scene-select").addEventListener("change", selectScene);
 });
 </script>

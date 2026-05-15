@@ -36,6 +36,7 @@ class _AccessFilter(logging.Filter):
         "/api/tasks/overview", "/api/whats-happening", "/api/sim/mode",
         "/api/runs", "/api/trial/info", "/api/trial/status",
         "/api/library/list", "/api/env/params",
+        "/api/task/progress", "/api/tasks/registry",
     )
     def filter(self, record):
         msg = record.getMessage()
@@ -177,7 +178,7 @@ def _bg(*args: str) -> dict:
 
 
 INFINITE_STEPS = 10_000_000_000  # 10B — effectively never reached; safety cap only.
-GOAL_SUCCESS_FRAC = 0.90          # auto-stop when policy succeeds in 90% of envs
+GOAL_TASK_PROGRESS = 0.90         # auto-stop when task_progress reaches 90%
 _DEFAULT_TRIAL_STEPS = 600        # ~20s per trial episode before forced reset
 
 
@@ -197,9 +198,9 @@ def start_training(task: str = "walk", envs: int | None = None,
     # No step cap unless user gave one — the trainer auto-stops on goal
     # (success_frac > 0.9 sustained for 20 updates) and on Ctrl-C/Stop.
     args += ["--total-steps", str(total_steps or INFINITE_STEPS)]
-    args += ["--early-stop-metric", "success_frac",
+    args += ["--early-stop-metric", "task_progress",
              "--early-stop-op", "gt",
-             "--early-stop-value", str(GOAL_SUCCESS_FRAC)]
+             "--early-stop-value", str(GOAL_TASK_PROGRESS)]
     if resume:
         args += ["--resume"]
     res = _bg(*args)
@@ -242,9 +243,9 @@ def restart_training(task: str | None = None, envs: int | None = None, total_ste
     if new_envs:
         args += ["--envs", str(new_envs)]
     args += ["--total-steps", str(total_steps or INFINITE_STEPS)]
-    args += ["--early-stop-metric", "success_frac",
+    args += ["--early-stop-metric", "task_progress",
              "--early-stop-op", "gt",
-             "--early-stop-value", str(GOAL_SUCCESS_FRAC)]
+             "--early-stop-value", str(GOAL_TASK_PROGRESS)]
     if resume:
         args += ["--resume"]
     res = _bg(*args)
@@ -299,6 +300,57 @@ def _params_path(task: str = "walk") -> Path:
     """All tasks share envs/env.py since the refactor; the file holds
     every reward/motor knob as a module-level constant."""
     return REPO_ROOT / "envs" / "env.py"
+
+
+@app.get("/api/tasks/registry")
+def tasks_registry():
+    """List of {id, label, criterion} entries from envs/tasks.py.
+    Populates the dashboard's task dropdown."""
+    from envs.tasks import list_tasks
+    return {"tasks": list_tasks()}
+
+
+@app.get("/api/task/progress")
+def task_progress_endpoint(task: str | None = None):
+    """% progress toward the active task's goal, plus its human label
+    and criterion text. Reads the latest task_progress metric from
+    mlflow.db. Returns {value, best_so_far, trend, label, criterion}."""
+    from envs.tasks import task_info
+    task = task or _read_active(ACTIVE_TASK_FILE, "walk")
+    info = task_info(task)
+    out = {
+        "task": task,
+        "label": info.get("label", task),
+        "criterion": info.get("criterion", ""),
+        "value": None,
+        "best_so_far": None,
+        "trend": [],
+    }
+    try:
+        import mlflow
+        mlflow.set_tracking_uri(f"sqlite:///{REPO_ROOT/'mlflow.db'}")
+        client = mlflow.MlflowClient()
+        exp = client.get_experiment_by_name(f"ape_{task}_mjx")
+        if exp is None:
+            return out
+        runs = client.search_runs(
+            experiment_ids=[exp.experiment_id],
+            order_by=["attributes.start_time DESC"],
+            max_results=1,
+        )
+        if not runs:
+            return out
+        run = runs[0]
+        history = client.get_metric_history(run.info.run_id, "task_progress")
+        if not history:
+            return out
+        values = [h.value for h in history]
+        out["value"] = float(values[-1])
+        out["best_so_far"] = float(max(values))
+        out["trend"] = [float(v) for v in values[-12:]]
+    except Exception as e:
+        out["error"] = str(e)
+    return out
 
 
 @app.get("/api/env/params")

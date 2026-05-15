@@ -90,22 +90,22 @@ GAIT_PERIOD_STEPS = 40  # 1.28s cycle — slower trot, easier to balance than 0.
 def read_params(task: str = "walk"):
     """Return reward / motor params for a given task.
 
-    `walk`  — full walk-to-tree reward (default).
-    `stand` — zero out tree-progress signals; reward stays upright at
-              TARGET_Z. The only reason to move is the alive bonus
-              minus the flip / ground penalties.
-    Any other task name falls back to walk so the trainer never crashes
-    on a typo.
+    The per-task overrides live in `envs/tasks.py:TASKS[task]['rewards']`
+    so adding a new task is a registry edit, not an if/elif in here.
+    Unknown task → walk defaults.
     """
-    is_stand = task == "stand"
-    w_progress       = 0.0 if is_stand else float(W_PROGRESS)
-    w_fwd_vel        = 0.0 if is_stand else float(W_FWD_VEL)
-    w_proximity_tree = 0.0 if is_stand else float(W_PROXIMITY_TREE)
-    w_heading        = 0.0 if is_stand else float(W_HEADING)
-    w_success        = 0.0 if is_stand else float(W_SUCCESS)
-    # Boost upright + height when standing — that's the WHOLE task.
-    w_upright = 12.0 if is_stand else float(W_UPRIGHT)
-    w_height  = 5.0  if is_stand else float(W_HEIGHT)
+    from envs.tasks import task_reward_overrides
+    overrides = task_reward_overrides(task)
+    def _w(name, default):
+        return float(overrides.get(name, default))
+
+    w_progress       = _w("W_PROGRESS",       W_PROGRESS)
+    w_fwd_vel        = _w("W_FWD_VEL",        W_FWD_VEL)
+    w_proximity_tree = _w("W_PROXIMITY_TREE", W_PROXIMITY_TREE)
+    w_heading        = _w("W_HEADING",        W_HEADING)
+    w_success        = _w("W_SUCCESS",        W_SUCCESS)
+    w_upright        = _w("W_UPRIGHT",        W_UPRIGHT)
+    w_height         = _w("W_HEIGHT",         W_HEIGHT)
     return (
         float(TARGET_Z),
         float(TARGET_TOL),

@@ -762,8 +762,15 @@ def main():
                 "mean_jvel": mean_jvel, "asym_torque": asym,
                 "gait_coherence": gait_coh, "stride_period_s": stride_s,
             }
+            # Task-specific 0..1 progress toward the named goal. Used as the
+            # early-stop signal AND surfaced in the dashboard progress bar.
+            try:
+                from envs.tasks import task_progress as _task_progress
+                metrics["task_progress"] = _task_progress(metrics, TASK)
+            except Exception:
+                metrics["task_progress"] = 0.0
 
-            print(f"{update_count:>8}  {total_steps:>12,}  {sps:>8,.0f}  rew={mean_rew:+.2f}  d={mean_dist:.2f}  vx={mean_speed_x:+.2f}  z={mean_z:.2f}  upr={mean_upright:.2f}  ωz={mean_angvel_z:+.2f}", flush=True)
+            print(f"{update_count:>8}  {total_steps:>12,}  {sps:>8,.0f}  rew={mean_rew:+.2f}  d={mean_dist:.2f}  vx={mean_speed_x:+.2f}  z={mean_z:.2f}  upr={mean_upright:.2f}  prog={metrics['task_progress']:.2f}", flush=True)
 
             # Dump live qpos of env 0 for the dashboard viewer.
             # Cheap (small array), once per PPO batch.
