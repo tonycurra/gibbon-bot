@@ -469,35 +469,19 @@ def _ensure_home():
 
 
 def _apply_pose_from_ctrl():
-    """Drag-slider feedback: qpos ← ctrl + a stable resting pose.
-
-    Without specific joint angles the robot's mid-range pose has legs spread
-    and arms out, leaving the torso hovering. We use mujoco's keyframe if
-    one exists ('home'); otherwise we apply a hand-tuned crouched pose so
-    the feet sit on the floor.
-    """
+    """Drag-slider feedback: start from the XML's rest pose, then layer
+    the user's ctrl on top, joint by joint. Using qpos0 (the model's
+    default rest pose) ensures the robot is rendered in a configuration
+    where limbs clear the floor — same as look.py shows it."""
     import mujoco
     model, data = get_model()
 
-    # Free-joint torso position. 0.16m torso z keeps the body close to the
-    # floor when arms+legs hang in their default config.
-    if model.nq >= 7 and model.jnt_type[0] == 0:
-        data.qpos[0] = 0.0
-        data.qpos[1] = 0.0
-        data.qpos[2] = 0.16
-        data.qpos[3] = 1.0
-        data.qpos[4:7] = 0.0
+    # Reset to the XML's default qpos (arms/legs in canonical rest, torso
+    # at its design spawn z). Avoids the broken below-floor pose that
+    # mid-range ctrl produces.
+    data.qpos[:] = model.qpos0
 
-    # If the model has a 'home' keyframe, use that as the baseline.
-    home_id = -1
-    try:
-        home_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, "home")
-    except Exception:
-        pass
-    if home_id >= 0:
-        data.qpos[:] = model.key_qpos[home_id]
-
-    # Then apply user's ctrl on top, joint by joint.
+    # Then apply the user's ctrl as joint targets.
     for i in range(model.nu):
         if model.actuator_trntype[i] != 0:
             continue
