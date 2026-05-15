@@ -314,6 +314,9 @@ select:focus, input:focus { outline: none; border-color: var(--accent); }
       <label class="field">Envs
         <input id="envs-input" type="number" min="1" max="4096" step="1" value="1" title="1 = real-time viewing; raise for faster learning"/>
       </label>
+      <label class="field">Steps
+        <input id="steps-input" type="number" min="10000" max="100000000" step="10000" value="1000000" title="total environment steps before training stops"/>
+      </label>
       <label class="field" style="flex:1;min-width:140px;">Scene
         <select id="scene-select" title="switch model XML (stop training first)"></select>
       </label>
@@ -396,8 +399,10 @@ const API = window.location.origin + "/api";
 function _qs() {
     const task = document.getElementById("task-select").value;
     const envs = document.getElementById("envs-input").value;
+    const steps = document.getElementById("steps-input").value;
     let q = "task=" + encodeURIComponent(task);
     if (envs) q += "&envs=" + encodeURIComponent(envs);
+    if (steps) q += "&total_steps=" + encodeURIComponent(steps);
     return q;
 }
 async function startTraining() {

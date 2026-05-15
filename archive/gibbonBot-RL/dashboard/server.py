@@ -174,17 +174,19 @@ def _bg(*args: str) -> dict:
     return {"ok": res.returncode == 0, "stdout": res.stdout, "stderr": res.stderr}
 
 
+DEFAULT_TOTAL_STEPS = 1_000_000  # 100M is for production; demos use 1M.
+
+
 @app.post("/api/train/start")
-def start_training(task: str = "walk", envs: int | None = None, total_steps: int | None = None, resume: bool = True):
+def start_training(task: str = "walk", envs: int | None = None,
+                   total_steps: int | None = None, resume: bool = True):
     if _trainer_pids():
         raise HTTPException(status_code=400, detail="Trainer already running — use /api/train/restart")
     args = ["start", task]
     if envs:
         args += ["--envs", str(envs)]
-    if total_steps:
-        args += ["--total-steps", str(total_steps)]
+    args += ["--total-steps", str(total_steps or DEFAULT_TOTAL_STEPS)]
     if resume:
-        # Don't trash checkpoints on minor scene/param tweaks.
         args += ["--resume"]
     res = _bg(*args)
     if not res["ok"]:
@@ -215,8 +217,7 @@ def restart_training(task: str | None = None, envs: int | None = None, total_ste
     args = ["start", new_task]
     if new_envs:
         args += ["--envs", str(new_envs)]
-    if total_steps:
-        args += ["--total-steps", str(total_steps)]
+    args += ["--total-steps", str(total_steps or DEFAULT_TOTAL_STEPS)]
     if resume:
         args += ["--resume"]
     res = _bg(*args)
