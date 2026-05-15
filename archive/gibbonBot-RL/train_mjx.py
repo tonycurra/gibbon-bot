@@ -425,7 +425,7 @@ def main():
     elif args.auto_resume:
         train_state, start_steps, resume_status = load_latest(train_state, RUNS, TASK, force=args.resume)
 
-    rparams = tuple(jnp.float32(v) for v in env_mod.read_params())
+    rparams = tuple(jnp.float32(v) for v in env_mod.read_params(TASK))
 
     v_reset = jax.jit(jax.vmap(lambda rng: env_mod.reset(mx, jnt_lo, jnt_hi, target_xy, rng)))
     v_step  = jax.jit(jax.vmap(

@@ -87,16 +87,34 @@ OBS_DIM = 88
 GAIT_PERIOD_STEPS = 40  # 1.28s cycle — slower trot, easier to balance than 0.8s
 
 
-def read_params():
+def read_params(task: str = "walk"):
+    """Return reward / motor params for a given task.
+
+    `walk`  — full walk-to-tree reward (default).
+    `stand` — zero out tree-progress signals; reward stays upright at
+              TARGET_Z. The only reason to move is the alive bonus
+              minus the flip / ground penalties.
+    Any other task name falls back to walk so the trainer never crashes
+    on a typo.
+    """
+    is_stand = task == "stand"
+    w_progress       = 0.0 if is_stand else float(W_PROGRESS)
+    w_fwd_vel        = 0.0 if is_stand else float(W_FWD_VEL)
+    w_proximity_tree = 0.0 if is_stand else float(W_PROXIMITY_TREE)
+    w_heading        = 0.0 if is_stand else float(W_HEADING)
+    w_success        = 0.0 if is_stand else float(W_SUCCESS)
+    # Boost upright + height when standing — that's the WHOLE task.
+    w_upright = 12.0 if is_stand else float(W_UPRIGHT)
+    w_height  = 5.0  if is_stand else float(W_HEIGHT)
     return (
         float(TARGET_Z),
         float(TARGET_TOL),
-        float(W_HEIGHT),
-        float(W_UPRIGHT),
-        float(W_PROGRESS),
-        float(W_PROXIMITY_TREE),
+        w_height,
+        w_upright,
+        w_progress,
+        w_proximity_tree,
         float(SUCCESS_DIST),
-        float(W_SUCCESS),
+        w_success,
         float(GROUND_CLEARANCE),
         float(W_GROUND),
         float(FLIP_PENALTY),
@@ -106,9 +124,9 @@ def read_params():
         float(W_ENERGY),
         float(W_ALIVE),
         float(ACTION_SMOOTH_ALPHA),
-        float(W_FWD_VEL),
+        w_fwd_vel,
         float(W_SYMMETRY),
-        float(W_HEADING),
+        w_heading,
         float(MOTOR_MAX_ACCEL),
         float(W_CPG_PITCH),
         float(W_CPG_ELBOW),

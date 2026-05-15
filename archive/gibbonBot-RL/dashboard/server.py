@@ -186,10 +186,11 @@ def start_training(task: str = "walk", envs: int | None = None,
                    total_steps: int | None = None, resume: bool = True):
     if _trainer_pids():
         raise HTTPException(status_code=400, detail="Trainer already running — use /api/train/restart")
-    # Only one env exists now (envs/env.py). Force task=walk so the
-    # runs/ape_walk_mjx/ folder is consistent regardless of what the
-    # client sent.
-    task = "walk"
+    # Task is now meaningful: env.read_params(task) zeros out tree-progress
+    # rewards when task='stand'. Folder runs/ape_<task>_mjx/ still segregates
+    # checkpoints per task.
+    if task not in ("walk", "stand"):
+        task = "walk"
     args = ["start", task]
     if envs:
         args += ["--envs", str(envs)]
