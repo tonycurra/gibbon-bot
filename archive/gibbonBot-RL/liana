@@ -134,6 +134,11 @@ case "$cmd" in
         fi
         ;;
 
+    sync)
+        sub="${1:-up}"; shift || true
+        exec "$ROOT/scripts/liana_sync.sh" "$sub" "$@"
+        ;;
+
     log)
         msg="${1:-}"
         if [[ -z "$msg" ]]; then

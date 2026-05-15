@@ -30,6 +30,22 @@ Then from the dashboard:
 Ctrl-C in the terminal tears down all subprocesses (dashboard, trainer,
 trial).
 
+## Sync with object storage
+
+Training artifacts (`runs/`, `mlflow.db`, `mlruns/`, `data/brain/`,
+`LIANA_LOG.md`) are mirrored to `scaleway:gibbonbot-training/` via rclone.
+
+```bash
+./liana sync up       # local → Scaleway (diff only after first run)
+./liana sync down     # Scaleway → local (overwrites — asks confirm)
+./liana sync status   # show diff without copying
+```
+
+Run `up` after a successful training session you want to preserve; run
+`down` on a new machine to bring local state up to speed before
+`./liana go`. The `runs/.jax_cache/` and `__pycache__/` directories are
+excluded.
+
 ## Tasks
 
 | Task    | Reward                                                                                | Folder                  |
