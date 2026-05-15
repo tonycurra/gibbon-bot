@@ -68,19 +68,21 @@ def _walk_progress(m: dict) -> float:
 TASKS = {
     "stand": {
         "label": "Stand tall",
-        "criterion_text": f"torso ≥ {_HEIGHT_TARGET:.2f} m and upright > 0.95, low motor energy",
+        "criterion_text": f"torso ≥ {_HEIGHT_TARGET:.2f} m and upright > 0.95, sustained 5s",
         "rewards": {
             "W_PROGRESS": 0.0, "W_FWD_VEL": 0.0, "W_HEADING": 0.0,
             "W_PROXIMITY_TREE": 0.0, "W_SUCCESS": 0.0,
             "W_UPRIGHT": 12.0, "W_HEIGHT": 5.0,
         },
         "progress": _stand_progress,
+        "trial_seconds": 5,   # short — standing is a sustained-pose task
     },
     "walk": {
         "label": "Walk to olive tree",
         "criterion_text": "reach within 0.6 m of the tree at (3, 0)",
-        "rewards": {},  # env.py defaults are already walk-tuned
+        "rewards": {},
         "progress": _walk_progress,
+        "trial_seconds": 20,  # long — walking 3m takes ≥10s
     },
 }
 
@@ -88,7 +90,12 @@ TASKS = {
 def list_tasks() -> list[dict]:
     """Public registry view for the dashboard."""
     return [
-        {"id": tid, "label": t["label"], "criterion": t["criterion_text"]}
+        {
+            "id": tid,
+            "label": t["label"],
+            "criterion": t["criterion_text"],
+            "trial_seconds": int(t.get("trial_seconds", 20)),
+        }
         for tid, t in TASKS.items()
     ]
 
@@ -107,11 +114,16 @@ def task_progress(metrics: dict, task: str) -> float:
 
 
 def task_info(task: str) -> dict:
-    """Label + criterion text for the named task. Unknown → minimal record."""
+    """Label + criterion text + trial_seconds for the named task."""
     cfg = TASKS.get(task)
     if cfg is None:
-        return {"id": task, "label": task, "criterion": "(unknown task)"}
-    return {"id": task, "label": cfg["label"], "criterion": cfg["criterion_text"]}
+        return {"id": task, "label": task, "criterion": "(unknown task)", "trial_seconds": 20}
+    return {
+        "id": task,
+        "label": cfg["label"],
+        "criterion": cfg["criterion_text"],
+        "trial_seconds": int(cfg.get("trial_seconds", 20)),
+    }
 
 
 def task_reward_overrides(task: str) -> dict:

@@ -354,13 +354,10 @@ select:focus, input:focus { outline: none; border-color: var(--accent); }
     </div>
     <div class="row" style="margin-top:8px;">
       <label class="field">Envs
-        <input id="envs-input" type="number" min="1" max="4096" step="1" value="2048"/>
+        <input id="envs-input" type="number" min="1" max="4096" step="1" value="512"/>
       </label>
-      <label class="field">Trial s
-        <input id="trial-seconds-input" type="number" min="2" max="120" step="1" value="20"/>
-      </label>
-      <label class="field">Speed
-        <input id="realtime-input" type="number" min="0.1" max="2" step="0.1" value="0.5" title="1.0 = real time. 0.5 = half speed (more visible)."/>
+      <label class="field">Trial s <span class="hint">from task</span>
+        <input id="trial-seconds-input" type="number" min="2" max="120" step="1" placeholder="auto"/>
       </label>
     </div>
     <div class="row" style="margin-top:10px;">
@@ -450,13 +447,26 @@ const API = window.location.origin + "/api";
 
 // ── Task registry & progress ──────────────────────────────────────────
 let TRAINING_RUNNING = false;
+let TASK_REGISTRY = [];
 async function loadTaskRegistry() {
     try {
         const r = await fetch(API + "/tasks/registry");
         const d = await r.json();
+        TASK_REGISTRY = d.tasks || [];
         const sel = document.getElementById("task-select");
-        sel.innerHTML = (d.tasks || []).map(t => `<option value="${t.id}" title="${t.criterion}">${t.label}</option>`).join("");
+        sel.innerHTML = TASK_REGISTRY.map(t =>
+            `<option value="${t.id}" title="${t.criterion}">${t.label}</option>`
+        ).join("");
+        applyTaskDefaults();
     } catch(e) {}
+}
+
+function applyTaskDefaults() {
+    const task = document.getElementById("task-select").value;
+    const t = TASK_REGISTRY.find(x => x.id === task);
+    if (!t) return;
+    const ts = document.getElementById("trial-seconds-input");
+    if (!ts.value) ts.placeholder = `${t.trial_seconds}s (task default)`;
 }
 
 async function refreshProgress() {
@@ -754,10 +764,11 @@ async function refreshViewerInfo() {
 
 async function runTrial() {
     const task = document.getElementById("task-select").value;
-    const secs = document.getElementById("trial-seconds-input").value || 20;
-    const rt = document.getElementById("realtime-input").value || 0.5;
+    const secs = document.getElementById("trial-seconds-input").value; // may be ""; server falls back to task default
+    let url = `/trial/start?task=${task}&realtime=1.0`;
+    if (secs) url += `&seconds=${secs}`;
     try {
-        const r = await fetch(API + `/trial/start?task=${task}&seconds=${secs}&realtime=${rt}`, {method:"POST"});
+        const r = await fetch(API + url, {method:"POST"});
         const d = await r.json();
         if (!r.ok) alert("Trial failed: " + (d.detail || r.statusText));
     } catch(e) { alert(e.message); }
@@ -1015,7 +1026,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     loadScenes();
     refreshRuns();
     refreshLibrary();
-    document.getElementById("task-select").addEventListener("change", refreshProgress);
+    document.getElementById("task-select").addEventListener("change", () => { refreshProgress(); applyTaskDefaults(); });
     document.getElementById("scene-select").addEventListener("change", selectScene);
 });
 </script>

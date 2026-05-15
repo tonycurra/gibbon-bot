@@ -211,12 +211,17 @@ def start_training(task: str = "walk", envs: int | None = None,
     if envs:
         ACTIVE_ENVS_FILE.write_text(str(envs))
     # Auto-start looping trial so the viewer shows real-time playback
-    # of the latest checkpoint while the trainer churns. Default to
-    # 0.5x speed — more realistic / less jerky to watch.
+    # of the latest checkpoint while the trainer churns. Episode length
+    # comes from the task's trial_seconds.
     global _trial_proc
     if _trial_proc is None or _trial_proc.poll() is not None:
-        try: _spawn_trial(task, _DEFAULT_TRIAL_STEPS, 0.5, loop=True)
-        except Exception as e: sys.stderr.write(f"[liana] auto-trial failed to start: {e}\n")
+        try:
+            from envs.tasks import task_info as _ti
+            secs = _ti(task).get("trial_seconds", 20)
+            steps = max(30, int(secs / 0.032))
+            _spawn_trial(task, steps, 1.0, loop=True)
+        except Exception as e:
+            sys.stderr.write(f"[liana] auto-trial failed to start: {e}\n")
     return {"status": "started", "task": task, "envs": envs, "detail": res["stdout"].strip()}
 
 
@@ -792,7 +797,7 @@ def _spawn_trial(task: str, max_steps: int, realtime: float, loop: bool,
 
 
 @app.post("/api/trial/start")
-def trial_start(task: str = "walk", seconds: float = 20.0, realtime: float = 0.5, loop: bool = True):
+def trial_start(task: str = "walk", seconds: float | None = None, realtime: float = 1.0, loop: bool = True):
     """Run playback of the latest policy in a CPU subprocess.
 
     realtime: 1.0 = real time, 0.5 = half speed (default, more visible),
@@ -803,6 +808,10 @@ def trial_start(task: str = "walk", seconds: float = 20.0, realtime: float = 0.5
     global _trial_proc
     if _trial_proc is not None and _trial_proc.poll() is None:
         raise HTTPException(status_code=400, detail="trial already running — stop it first")
+    # Default to the task's preferred trial duration if caller didn't say.
+    if seconds is None:
+        from envs.tasks import task_info as _ti
+        seconds = float(_ti(task).get("trial_seconds", 20))
     max_steps = max(30, int(seconds / 0.032))
     pid = _spawn_trial(task, max_steps, realtime, loop)
     return {"ok": True, "pid": pid, "loop": loop, "max_steps": max_steps, "seconds": seconds, "realtime": realtime}
