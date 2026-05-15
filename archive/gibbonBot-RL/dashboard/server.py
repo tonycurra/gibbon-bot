@@ -219,12 +219,13 @@ def start_training(task: str = "walk", envs: int | None = None,
 @app.post("/api/train/stop")
 def stop_training():
     res = _bg("stop")
-    # Also stop the auto-started looping trial.
+    # Stop the trial AND any stragglers from previous sessions.
     global _trial_proc
     if _trial_proc is not None and _trial_proc.poll() is None:
         _trial_proc.terminate()
         try: _trial_proc.wait(timeout=3)
         except subprocess.TimeoutExpired: _trial_proc.kill()
+    _kill_stray_trials()
     return {"status": "stopped" if res["ok"] else "error", "detail": (res["stdout"] or res["stderr"]).strip()}
 
 
@@ -537,10 +538,24 @@ def trial_info():
 _trial_proc: subprocess.Popen | None = None
 
 
+def _kill_stray_trials():
+    """Reap any play_trial.py processes from previous sessions BEFORE
+    spawning a new one. If two of these run at once they both write to
+    runs/.trial_qpos.npy and the viewer flips between robot states (the
+    'many robots, fast' bug)."""
+    try:
+        subprocess.run(["pkill", "-f", "scripts/play_trial.py"],
+                       check=False, timeout=3)
+        time.sleep(0.3)
+    except Exception:
+        pass
+
+
 def _spawn_trial(task: str, max_steps: int, realtime: float, loop: bool,
                  stuck_window: float = 3.0, stuck_dist: float = 0.05) -> int:
     """Spawn the play_trial subprocess. Caller owns the global _trial_proc."""
     global _trial_proc
+    _kill_stray_trials()
     cmd = [
         str(REPO_ROOT / ".venv" / "bin" / "python"),
         str(REPO_ROOT / "scripts" / "play_trial.py"),

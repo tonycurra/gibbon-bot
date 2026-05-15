@@ -65,6 +65,8 @@ _stop_all() {
     _stop_mlflow  # tear down any stray mlflow ui from older runs
     echo "[liana] stopping trainer..."
     "$ROOT/scripts/train_bg.sh" stop || true
+    # Reap any orphan trial subprocesses (writers of .trial_qpos.npy).
+    pkill -f "scripts/play_trial.py" 2>/dev/null || true
 }
 
 cmd="${1:-go}"; shift || true
