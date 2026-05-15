@@ -144,6 +144,31 @@ select:focus, input:focus { outline: none; border-color: var(--accent); }
 .viewer-badge.live .dot { animation: pulse 1s infinite; }
 .viewer-badge.compiling .dot { animation: pulse 0.5s infinite; }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+.view-buttons {
+    position: absolute;
+    top: 10px; right: 10px;
+    display: flex;
+    gap: 4px;
+    background: rgba(0,0,0,0.55);
+    border: 1px solid var(--line-2);
+    border-radius: 4px;
+    padding: 3px;
+}
+.view-btn {
+    padding: 3px 8px;
+    font-size: 0.7em;
+    letter-spacing: 0.12em;
+    background: transparent;
+    color: var(--muted);
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    font-family: inherit;
+    text-transform: uppercase;
+}
+.view-btn:hover { color: var(--text); }
+.view-btn.active { color: var(--text); background: var(--line-2); }
 .viewer-info { margin-top: 8px; font-size: 0.75em; color: var(--muted); }
 
 #metrics, #logs {
@@ -322,6 +347,7 @@ select:focus, input:focus { outline: none; border-color: var(--accent); }
     <div id="viewer-container">
       <img id="frame" src="/api/viewer/stream?fps=20" alt="robot"/>
       <div id="viewer-badge" class="viewer-badge">MANUAL</div>
+      <div id="view-buttons" class="view-buttons"></div>
     </div>
     <div class="viewer-info" id="viewer-info">—</div>
   </div>
@@ -522,6 +548,23 @@ async function simZero() {
 async function setSimMode(mode) {
     try { await fetch(API + "/sim/mode?mode=" + mode, {method:"POST"}); } catch(e) { console.error(e); }
 }
+async function loadViews() {
+    try {
+        const r = await fetch(API + "/viewer/views");
+        const d = await r.json();
+        const cur = d.current;
+        document.getElementById("view-buttons").innerHTML = (d.views || []).map(v =>
+            `<button class="view-btn ${v === cur ? "active" : ""}" onclick="setView('${v}')">${v}</button>`
+        ).join("");
+    } catch(e) {}
+}
+async function setView(name) {
+    try {
+        await fetch(API + "/viewer/view?name=" + name, {method:"POST"});
+        loadViews();
+    } catch(e) {}
+}
+
 async function refreshViewerInfo() {
     try {
         const r = await fetch(API + "/viewer/info");
@@ -647,6 +690,7 @@ document.addEventListener("DOMContentLoaded", () => {
     loadScenes();
     loadSimMode();
     refreshViewerInfo();
+    loadViews();
     refreshMetrics();
     refreshLogs();
     document.getElementById("task-select").addEventListener("change", loadParams);

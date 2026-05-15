@@ -394,6 +394,30 @@ _LAST_STEP_TIME = None
 # when you drag a slider). physics runs mj_step with current ctrl as target.
 _SIM_MODE = "pose"
 
+# (azimuth, elevation, distance, lookat_z_offset)
+_CAMERA_PRESETS = {
+    "perspective": (135, -18, 1.6, 0.0),
+    "iso":         (45, -30, 2.0, 0.0),
+    "top":         (90, -89, 2.5, 0.0),
+    "front":       (90, -5, 1.8, 0.0),
+    "side":        (180, -5, 1.8, 0.0),
+}
+_CAMERA_VIEW = "perspective"
+
+
+@app.get("/api/viewer/views")
+def viewer_views():
+    return {"views": list(_CAMERA_PRESETS), "current": _CAMERA_VIEW}
+
+
+@app.post("/api/viewer/view")
+def viewer_set_view(name: str):
+    global _CAMERA_VIEW
+    if name not in _CAMERA_PRESETS:
+        raise HTTPException(status_code=400, detail=f"unknown view {name}")
+    _CAMERA_VIEW = name
+    return {"ok": True, "view": _CAMERA_VIEW}
+
 
 def _ensure_home():
     """Initialize ctrl to mid-range on first access."""
@@ -739,14 +763,13 @@ def _render_png_bytes() -> bytes:
                 mujoco.mj_resetData(model, data)
                 _apply_pose_from_ctrl()
         cam = mujoco.MjvCamera()
-        # Track the robot's torso so the camera follows the qpos even after
-        # the policy walks it across the arena.
         torso_xy = data.qpos[0:2] if data.qpos.shape[0] >= 3 else np.zeros(2)
         torso_z = float(data.qpos[2]) if data.qpos.shape[0] >= 3 else 0.3
-        cam.lookat = [float(torso_xy[0]), float(torso_xy[1]), torso_z]
-        cam.distance = 1.6
-        cam.azimuth = 135
-        cam.elevation = -18
+        az, el, dist, dz = _CAMERA_PRESETS.get(_CAMERA_VIEW, _CAMERA_PRESETS["perspective"])
+        cam.lookat = [float(torso_xy[0]), float(torso_xy[1]), torso_z + dz]
+        cam.distance = dist
+        cam.azimuth = az
+        cam.elevation = el
         renderer.update_scene(data, camera=cam)
         img = renderer.render()
     buf = BytesIO()
