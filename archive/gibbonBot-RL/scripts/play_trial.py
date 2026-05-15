@@ -104,6 +104,8 @@ def main():
                         help="action steps before forced exit (default 600 = ~20s sim)")
     parser.add_argument("--realtime", type=float, default=1.0,
                         help="real-time multiplier; 1.0 = real time, 0.5 = half-speed")
+    parser.add_argument("--loop", action="store_true",
+                        help="run episodes back-to-back, reloading latest checkpoint each time")
     args = parser.parse_args()
 
     model = mujoco.MjModel.from_xml_path(str(SCENE))
@@ -122,59 +124,70 @@ def main():
     except KeyError:
         tree_xy = np.array([3.0, 0.0], dtype=np.float32)
 
-    ckpt = latest_checkpoint(args.task)
-    if ckpt is None:
-        print(f"[trial] no checkpoint for task={args.task}; using random policy", flush=True)
-        predict = None
-    else:
-        print(f"[trial] loading {ckpt.name}", flush=True)
-        try:
-            predict = build_predict(ckpt)
-        except Exception as e:
-            print(f"[trial] policy load failed: {e}; falling back to random", flush=True)
-            predict = None
-
     qpos_path = ROOT / "runs" / ".trial_qpos.npy"
     qpos_path.parent.mkdir(parents=True, exist_ok=True)
     action_dt = PHYSICS_STEPS_PER_ACTION * float(model.opt.timestep)  # ~32ms
     sleep_per_action = action_dt / max(0.05, args.realtime)
 
-    print(f"[trial] starting episode (tree at {tree_xy.tolist()}, max {args.max_steps} steps)", flush=True)
-    t_start = time.time()
-    for step_i in range(args.max_steps):
-        if predict is not None:
-            obs = build_obs(model, data, tree_xy, step_i)
-            action = predict(obs)
-        else:
-            action = rng.uniform(-1, 1, size=ACT_DIM).astype(np.float32)
+    current_ckpt_path = None
+    predict = None
+    episode = 0
+    while True:
+        episode += 1
+        # Reload latest checkpoint between episodes if it changed.
+        ckpt = latest_checkpoint(args.task)
+        if ckpt is not None and ckpt != current_ckpt_path:
+            try:
+                predict = build_predict(ckpt)
+                current_ckpt_path = ckpt
+                print(f"[trial] loaded {ckpt.name}", flush=True)
+            except Exception as e:
+                print(f"[trial] policy load failed: {e}; keeping previous (or random)", flush=True)
+        elif ckpt is None and predict is None:
+            print(f"[trial] no checkpoint; random policy", flush=True)
 
-        # Map [-1, 1] to actuator ctrlrange.
-        lo = model.actuator_ctrlrange[:, 0]
-        hi = model.actuator_ctrlrange[:, 1]
-        data.ctrl[:] = lo + 0.5 * (action + 1.0) * (hi - lo)
+        # Reset robot at start of episode.
+        data.qpos[:] = model.qpos0
+        data.qpos[2] = 0.30
+        data.qpos[7:7 + ACT_DIM] += rng.normal(0, 0.02, ACT_DIM)
+        data.qvel[:] = 0.0
+        mujoco.mj_forward(model, data)
 
-        for _ in range(PHYSICS_STEPS_PER_ACTION):
-            mujoco.mj_step(model, data)
+        t_start = time.time()
+        outcome = "timeout"
+        for step_i in range(args.max_steps):
+            if predict is not None:
+                obs = build_obs(model, data, tree_xy, step_i)
+                action = predict(obs)
+            else:
+                action = rng.uniform(-1, 1, size=ACT_DIM).astype(np.float32)
 
-        np.save(str(qpos_path), np.asarray(data.qpos))
+            lo = model.actuator_ctrlrange[:, 0]
+            hi = model.actuator_ctrlrange[:, 1]
+            data.ctrl[:] = lo + 0.5 * (action + 1.0) * (hi - lo)
 
-        # Termination: torso flipped (quat w < 0.2 → past 90°) or reached tree.
-        if data.qpos[3] < 0.2:
-            print(f"[trial] flip at step {step_i}", flush=True)
+            for _ in range(PHYSICS_STEPS_PER_ACTION):
+                mujoco.mj_step(model, data)
+
+            np.save(str(qpos_path), np.asarray(data.qpos))
+
+            if data.qpos[3] < 0.2:
+                outcome = "flip"
+                break
+            if float(np.linalg.norm(tree_xy - data.qpos[0:2])) < 0.6:
+                outcome = "success"
+                break
+
+            elapsed = time.time() - t_start
+            target_elapsed = (step_i + 1) * sleep_per_action
+            if target_elapsed > elapsed:
+                time.sleep(target_elapsed - elapsed)
+
+        print(f"[trial] ep{episode}: {outcome} in {time.time() - t_start:.1f}s", flush=True)
+
+        if not args.loop:
             break
-        dist_to_tree = float(np.linalg.norm(tree_xy - data.qpos[0:2]))
-        if dist_to_tree < 0.6:
-            print(f"[trial] SUCCESS at step {step_i} — reached tree", flush=True)
-            break
-
-        # Pace to real time.
-        elapsed = time.time() - t_start
-        target_elapsed = (step_i + 1) * sleep_per_action
-        if target_elapsed > elapsed:
-            time.sleep(target_elapsed - elapsed)
-
-    # Mark end of trial by removing the qpos file (or leaving the final pose).
-    print(f"[trial] done in {time.time() - t_start:.1f}s", flush=True)
+        time.sleep(0.5)  # brief pause between episodes
 
 
 if __name__ == "__main__":

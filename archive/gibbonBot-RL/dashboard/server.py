@@ -201,12 +201,24 @@ def start_training(task: str = "walk", envs: int | None = None,
     ACTIVE_TASK_FILE.write_text(task)
     if envs:
         ACTIVE_ENVS_FILE.write_text(str(envs))
+    # Auto-start looping trial so the viewer shows smooth real-time
+    # playback of the latest checkpoint while the trainer churns.
+    global _trial_proc
+    if _trial_proc is None or _trial_proc.poll() is not None:
+        try: _spawn_trial(task, 600, 1.0, loop=True)
+        except Exception as e: sys.stderr.write(f"[liana] auto-trial failed to start: {e}\n")
     return {"status": "started", "task": task, "envs": envs, "detail": res["stdout"].strip()}
 
 
 @app.post("/api/train/stop")
 def stop_training():
     res = _bg("stop")
+    # Also stop the auto-started looping trial.
+    global _trial_proc
+    if _trial_proc is not None and _trial_proc.poll() is None:
+        _trial_proc.terminate()
+        try: _trial_proc.wait(timeout=3)
+        except subprocess.TimeoutExpired: _trial_proc.kill()
     return {"status": "stopped" if res["ok"] else "error", "detail": (res["stdout"] or res["stderr"]).strip()}
 
 
@@ -451,15 +463,9 @@ def _load_live_qpos(task: str):
 _trial_proc: subprocess.Popen | None = None
 
 
-@app.post("/api/trial/start")
-def trial_start(task: str = "walk", max_steps: int = 600, realtime: float = 1.0):
-    """Run ONE real-time episode of the latest policy in a CPU subprocess.
-
-    Writes runs/.trial_qpos.npy each action step; the viewer streams that.
-    Trial process is separate from any background trainer."""
+def _spawn_trial(task: str, max_steps: int, realtime: float, loop: bool) -> int:
+    """Spawn the play_trial subprocess. Caller owns the global _trial_proc."""
     global _trial_proc
-    if _trial_proc is not None and _trial_proc.poll() is None:
-        raise HTTPException(status_code=400, detail="trial already running — stop it first")
     cmd = [
         str(REPO_ROOT / ".venv" / "bin" / "python"),
         str(REPO_ROOT / "scripts" / "play_trial.py"),
@@ -467,9 +473,25 @@ def trial_start(task: str = "walk", max_steps: int = 600, realtime: float = 1.0)
         "--max-steps", str(max_steps),
         "--realtime", str(realtime),
     ]
+    if loop:
+        cmd.append("--loop")
     log = open(REPO_ROOT / "runs" / "trial.log", "w")
     _trial_proc = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT, cwd=str(REPO_ROOT))
-    return {"ok": True, "pid": _trial_proc.pid}
+    return _trial_proc.pid
+
+
+@app.post("/api/trial/start")
+def trial_start(task: str = "walk", max_steps: int = 600, realtime: float = 1.0, loop: bool = True):
+    """Run real-time playback of the latest policy in a CPU subprocess.
+
+    Default is loop=true: episodes back-to-back, reloading the latest
+    checkpoint between each so the viewer always shows the freshest
+    policy. Set loop=false for a single episode."""
+    global _trial_proc
+    if _trial_proc is not None and _trial_proc.poll() is None:
+        raise HTTPException(status_code=400, detail="trial already running — stop it first")
+    pid = _spawn_trial(task, max_steps, realtime, loop)
+    return {"ok": True, "pid": pid, "loop": loop}
 
 
 @app.post("/api/trial/stop")
