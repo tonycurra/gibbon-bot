@@ -34,7 +34,7 @@ class _AccessFilter(logging.Filter):
         "/api/train/metrics", "/api/train/logs", "/api/train/status",
         "/api/system/stats", "/api/params/get", "/api/sim/joints",
         "/api/tasks/overview", "/api/whats-happening", "/api/sim/mode",
-        "/api/runs",
+        "/api/runs", "/api/trial/info", "/api/trial/status",
     )
     def filter(self, record):
         msg = record.getMessage()
@@ -503,32 +503,34 @@ LIVE_QPOS_MIN_INTERVAL = 0.2  # 5fps — slow enough that resets don't blink pas
 
 
 TRIAL_QPOS = REPO_ROOT / "runs" / ".trial_qpos.npy"
+TRIAL_INFO = REPO_ROOT / "runs" / ".trial_info.json"
 
 
 def _load_live_qpos(task: str):
-    """Read whatever qpos source applies right now.
-
-    Priority: TRIAL (if a trial subprocess is running) > TRAINER live dump.
-    Rate-limited to 5fps so resets don't flicker."""
-    # Trial process running? Prefer its qpos dump.
+    """Read qpos for the viewer. Trial ONLY — we don't show the trainer's
+    env-0 (jerky, resets visible). If the trial isn't running, the viewer
+    returns the idle placeholder (handled by _render_png_bytes)."""
     if _trial_proc is not None and _trial_proc.poll() is None and TRIAL_QPOS.exists():
         try:
             return np.load(str(TRIAL_QPOS))
         except Exception:
             pass
-    p = REPO_ROOT / "runs" / f"ape_{task}_mjx" / "live_qpos.npy"
-    if not p.exists():
-        return None
-    now = time.time()
-    if (now - _LIVE_QPOS_CACHE["ts"]) < LIVE_QPOS_MIN_INTERVAL and _LIVE_QPOS_CACHE["qpos"] is not None:
-        return _LIVE_QPOS_CACHE["qpos"]
+    return None
+
+
+@app.get("/api/trial/info")
+def trial_info():
+    """What the viewer's playing right now: episode #, checkpoint filename,
+    policy kind (trained / random), last outcome."""
+    if not TRIAL_INFO.exists():
+        return {"running": False}
     try:
-        arr = np.load(str(p))
-        _LIVE_QPOS_CACHE["qpos"] = arr
-        _LIVE_QPOS_CACHE["ts"] = now
-        return arr
-    except Exception:
-        return _LIVE_QPOS_CACHE["qpos"]
+        import json
+        d = json.loads(TRIAL_INFO.read_text())
+        d["running"] = _trial_proc is not None and _trial_proc.poll() is None
+        return d
+    except Exception as e:
+        return {"running": False, "error": str(e)}
 
 
 # ───── Single-trial playback (real-time CPU subprocess) ─────
@@ -1064,9 +1066,10 @@ def _render_png_bytes() -> bytes:
     import mujoco
     from PIL import Image
     global _RENDER_OWNER_THREAD, _renderer_cache
-    # Show the rendered scene whenever a trial is running OR a trainer is dumping qpos.
+    # Viewer shows the TRIAL only. Never trainer env-0 (too jerky).
+    # If the trial isn't running, return the idle placeholder.
     trial_running = _trial_proc is not None and _trial_proc.poll() is None
-    if not (_trainer_pids() or trial_running):
+    if not trial_running:
         return _idle_frame()
     tid = threading.get_ident()
     with _SIM_LOCK:
@@ -1184,26 +1187,22 @@ def whats_happening():
 
     # VIEWER: what's the user looking at?
     if trial_running:
+        info = trial_info() if TRIAL_INFO.exists() else {}
+        ckpt = info.get("checkpoint", "random policy")
         viewer = {
-            "label": "TRIAL — REAL-TIME PLAYBACK",
-            "detail": "Single CPU robot, loops episodes, reloads latest checkpoint between each.",
+            "label": f"TRIAL · {ckpt}",
+            "detail": "Real-time single robot. Reloads the best checkpoint between episodes.",
             "color": "ok",
-        }
-    elif training_running and qpos_age is not None and qpos_age < 3.0:
-        viewer = {
-            "label": "TRAINING PEEK (env-0)",
-            "detail": "Raw view of the trainer's first env — fast, resets visible, NOT for the customer.",
-            "color": "warn",
         }
     elif training_running:
         viewer = {
-            "label": "WAITING FOR FIRST FRAME",
-            "detail": "Trainer is JIT-compiling (~30–60s first run, ~5s cached).",
+            "label": "TRAINING IN BACKGROUND",
+            "detail": "Trainer is running but no trial yet. Click Replay (or wait for auto-trial).",
             "color": "warn",
         }
     else:
         viewer = {
-            "label": "IDLE — nothing to show",
+            "label": "IDLE",
             "detail": "Press Start to launch trainer + auto-playback.",
             "color": "muted",
         }

@@ -145,7 +145,15 @@ def main():
         tree_xy = np.array([3.0, 0.0], dtype=np.float32)
 
     qpos_path = ROOT / "runs" / ".trial_qpos.npy"
+    info_path = ROOT / "runs" / ".trial_info.json"
     qpos_path.parent.mkdir(parents=True, exist_ok=True)
+
+    def write_info(payload: dict):
+        import json
+        try:
+            info_path.write_text(json.dumps(payload))
+        except Exception:
+            pass
     action_dt = PHYSICS_STEPS_PER_ACTION * float(model.opt.timestep)  # ~32ms
     sleep_per_action = action_dt / max(0.05, args.realtime)
 
@@ -165,6 +173,13 @@ def main():
                 print(f"[trial] policy load failed: {e}; keeping previous (or random)", flush=True)
         elif ckpt is None and predict is None:
             print(f"[trial] no checkpoint; random policy", flush=True)
+
+        write_info({
+            "episode": episode,
+            "checkpoint": current_ckpt_path.name if current_ckpt_path else None,
+            "policy_kind": "trained" if predict is not None else "random",
+            "started_at": time.time(),
+        })
 
         # Reset robot at start of episode.
         data.qpos[:] = model.qpos0
@@ -216,7 +231,16 @@ def main():
             if target_elapsed > elapsed:
                 time.sleep(target_elapsed - elapsed)
 
-        print(f"[trial] ep{episode}: {outcome} in {time.time() - t_start:.1f}s", flush=True)
+        dur = time.time() - t_start
+        print(f"[trial] ep{episode}: {outcome} in {dur:.1f}s", flush=True)
+        write_info({
+            "episode": episode,
+            "checkpoint": current_ckpt_path.name if current_ckpt_path else None,
+            "policy_kind": "trained" if predict is not None else "random",
+            "last_outcome": outcome,
+            "last_duration_s": dur,
+            "started_at": t_start,
+        })
 
         if not args.loop:
             break
