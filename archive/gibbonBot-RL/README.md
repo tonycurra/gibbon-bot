@@ -23,9 +23,11 @@ Reinforcement-learning training stack for a 4-limbed robotic ape.
 front-right, back-left, back-right) on a shared torso, simulated in
 MuJoCo + MJX with a Warp physics backend on GPU.
 
-**Current focus**: `walk` — train the robot to walk from its spawn at
-(0, 0) to the olive tree at (3, 0). Single env file at `envs/env.py`;
-per-task env variants have been archived to `envs/_archive/`.
+**Current focus**: `walk` (main demo) + `stand` (sanity check). Both
+share a single env file `envs/env.py`; `read_params(task)` switches
+reward weights — `stand` zeros tree-progress signals and bumps
+upright/height. Per-task env variants are archived under
+`envs/_archive/` and no longer wired in.
 
 ---
 
@@ -33,7 +35,8 @@ per-task env variants have been archived to `envs/_archive/`.
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
-│  data/scene.xml          ← robot + floor + light (the world)   │
+│  data/scene.xml          ← robot + floor + light + tree        │
+│  data/gibbonbot.xml      ← frozen canonical scene (do-not-edit)│
 │  data/meshes/*.stl       ← roarm-M3 STL parts (real geometry)  │
 │  data/SCENE_GEOMETRY.md  ← required reading before scene edits │
 └────────────────────────────────────────────────────────────────┘
@@ -41,8 +44,10 @@ per-task env variants have been archived to `envs/_archive/`.
                               │ loaded by
                               │
 ┌────────────────────────────────────────────────────────────────┐
-│  envs/<task>_env_mjx.py       ← reset / step / reward / done   │
-│  envs/params_<task>_mjx.py    ← hyperparams (lr, n_envs, etc.) │
+│  envs/env.py                  ← reset / step / reward / done   │
+│                                  reward weights inlined,        │
+│                                  read_params(task) switches    │
+│                                  walk vs stand                 │
 │  envs/_shared_physics_backend ← MJX vs MJX-Warp dispatch       │
 └────────────────────────────────────────────────────────────────┘
                               ▲

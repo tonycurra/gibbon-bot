@@ -2,42 +2,44 @@
 
 _The GibbonBot's running notebook + control interface._
 
-> **Demo north star (locked 2026-05-15):** > Robot starts dumb, visibly improves while you talk *("look, it learns")
-> Robot walks to the olive tree
- on command, reliably. Customer hits a button, the robot does it. Anything
-> that doesn't move this forward is a tangent — push back, don't build it.
-This file is the brain's diary. Append-only. Every meaningful tweak gets a
-dated entry — what was changed, why, and (later) the result. Scrolling this
-file should let anyone catch up on what we've tried and what we know.
+> **Demo north star (locked 2026-05-15):** Robot walks to the olive tree
+> on command, reliably. Customer hits a button, the robot does it.
+> Anything that doesn't move this forward is a tangent — push back.
 
 ## How to use it
 
-- `./liana go` — start trainer + viewer (default task `walk`, phase A is stand-and-survive)
-- `./liana go stand` — train pure stand
-- `./liana stop` — kill both
-- `./liana status` — what's running + last 20 log lines
-- `./liana log "tweak X because Y"` — drop a note into this file
+```bash
+./liana go             # spawn dashboard at http://localhost:8000/static/index.html
+```
 
-When you tell Claude "make it lean forward more" / "stop the wobble" /
-"this is going nowhere", Claude edits the relevant
-`envs/params_<task>_mjx.py` and appends a `## <date> — <task>` entry below.
+Then from the dashboard:
+- **Task** dropdown — `walk` or `stand`
+- **Scene** dropdown — pick from `data/scene*.xml` + archive
+- **Envs** — parallel envs on GPU (default 2048)
+- **Trial s** + **Speed** — how long each playback episode runs / how fast
+- **Start** → trainer + auto-trial spawn. **Stop train** kills only the
+  trainer; the trial loop keeps showing the best policy
+- **Replay** / **Stop trial** — manual control of the playback loop
+- **Demo walk** — scripted sine-wave gait (no RL) as a sanity reference
+- **Library** — save the current best with a name, recall it later
+- **Env Params** — read-only live dump of every active constant in
+  `envs/env.py`
+- **Runs** — last 20 training runs from `mlflow.db` (succ, rew, scene
+  fingerprint, headline params)
 
-## Current state
+Ctrl-C in the terminal tears down all subprocesses (dashboard, trainer,
+trial).
 
-- Task focus: **walk** (autopilot phase A → D handles stand → walk → reach)
-- Active branch: `brain-modeling`
-- See `utils/autopilot.py` for phase knobs and success criteria.
+## Tasks
 
-## Tasks summary
+| Task    | Reward                                                                                | Folder                  |
+|---------|---------------------------------------------------------------------------------------|-------------------------|
+| `walk`  | progress toward tree + upright + height − flip / ground / jerk                        | `runs/ape_walk_mjx/`    |
+| `stand` | upright + height (tree-progress rewards **zeroed**) − flip / ground / jerk            | `runs/ape_stand_mjx/`   |
 
-| Task         | Env file                            | Best policy                          |
-|--------------|-------------------------------------|--------------------------------------|
-| stand        | `envs/stand_env_mjx.py`             | `runs/ape_stand_mjx/`                |
-| walk         | `envs/walk_env_mjx.py`              | `runs/ape_walk_mjx/`                 |
-| walk_forward | `envs/walk_forward_env_mjx.py`      | `runs/ape_walk_forward_mjx/`         |
-| turn_left    | `envs/turn_left_env_mjx.py`         | `runs/ape_turn_left_mjx/` (if any)   |
-| turn_right   | `envs/turn_right_env_mjx.py`        | `runs/ape_turn_right_mjx/` (if any)  |
-| climb        | _not yet — see BACKLOG.md_          | —                                    |
+Reward weights live in `envs/env.py`; `read_params(task)` returns a
+different tuple for `stand` vs `walk`. Folder layout is segregated so
+keepers never mix.
 
 ## Architecture & where knowledge lives
 

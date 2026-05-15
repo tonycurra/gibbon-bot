@@ -108,6 +108,25 @@ The brain currently **records** what happens during training. It does
 not yet **drive** training decisions (curriculum, action priors). That's
 the next integration step; for the demo we don't need it.
 
+## Per-task reward switching
+
+A single `envs/env.py` serves both `walk` and `stand`. The trainer calls
+`env.read_params(task)` and gets a different reward tuple back:
+
+| Constant         | `walk` | `stand` | Note                                 |
+|------------------|-------:|--------:|--------------------------------------|
+| `W_PROGRESS`     |   80.0 |     0.0 | tree-progress signal off in stand    |
+| `W_FWD_VEL`      |   25.0 |     0.0 |                                      |
+| `W_PROXIMITY_TREE` | 1.0  |     0.0 |                                      |
+| `W_HEADING`      |    8.0 |     0.0 |                                      |
+| `W_SUCCESS`      |  200.0 |     0.0 |                                      |
+| `W_UPRIGHT`      |    3.0 |    12.0 | boosted for stand — the whole task   |
+| `W_HEIGHT`       |    0.5 |     5.0 | boosted for stand                    |
+
+Everything else (motor / smoothing / penalties / PPO) is the same.
+Checkpoints land in segregated folders (`runs/ape_walk_mjx/` vs
+`runs/ape_stand_mjx/`) so the two tasks never share weights.
+
 ## When something works
 
 1. Trainer auto-saves a keeper with a descriptive filename:
