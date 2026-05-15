@@ -23,6 +23,10 @@ from collections import deque
 
 os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
 
+import warnings as _warnings
+_warnings.filterwarnings("ignore", message=".*coplanar face.*", module="mujoco.mjx._src.mesh")
+_warnings.filterwarnings("ignore", category=UserWarning, module=r"mujoco\.mjx\..*")
+
 import hashlib
 import json
 
@@ -498,7 +502,10 @@ def main():
         except Exception as e:
             print(f"[watch] failed to spawn: {e}", flush=True)
 
-    print(f"Training — {total_steps_budget:,} total steps.")
+    if total_steps_budget >= 1_000_000_000:
+        print("Training — indefinite (auto-stops on goal or user Stop)")
+    else:
+        print(f"Training — {total_steps_budget:,} total steps.")
     print(f"{'updates':>8}  {'steps':>12}  {'sps':>8}  {'mean_rew':>10}  metrics")
     print("-" * 60)
 
