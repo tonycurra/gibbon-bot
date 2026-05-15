@@ -114,11 +114,19 @@ def _read_active(path: Path, default: str) -> str:
 def _bg(*args: str) -> dict:
     """Invoke scripts/train_bg.sh — returns {ok, stdout, stderr}.
 
-    ALLOW_GPU_SHARE=1: the dashboard process holds a small chunk of GPU for
-    its MuJoCo renderer; without this flag train_bg.sh sees it via nvidia-smi
-    and refuses to launch the trainer.
+    - ALLOW_GPU_SHARE=1: dashboard holds a small chunk of GPU for its
+      MuJoCo renderer; without this flag train_bg.sh refuses to launch.
+    - XLA_PYTHON_CLIENT_PREALLOCATE=false: JAX grabs only what it needs
+      instead of 75% of VRAM. Otherwise the dashboard's EGL renderer
+      stops producing frames once training starts.
+    - XLA_PYTHON_CLIENT_MEM_FRACTION=0.6: cap JAX growth to leave headroom.
     """
-    env = {**os.environ, "ALLOW_GPU_SHARE": "1"}
+    env = {
+        **os.environ,
+        "ALLOW_GPU_SHARE": "1",
+        "XLA_PYTHON_CLIENT_PREALLOCATE": "false",
+        "XLA_PYTHON_CLIENT_MEM_FRACTION": "0.6",
+    }
     res = subprocess.run(
         ["bash", str(TRAIN_BG), *args],
         cwd=str(REPO_ROOT), capture_output=True, text=True, timeout=60, env=env,
@@ -478,8 +486,15 @@ def get_frame(width: int = 640, height: int = 480):
         return Response(content=buf.getvalue(), media_type="image/png")
 
     except Exception as e:
-        # Return transparent 1x1 PNG as fallback
-        return Response(content=_TRANSPARENT_PNG, media_type="image/png")
+        # Surface the error in headers so we can diagnose without swallowing it.
+        import traceback
+        err = f"{type(e).__name__}: {e}"
+        sys.stderr.write(f"[viewer] render failed: {err}\n{traceback.format_exc()}\n")
+        sys.stderr.flush()
+        return Response(
+            content=_TRANSPARENT_PNG, media_type="image/png",
+            headers={"X-Viewer-Error": err[:200]},
+        )
 
 
 @app.get("/api/viewer/state")
