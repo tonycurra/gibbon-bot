@@ -320,20 +320,44 @@ select:focus, input:focus { outline: none; border-color: var(--accent); }
   <div class="card">
     <h2>Train</h2>
     <div class="row">
-      <label class="field">Envs <span class="hint">parallel</span>
-        <input id="envs-input" type="number" min="1" max="4096" step="1" value="2048" title="parallel envs on GPU; higher = faster learning"/>
+      <label class="field">Task
+        <select id="task-select">
+          <option value="walk">walk to tree</option>
+          <option value="stand">stand (sanity)</option>
+        </select>
+      </label>
+      <label class="field">Scene
+        <select id="scene-select" title="model XML (Stop training first)"></select>
+      </label>
+    </div>
+    <div class="row" style="margin-top:8px;">
+      <label class="field">Envs
+        <input id="envs-input" type="number" min="1" max="4096" step="1" value="2048"/>
       </label>
       <label class="field">Trial s
-        <input id="trial-seconds-input" type="number" min="2" max="120" step="1" value="20" title="seconds per playback episode"/>
+        <input id="trial-seconds-input" type="number" min="2" max="120" step="1" value="20"/>
       </label>
     </div>
     <div class="row" style="margin-top:10px;">
       <button class="btn primary" onclick="startTraining()">Start</button>
       <button class="btn" onclick="stopTraining()">Stop</button>
-      <button class="btn ghost" onclick="runTrial()" title="replay one episode of the current best policy">Replay</button>
+      <button class="btn ghost" onclick="runTrial()" title="replay one episode of the best policy so far">Replay</button>
     </div>
-    <input type="hidden" id="task-select" value="walk"/>
     <input type="hidden" id="steps-input" value=""/>
+  </div>
+
+  <div class="card">
+    <h2>Params <span class="hint">applied next episode</span></h2>
+    <div id="param-sliders"><span class="loading">Loading…</span></div>
+    <div class="row" style="margin-top:10px;">
+      <button class="btn" onclick="resetParams()">Reset to known-good</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>History</h2>
+    <a class="btn" target="_blank" id="mlflow-link" href="http://localhost:5000">Open MLflow ↗</a>
+    <div class="state-det" style="margin-top:8px;">Every Start is a run with params, metrics, scene fingerprint. Compare across runs to see what works.</div>
   </div>
 
 </div>
@@ -756,6 +780,10 @@ document.addEventListener("DOMContentLoaded", () => {
     refreshMetrics();
     refreshLogs();
     loadViews();
+    loadParams();
+    loadScenes();
+    document.getElementById("task-select").addEventListener("change", loadParams);
+    document.getElementById("scene-select").addEventListener("change", selectScene);
 });
 </script>
 </body>

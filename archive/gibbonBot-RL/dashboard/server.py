@@ -294,11 +294,16 @@ def params_reset(task: str = "walk"):
     return {"ok": True, "applied": out}
 
 
-def _params_path(task: str) -> Path:
-    p = REPO_ROOT / "envs" / f"params_{task}_mjx.py"
-    if not p.exists():
-        raise HTTPException(status_code=404, detail=f"No params file for task '{task}'")
-    return p
+def _params_path(task: str = "walk") -> Path:
+    """All tasks share envs/env.py since the refactor; the file holds
+    every reward/motor knob as a module-level constant."""
+    return REPO_ROOT / "envs" / "env.py"
+
+
+@app.get("/api/mlflow/url")
+def mlflow_url():
+    """The URL the LIANA dashboard links to for run comparison."""
+    return {"url": "http://localhost:5000"}
 
 
 @app.get("/api/params/get")

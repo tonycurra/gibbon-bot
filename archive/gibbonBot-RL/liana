@@ -24,6 +24,8 @@ cd "$ROOT"
 TRAIN_LOG="$ROOT/train.log"
 DASH_PID_FILE="$ROOT/runs/.dashboard.pid"
 DASH_PORT="${LIANA_PORT:-8000}"
+MLFLOW_PID_FILE="$ROOT/runs/.mlflow.pid"
+MLFLOW_PORT="${LIANA_MLFLOW_PORT:-5000}"
 
 _dash_alive() {
     [[ -f "$DASH_PID_FILE" ]] || return 1
@@ -41,9 +43,27 @@ _stop_dashboard() {
     rm -f "$DASH_PID_FILE"
 }
 
+_mlflow_alive() {
+    [[ -f "$MLFLOW_PID_FILE" ]] || return 1
+    local pid; pid="$(cat "$MLFLOW_PID_FILE")"
+    [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null
+}
+_stop_mlflow() {
+    if _mlflow_alive; then
+        kill -TERM "$(cat "$MLFLOW_PID_FILE")" 2>/dev/null || true
+        sleep 1
+        kill -KILL "$(cat "$MLFLOW_PID_FILE")" 2>/dev/null || true
+    fi
+    pkill -f "mlflow.* ui" 2>/dev/null || true
+    pkill -f "mlflow.server" 2>/dev/null || true
+    rm -f "$MLFLOW_PID_FILE"
+}
+
 _stop_all() {
     echo "[liana] stopping dashboard..."
     _stop_dashboard
+    echo "[liana] stopping mlflow ui..."
+    _stop_mlflow
     echo "[liana] stopping trainer..."
     "$ROOT/scripts/train_bg.sh" stop || true
 }
@@ -61,6 +81,15 @@ case "$cmd" in
         mkdir -p "$ROOT/runs"
         [[ -f "$ROOT/runs/.active_task" ]] || echo -n "walk" > "$ROOT/runs/.active_task"
 
+        echo "[liana] launching mlflow ui on :$MLFLOW_PORT..."
+        nohup "$ROOT/.venv/bin/python" -m mlflow ui \
+            --backend-store-uri "sqlite:///$ROOT/mlflow.db" \
+            --default-artifact-root "file:$ROOT/mlruns" \
+            --host 127.0.0.1 --port "$MLFLOW_PORT" \
+            >"$ROOT/runs/mlflow.log" 2>&1 </dev/null &
+        echo $! >"$MLFLOW_PID_FILE"
+        disown || true
+
         echo "[liana] launching dashboard on :$DASH_PORT..."
         # --log-level warning silences the firehose of GET access logs.
         # An access-log filter in server.py drops the spammiest endpoints
@@ -76,10 +105,10 @@ case "$cmd" in
         "$0" log "started: dashboard only (no trainer)  → http://localhost:$DASH_PORT/static/index.html"
 
         echo "[liana] ─────────────────────────────────────────────────────"
-        echo "[liana] dashboard running. No trainer started — start it from the web UI."
-        echo "[liana]   url → http://localhost:$DASH_PORT/static/index.html"
-        echo "[liana]   tip → leave Envs=1 to watch a single env in real time"
-        echo "[liana]   Ctrl-C stops EVERYTHING (dashboard + any trainer)."
+        echo "[liana] services up:"
+        echo "[liana]   dashboard → http://localhost:$DASH_PORT/static/index.html"
+        echo "[liana]   mlflow ui → http://localhost:$MLFLOW_PORT  (run history)"
+        echo "[liana]   Ctrl-C stops EVERYTHING."
         echo "[liana] ─────────────────────────────────────────────────────"
 
         # Trap any way of dying so children never outlive the script.
