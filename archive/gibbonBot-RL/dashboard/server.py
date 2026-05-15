@@ -409,10 +409,20 @@ _LIVE_QPOS_CACHE: dict = {"qpos": None, "ts": 0.0, "src_mtime": 0.0}
 LIVE_QPOS_MIN_INTERVAL = 0.2  # 5fps — slow enough that resets don't blink past
 
 
+TRIAL_QPOS = REPO_ROOT / "runs" / ".trial_qpos.npy"
+
+
 def _load_live_qpos(task: str):
-    """Read the trainer's qpos dump, rate-limited so the viewer doesn't
-    flicker every reset. Returns the SAME cached value if the read is
-    still within LIVE_QPOS_MIN_INTERVAL of the previous read."""
+    """Read whatever qpos source applies right now.
+
+    Priority: TRIAL (if a trial subprocess is running) > TRAINER live dump.
+    Rate-limited to 5fps so resets don't flicker."""
+    # Trial process running? Prefer its qpos dump.
+    if _trial_proc is not None and _trial_proc.poll() is None and TRIAL_QPOS.exists():
+        try:
+            return np.load(str(TRIAL_QPOS))
+        except Exception:
+            pass
     p = REPO_ROOT / "runs" / f"ape_{task}_mjx" / "live_qpos.npy"
     if not p.exists():
         return None
@@ -426,6 +436,49 @@ def _load_live_qpos(task: str):
         return arr
     except Exception:
         return _LIVE_QPOS_CACHE["qpos"]
+
+
+# ───── Single-trial playback (real-time CPU subprocess) ─────
+_trial_proc: subprocess.Popen | None = None
+
+
+@app.post("/api/trial/start")
+def trial_start(task: str = "walk", max_steps: int = 600, realtime: float = 1.0):
+    """Run ONE real-time episode of the latest policy in a CPU subprocess.
+
+    Writes runs/.trial_qpos.npy each action step; the viewer streams that.
+    Trial process is separate from any background trainer."""
+    global _trial_proc
+    if _trial_proc is not None and _trial_proc.poll() is None:
+        raise HTTPException(status_code=400, detail="trial already running — stop it first")
+    cmd = [
+        str(REPO_ROOT / ".venv" / "bin" / "python"),
+        str(REPO_ROOT / "scripts" / "play_trial.py"),
+        "--task", task,
+        "--max-steps", str(max_steps),
+        "--realtime", str(realtime),
+    ]
+    log = open(REPO_ROOT / "runs" / "trial.log", "w")
+    _trial_proc = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT, cwd=str(REPO_ROOT))
+    return {"ok": True, "pid": _trial_proc.pid}
+
+
+@app.post("/api/trial/stop")
+def trial_stop():
+    global _trial_proc
+    if _trial_proc is not None and _trial_proc.poll() is None:
+        _trial_proc.terminate()
+        try: _trial_proc.wait(timeout=3)
+        except subprocess.TimeoutExpired: _trial_proc.kill()
+    return {"ok": True}
+
+
+@app.get("/api/trial/status")
+def trial_status():
+    if _trial_proc is None or _trial_proc.poll() is not None:
+        return {"running": False}
+    age = (time.time() - TRIAL_QPOS.stat().st_mtime) if TRIAL_QPOS.exists() else None
+    return {"running": True, "pid": _trial_proc.pid, "qpos_age_s": age}
 
 
 # ───── Manual joint control (used when no training is running) ─────
@@ -904,8 +957,9 @@ def _render_png_bytes() -> bytes:
     import mujoco
     from PIL import Image
     global _RENDER_OWNER_THREAD, _renderer_cache
-    # Pre-Start: skip rendering entirely, return the idle placeholder.
-    if not _trainer_pids():
+    # Show the rendered scene whenever a trial is running OR a trainer is dumping qpos.
+    trial_running = _trial_proc is not None and _trial_proc.poll() is None
+    if not (_trainer_pids() or trial_running):
         return _idle_frame()
     tid = threading.get_ident()
     with _SIM_LOCK:
@@ -1011,7 +1065,8 @@ def viewer_stream(fps: int = 20):
 def viewer_info():
     """Tells the UI what the viewer is actually showing right now:
 
-    - manual    : no trainer, sim driven by slider ctrl
+    - idle      : nothing running — placeholder frame
+    - trial     : single-trial subprocess running, real-time
     - compiling : trainer running but no fresh qpos yet (MJX JIT)
     - live      : trainer running and qpos is being updated
     """
@@ -1020,8 +1075,11 @@ def viewer_info():
     age = None
     if p.exists():
         age = time.time() - p.stat().st_mtime
-    if not _trainer_pids():
-        state = "manual"
+    trial_running = _trial_proc is not None and _trial_proc.poll() is None
+    if trial_running:
+        state = "trial"
+    elif not _trainer_pids():
+        state = "idle"
     elif age is None or age > 3.0:
         state = "compiling"
     else:

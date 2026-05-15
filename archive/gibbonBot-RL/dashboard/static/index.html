@@ -327,6 +327,10 @@ select:focus, input:focus { outline: none; border-color: var(--accent); }
       <button class="btn" onclick="restartTraining()">Restart</button>
       <button class="btn ghost" onclick="refreshStatus()" title="refresh">↻</button>
     </div>
+    <div class="row" style="margin-top:10px;">
+      <button class="btn" onclick="runTrial()" title="play one real-time episode of the latest policy">Run Trial</button>
+      <button class="btn ghost" onclick="stopTrial()">Stop Trial</button>
+    </div>
     <div class="divider"></div>
     <div class="status">
       <div class="k">Status</div><div class="v off" id="status-value">—</div>
@@ -598,19 +602,36 @@ async function refreshViewerInfo() {
         const d = await r.json();
         const b = document.getElementById("viewer-badge");
         b.className = "viewer-badge " + d.state;
-        const label = d.state === "live" ? "POLICY LIVE"
-                    : d.state === "compiling" ? "COMPILING…"
-                    : "MANUAL (sliders)";
-        b.innerHTML = "<span class=\"dot\"></span>" + label;
+        const labels = {
+            trial: "TRIAL — REAL TIME",
+            live: "POLICY LIVE",
+            compiling: "COMPILING…",
+            idle: "IDLE",
+        };
+        b.innerHTML = "<span class=\"dot\"></span>" + (labels[d.state] || d.state.toUpperCase());
         const info = document.getElementById("viewer-info");
-        if (d.state === "live") {
-            info.textContent = `task=${d.task} · qpos age ${(d.live_age_s*1000).toFixed(0)}ms`;
+        if (d.state === "trial") {
+            info.textContent = "single real-time playback of the latest policy. Trainer (if any) runs in background.";
+        } else if (d.state === "live") {
+            info.textContent = `training peek, env-0, task=${d.task}. Resets are visible.`;
         } else if (d.state === "compiling") {
-            info.textContent = "Trainer is JIT-compiling MJX step function. First frames in 30–60s.";
+            info.textContent = "Trainer is JIT-compiling. First frames in 30–60s (or ~5s if cached).";
         } else {
-            info.textContent = `manual sim, ${d.mode} mode. Drag sliders to pose the robot.`;
+            info.textContent = "Press Start to train, or Run Trial to watch one real-time episode.";
         }
     } catch(e) {}
+}
+
+async function runTrial() {
+    const task = document.getElementById("task-select").value;
+    try {
+        const r = await fetch(API + "/trial/start?task=" + task, {method:"POST"});
+        const d = await r.json();
+        if (!r.ok) alert("Trial failed: " + (d.detail || r.statusText));
+    } catch(e) { alert(e.message); }
+}
+async function stopTrial() {
+    try { await fetch(API + "/trial/stop", {method:"POST"}); } catch(e) {}
 }
 
 async function loadSimMode() {
