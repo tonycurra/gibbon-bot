@@ -530,6 +530,13 @@ python -m pytest tests_brain/ -v
 - **QNN**: Schuld, M., & Killoran, N. (2019). "Quantum Machine Learning in Feature Hilbert Spaces"
 - **Quantum RL**: Dong, D., et al. (2008). "Quantum Algorithm for Training Binary Perceptrons on Quantum Computers"
 
+### Spiking Neural Networks
+- **SNN Theory**: Maass, W. (1997). "Networks of Spiking Neurons: The Third Generation of Neural Network Models". *Neural Networks*.
+- **Spiking Neuron Models**: Izhikevich, E. M. (2003). "Simple Model of Spiking Neurons". *IEEE Transactions on Neural Networks*.
+- **SNN Learning**: Diehl, P. U., & Cook, M. (2015). "Unsupervised Learning of Digit Recognition using Spike-Timing-Dependent Plasticity". *Proceedings of the International Conference on Artificial Neural Networks (ICANN)*.
+- **Event-based Vision**: Besson, A., et al. (2020). "Spiking Neural Networks for Event-based Vision: A Survey". *Frontiers in Neuroscience*.
+- **SNN Deep Learning**: Tavanaei, A., et al. (2019). "Deep Learning with Spiking Neurons: Opportunities and Challenges". *Neural Networks*.
+
 ## 🤝 Contributing
 
 1. **Branch**: Create a feature branch from `ape_brain`
