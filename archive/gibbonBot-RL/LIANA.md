@@ -46,3 +46,6 @@ _(empty — add as we learn)_
 # Session log
 
 _New entries appended below by `./liana log "..."` and by Claude when changes are made._
+
+## 2026-05-15 12:37
+started: task=walk

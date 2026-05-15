@@ -5,11 +5,10 @@ MOTOR_MAX_SPEED = (
     0.10  # legacy — unused; per-joint limits derived from data/motors.md at env load
 )
 MOTOR_MAX_ACCEL = 0.025  # legacy — unused
-MOTOR_SPEED_FRAC = (
-    0.8  # global scale on real motor max speed (0.8=20% slower; <1=slower than reality)
-)
-MOTOR_ACCEL_RATIO = 2.0  # max angular accel = SPEED × this/sec (gentler acceleration)
-ACTION_SMOOTH_ALPHA = 0.10  # stronger lowpass — smoother movement, less shake
+# Slowed for visibility (was 0.8). Raise via dashboard slider.
+MOTOR_SPEED_FRAC = 0.4
+MOTOR_ACCEL_RATIO = 1.5  # gentler acceleration (was 2.0) — smoother visible motion.
+ACTION_SMOOTH_ALPHA = 0.20  # stronger lowpass — smoother movement, less shake (was 0.10).
 
 # Central Pattern Generator baseline — built-in trot rhythm added to policy
 # output before motor mapping. Lets policy learn corrections to a working gait
@@ -23,9 +22,7 @@ MOTOR_KP = 8.0
 # ─── Goal: walk toward tree without dragging torso ───────────────────────────
 TARGET_Z = 0.30  # desired torso height while walking
 TARGET_TOL = 0.10  # Gaussian sigma around target_z
-W_HEIGHT = (
-    0.5  # cut hard — standing pays minimal. Was anchoring policy to "do nothing".
-)
+W_HEIGHT = 0.5  # cut hard — standing pays minimal. Was anchoring policy to "do nothing".
 W_UPRIGHT = 3.0  # bonus when w > 0
 
 W_PROGRESS = 80.0  # main signal: reward each meter closer per step

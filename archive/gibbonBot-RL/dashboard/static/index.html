@@ -65,13 +65,33 @@ h1 { font-size: 2em; color: #eaeaea; }
 <div class="grid">
 <div class="card">
 <h2>Training Controls</h2>
+<div class="controls" style="margin-bottom:10px;">
+<label>Task:
+<select id="task-select" style="padding:6px;border-radius:6px;">
+<option value="walk">walk</option>
+<option value="stand">stand</option>
+<option value="walk_forward">walk_forward</option>
+<option value="turn_left">turn_left</option>
+<option value="turn_right">turn_right</option>
+</select></label>
+<label style="margin-left:10px;">Envs:
+<input id="envs-input" type="number" min="16" max="4096" step="16" placeholder="auto" style="padding:6px;border-radius:6px;width:90px;"/>
+</label>
+</div>
 <div class="controls">
-<button class="btn primary" onclick="startTraining()">Start Training</button>
-<button class="btn warning" onclick="stopTraining()">Stop Training</button>
-<button class="btn" onclick="refreshStatus()">Refresh Status</button>
+<button class="btn primary" onclick="startTraining()">Start</button>
+<button class="btn warning" onclick="stopTraining()">Stop</button>
+<button class="btn" onclick="restartTraining()">Restart (apply task/envs)</button>
+<button class="btn" onclick="refreshStatus()">Refresh</button>
 </div>
 <div class="status-item"><span>Status:</span><span class="status-value" id="status-value">Unknown</span></div>
 <div class="status-item"><span>PID:</span><span class="status-value" id="pid-value">-</span></div>
+<div class="status-item"><span>Active task:</span><span class="status-value" id="active-task">-</span></div>
+<div class="status-item"><span>Active envs:</span><span class="status-value" id="active-envs">-</span></div>
+</div>
+<div class="card">
+<h2>Live Tuning <span style="font-weight:normal;color:#888;font-size:0.7em;">(hot-applied next episode)</span></h2>
+<div id="param-sliders"></div>
 </div>
 <div class="card">
 <h2>Brain State</h2>
@@ -104,23 +124,39 @@ h1 { font-size: 2em; color: #eaeaea; }
 <script>
 const API_BASE = window.location.origin + "/api";
 
+function _qs() {
+    const task = document.getElementById("task-select").value;
+    const envs = document.getElementById("envs-input").value;
+    let q = "task=" + encodeURIComponent(task);
+    if (envs) q += "&envs=" + encodeURIComponent(envs);
+    return q;
+}
+
 async function startTraining() {
-    const task = prompt("Task name:", "stand");
-    if (!task) return;
     try {
-        const resp = await fetch(API_BASE + "/train/start?task=" + encodeURIComponent(task), {method: "POST"});
+        const resp = await fetch(API_BASE + "/train/start?" + _qs(), {method: "POST"});
         const data = await resp.json();
-        alert("Training started: " + JSON.stringify(data));
+        if (!resp.ok) { alert("Error: " + (data.detail || resp.statusText)); return; }
         refreshStatus();
+        loadParams();
     } catch(e) { alert("Error: " + e.message); }
 }
 
 async function stopTraining() {
     try {
         const resp = await fetch(API_BASE + "/train/stop", {method: "POST"});
-        const data = await resp.json();
-        alert("Training " + data.status);
+        await resp.json();
         refreshStatus();
+    } catch(e) { alert("Error: " + e.message); }
+}
+
+async function restartTraining() {
+    try {
+        const resp = await fetch(API_BASE + "/train/restart?" + _qs(), {method: "POST"});
+        const data = await resp.json();
+        if (!resp.ok) { alert("Error: " + (data.detail || resp.statusText)); return; }
+        refreshStatus();
+        loadParams();
     } catch(e) { alert("Error: " + e.message); }
 }
 
@@ -131,7 +167,40 @@ async function refreshStatus() {
         document.getElementById("status-value").textContent = data.running ? "Running" : "Stopped";
         document.getElementById("status-value").style.color = data.running ? "#28a745" : "#e94560";
         document.getElementById("pid-value").textContent = data.pid || "-";
+        document.getElementById("active-task").textContent = data.task || "-";
+        document.getElementById("active-envs").textContent = data.envs || "(auto)";
     } catch(e) { console.error("Status error:", e); }
+}
+
+async function loadParams() {
+    const task = document.getElementById("task-select").value;
+    try {
+        const resp = await fetch(API_BASE + "/params/get?task=" + encodeURIComponent(task));
+        const data = await resp.json();
+        if (data.error || !data.params) {
+            document.getElementById("param-sliders").innerHTML = "<span class=\"loading\">No params for " + task + "</span>";
+            return;
+        }
+        let html = "";
+        for (const [key, val] of Object.entries(data.params)) {
+            const [lo, hi] = data.bounds[key];
+            const step = (hi - lo) / 200;
+            html += "<div style=\"margin:8px 0;\">";
+            html += "<label style=\"display:flex;justify-content:space-between;font-size:12px;\"><span>" + key + "</span><span id=\"v-" + key + "\" style=\"color:#e94560;\">" + val.toFixed(3) + "</span></label>";
+            html += "<input type=\"range\" min=\"" + lo + "\" max=\"" + hi + "\" step=\"" + step + "\" value=\"" + val + "\" style=\"width:100%;\" oninput=\"document.getElementById('v-" + key + "').textContent=parseFloat(this.value).toFixed(3)\" onchange=\"setParam('" + key + "', this.value)\"/>";
+            html += "</div>";
+        }
+        document.getElementById("param-sliders").innerHTML = html;
+    } catch(e) {
+        document.getElementById("param-sliders").innerHTML = "<span class=\"error\">Error: " + e.message + "</span>";
+    }
+}
+
+async function setParam(key, value) {
+    const task = document.getElementById("task-select").value;
+    try {
+        await fetch(API_BASE + "/params/set?task=" + task + "&key=" + key + "&value=" + value, {method: "POST"});
+    } catch(e) { console.error("setParam error:", e); }
 }
 
 async function listModules() {
@@ -226,6 +295,8 @@ document.addEventListener("DOMContentLoaded", function() {
     loadMemory();
     refreshMetrics();
     refreshLogs();
+    loadParams();
+    document.getElementById("task-select").addEventListener("change", loadParams);
 });
 </script>
 </body>

@@ -1,42 +1,49 @@
 #!/usr/bin/env bash
-# Liana — one command to start training + viewer + log tail.
+# Liana — one command to start training + dashboard + log tail.
 # Ctrl-C tears everything down cleanly.
 #
 # Usage:
-#   ./liana go [task]          start trainer + viewer for <task> (default: walk)
-#   ./liana stop               stop trainer + viewer
+#   ./liana go [task]          start trainer + dashboard for <task> (default: walk)
+#   ./liana stop               stop trainer + dashboard
 #   ./liana status             show what's running + tail of log
 #   ./liana log "message"      append a dated entry to LIANA.md
 #
 # Tasks: walk (default — phase A is stand-and-survive), stand, walk_forward,
 # turn_left, turn_right. The autopilot drives walk through phases A→D.
+#
+# Dashboard: http://localhost:8000/static/index.html
+#   - Task dropdown + Envs input + Restart button (changes batch size requires
+#     restart — MJX recompiles on shape change)
+#   - Live sliders for motor speed, action smoothing, reward weights (hot-applied)
+#   - Viewer renders env-0 qpos snapshot dumped every PPO batch
 
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "$ROOT"
 
 TRAIN_LOG="$ROOT/train.log"
-VIEW_PID_FILE="$ROOT/runs/.view.pid"
+DASH_PID_FILE="$ROOT/runs/.dashboard.pid"
+DASH_PORT="${LIANA_PORT:-8000}"
 
-_view_alive() {
-    [[ -f "$VIEW_PID_FILE" ]] || return 1
-    local pid; pid="$(cat "$VIEW_PID_FILE")"
+_dash_alive() {
+    [[ -f "$DASH_PID_FILE" ]] || return 1
+    local pid; pid="$(cat "$DASH_PID_FILE")"
     [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null
 }
 
-_stop_viewer() {
-    if _view_alive; then
-        kill -TERM "$(cat "$VIEW_PID_FILE")" 2>/dev/null || true
+_stop_dashboard() {
+    if _dash_alive; then
+        kill -TERM "$(cat "$DASH_PID_FILE")" 2>/dev/null || true
         sleep 1
-        kill -KILL "$(cat "$VIEW_PID_FILE")" 2>/dev/null || true
+        kill -KILL "$(cat "$DASH_PID_FILE")" 2>/dev/null || true
     fi
-    pkill -f "[v]iew\.py" 2>/dev/null || true
-    rm -f "$VIEW_PID_FILE"
+    pkill -f "uvicorn dashboard.server" 2>/dev/null || true
+    rm -f "$DASH_PID_FILE"
 }
 
 _stop_all() {
-    echo "[liana] stopping viewer..."
-    _stop_viewer
+    echo "[liana] stopping dashboard..."
+    _stop_dashboard
     echo "[liana] stopping trainer..."
     "$ROOT/scripts/train_bg.sh" stop || true
 }
@@ -49,33 +56,39 @@ case "$cmd" in
         echo "[liana] task=$task — cleaning any previous run"
         _stop_all
 
+        # Record active task so the dashboard knows what to render.
+        mkdir -p "$ROOT/runs"
+        echo -n "$task" > "$ROOT/runs/.active_task"
+
         echo "[liana] starting trainer..."
         "$ROOT/scripts/train_bg.sh" start "$task" "$@"
 
-        # Wait for log to appear so view.py has something to hot-swap from.
+        # Wait for log to appear.
         for _ in 1 2 3 4 5; do
             [[ -s "$TRAIN_LOG" ]] && break
             sleep 1
         done
 
-        echo "[liana] launching viewer (task=$task)..."
-        # view.py opens a MuJoCo GUI window. Run in background; tee its stderr
-        # so a missing DISPLAY shows up here without blocking.
-        nohup "$ROOT/.venv/bin/python" view.py --task "$task" \
-            >"$ROOT/runs/view.log" 2>&1 </dev/null &
-        echo $! >"$VIEW_PID_FILE"
+        echo "[liana] launching dashboard on :$DASH_PORT..."
+        nohup "$ROOT/.venv/bin/python" -m uvicorn dashboard.server:app \
+            --host 0.0.0.0 --port "$DASH_PORT" \
+            >"$ROOT/runs/dashboard.log" 2>&1 </dev/null &
+        echo $! >"$DASH_PID_FILE"
         disown || true
 
-        # Append a Liana entry so we can see this session later.
-        "$0" log "started: task=$task"
+        # Try to open the browser (no-op if no GUI / no xdg-open).
+        ( sleep 2 && xdg-open "http://localhost:$DASH_PORT/static/index.html" >/dev/null 2>&1 ) &
+
+        "$0" log "started: task=$task  (dashboard http://localhost:$DASH_PORT/static/index.html)"
 
         echo "[liana] ─────────────────────────────────────────────────────"
-        echo "[liana] trainer + viewer running. Tailing $TRAIN_LOG."
-        echo "[liana] Ctrl-C stops everything."
+        echo "[liana] trainer + dashboard running."
+        echo "[liana]   dashboard → http://localhost:$DASH_PORT/static/index.html"
+        echo "[liana]   tailing  → $TRAIN_LOG"
+        echo "[liana]   Ctrl-C stops everything."
         echo "[liana] ─────────────────────────────────────────────────────"
 
         trap '_stop_all; exit 0' INT TERM
-        # -F follows even if the file is rotated.
         tail -F "$TRAIN_LOG" 2>/dev/null || true
         ;;
 
@@ -87,9 +100,9 @@ case "$cmd" in
         echo "── trainer ──"
         "$ROOT/scripts/train_bg.sh" status || true
         echo
-        echo "── viewer ──"
-        if _view_alive; then
-            echo "RUNNING  pid=$(cat "$VIEW_PID_FILE")  log=$ROOT/runs/view.log"
+        echo "── dashboard ──"
+        if _dash_alive; then
+            echo "RUNNING  pid=$(cat "$DASH_PID_FILE")  url=http://localhost:$DASH_PORT/static/index.html"
         else
             echo "STOPPED"
         fi

@@ -743,6 +743,14 @@ def main():
             }
 
             print(f"{update_count:>8}  {total_steps:>12,}  {sps:>8,.0f}  rew={mean_rew:+.2f}  d={mean_dist:.2f}  vx={mean_speed_x:+.2f}  z={mean_z:.2f}  upr={mean_upright:.2f}  ωz={mean_angvel_z:+.2f}", flush=True)
+
+            # Dump live qpos of env 0 for the dashboard viewer.
+            # Cheap (small array), once per PPO batch.
+            try:
+                live_qpos = np.asarray(jax.device_get(dx_batch.qpos[0]))
+                np.save(str(RUNS / "live_qpos.npy"), live_qpos)
+            except Exception:
+                pass
             if brain_hook is not None:
                 metrics.update(brain_hook.metrics())
             mlflow.log_metrics(metrics, step=total_steps)

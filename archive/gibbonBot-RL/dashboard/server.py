@@ -9,15 +9,22 @@ Note: For MJX/Warp rendering, frames are generated on-demand.
 """
 
 import os
+import re
 import subprocess
 import sys
 import time
 from io import BytesIO
 from pathlib import Path
 
+import numpy as np
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+TRAIN_BG = REPO_ROOT / "scripts" / "train_bg.sh"
+ACTIVE_TASK_FILE = REPO_ROOT / "runs" / ".active_task"
+ACTIVE_ENVS_FILE = REPO_ROOT / "runs" / ".active_envs"
 
 # Add parent directory to path for brain imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -77,34 +84,135 @@ def get_renderer():
 # ============================================================================
 
 
-@app.post("/api/train/start")
-def start_training(task: str = "stand"):
-    global training_process
-    if training_process and training_process.poll() is None:
-        raise HTTPException(status_code=400, detail="Training already running")
-    cmd = [sys.executable, "train_mjx.py", "--task", task, "--no-watch"]
-    training_process = subprocess.Popen(
-        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+def _trainer_pids():
+    try:
+        out = subprocess.check_output(["pgrep", "-f", "[t]rain_mjx.py"], text=True)
+        return [int(p) for p in out.split() if p.strip()]
+    except subprocess.CalledProcessError:
+        return []
+
+
+def _read_active(path: Path, default: str) -> str:
+    try:
+        return path.read_text().strip() or default
+    except FileNotFoundError:
+        return default
+
+
+def _bg(*args: str) -> dict:
+    """Invoke scripts/train_bg.sh — returns {ok, stdout, stderr}."""
+    res = subprocess.run(
+        ["bash", str(TRAIN_BG), *args],
+        cwd=str(REPO_ROOT), capture_output=True, text=True, timeout=60,
     )
-    return {"status": "started", "task": task, "pid": training_process.pid}
+    return {"ok": res.returncode == 0, "stdout": res.stdout, "stderr": res.stderr}
+
+
+@app.post("/api/train/start")
+def start_training(task: str = "walk", envs: int | None = None):
+    if _trainer_pids():
+        raise HTTPException(status_code=400, detail="Trainer already running — use /api/train/restart")
+    args = ["start", task]
+    if envs:
+        args += ["--envs", str(envs)]
+    res = _bg(*args)
+    if not res["ok"]:
+        raise HTTPException(status_code=500, detail=res["stderr"] or res["stdout"])
+    ACTIVE_TASK_FILE.parent.mkdir(parents=True, exist_ok=True)
+    ACTIVE_TASK_FILE.write_text(task)
+    if envs:
+        ACTIVE_ENVS_FILE.write_text(str(envs))
+    return {"status": "started", "task": task, "envs": envs, "detail": res["stdout"].strip()}
 
 
 @app.post("/api/train/stop")
 def stop_training():
-    global training_process
-    if training_process and training_process.poll() is None:
-        training_process.terminate()
-        training_process.wait(timeout=10)
-        return {"status": "stopped"}
-    return {"status": "not running"}
+    res = _bg("stop")
+    return {"status": "stopped" if res["ok"] else "error", "detail": (res["stdout"] or res["stderr"]).strip()}
+
+
+@app.post("/api/train/restart")
+def restart_training(task: str | None = None, envs: int | None = None):
+    """Stop + start with new task / num_envs. Required for changing batch size mid-run
+    (MJX recompiles on batch-shape change)."""
+    cur_task = _read_active(ACTIVE_TASK_FILE, "walk")
+    cur_envs = _read_active(ACTIVE_ENVS_FILE, "")
+    new_task = task or cur_task
+    new_envs = envs if envs is not None else (int(cur_envs) if cur_envs else None)
+    _bg("stop")
+    # Give kernel a beat to release the GPU.
+    time.sleep(2)
+    args = ["start", new_task]
+    if new_envs:
+        args += ["--envs", str(new_envs)]
+    res = _bg(*args)
+    if not res["ok"]:
+        raise HTTPException(status_code=500, detail=res["stderr"] or res["stdout"])
+    ACTIVE_TASK_FILE.write_text(new_task)
+    if new_envs:
+        ACTIVE_ENVS_FILE.write_text(str(new_envs))
+    return {"status": "restarted", "task": new_task, "envs": new_envs}
 
 
 @app.get("/api/train/status")
 def get_status():
-    global training_process
-    if training_process:
-        return {"running": training_process.poll() is None, "pid": training_process.pid}
-    return {"running": False}
+    pids = _trainer_pids()
+    return {
+        "running": bool(pids),
+        "pid": pids[0] if pids else None,
+        "task": _read_active(ACTIVE_TASK_FILE, "walk"),
+        "envs": _read_active(ACTIVE_ENVS_FILE, "(auto)"),
+    }
+
+
+# ───── Params editor (hot-reloaded per-episode by trainer) ─────
+_PARAM_KEYS = {
+    "MOTOR_SPEED_FRAC": (0.05, 1.5),
+    "MOTOR_ACCEL_RATIO": (0.5, 5.0),
+    "ACTION_SMOOTH_ALPHA": (0.0, 1.0),
+    "W_UPRIGHT": (0.0, 50.0),
+    "W_HEIGHT": (0.0, 50.0),
+    "W_PROGRESS": (0.0, 500.0),
+    "W_SMOOTH": (0.0, 5.0),
+    "FLIP_PENALTY": (0.0, 500.0),
+}
+
+
+def _params_path(task: str) -> Path:
+    p = REPO_ROOT / "envs" / f"params_{task}_mjx.py"
+    if not p.exists():
+        raise HTTPException(status_code=404, detail=f"No params file for task '{task}'")
+    return p
+
+
+@app.get("/api/params/get")
+def params_get(task: str = "walk"):
+    src = _params_path(task).read_text()
+    out = {}
+    for key in _PARAM_KEYS:
+        m = re.search(rf"^{key}\s*=\s*([0-9.+\-eE]+)", src, re.MULTILINE)
+        if m:
+            out[key] = float(m.group(1))
+    return {"task": task, "params": out, "bounds": _PARAM_KEYS}
+
+
+@app.post("/api/params/set")
+def params_set(task: str = "walk", key: str = "", value: float = 0.0):
+    if key not in _PARAM_KEYS:
+        raise HTTPException(status_code=400, detail=f"Key '{key}' not editable. Allowed: {list(_PARAM_KEYS)}")
+    lo, hi = _PARAM_KEYS[key]
+    if not (lo <= value <= hi):
+        raise HTTPException(status_code=400, detail=f"{key}={value} out of bounds [{lo}, {hi}]")
+    path = _params_path(task)
+    src = path.read_text()
+    new_line = f"{key} = {value}"
+    new_src, n = re.subn(
+        rf"^{key}\s*=\s*[0-9.+\-eE]+.*$", new_line, src, count=1, flags=re.MULTILINE,
+    )
+    if n == 0:
+        raise HTTPException(status_code=404, detail=f"{key} not found in {path.name}")
+    path.write_text(new_src)
+    return {"ok": True, "task": task, "key": key, "value": value, "note": "picked up next episode (~few seconds)"}
 
 
 @app.get("/api/train/metrics")
@@ -222,18 +330,36 @@ def _create_transparent_png(width: int = 1, height: int = 1) -> bytes:
 _TRANSPARENT_PNG = _create_transparent_png()
 
 
+def _load_live_qpos(task: str):
+    """Read the latest qpos snapshot the trainer dumps each PPO batch."""
+    p = REPO_ROOT / "runs" / f"ape_{task}_mjx" / "live_qpos.npy"
+    if not p.exists():
+        return None
+    try:
+        return np.load(str(p))
+    except Exception:
+        return None
+
+
 @app.get("/api/viewer/frame")
 def get_frame(width: int = 640, height: int = 480):
-    """Get frame as PNG.
+    """Get frame as PNG showing the current trained robot.
 
-    Uses mujoco.Renderer which works with standard OpenGL.
-    Falls back to transparent PNG if rendering fails.
+    Reads runs/ape_<task>_mjx/live_qpos.npy (dumped by the trainer each batch),
+    applies it to the cached model, and renders. Falls back to the static
+    scene if no dump is available yet.
     """
     try:
         import mujoco
 
         model, data = get_model()
         renderer = get_renderer()
+
+        task = _read_active(ACTIVE_TASK_FILE, "walk")
+        live = _load_live_qpos(task)
+        if live is not None and live.shape == data.qpos.shape:
+            data.qpos[:] = live
+            data.qvel[:] = 0.0
 
         # Step simulation forward
         mujoco.mj_forward(model, data)
