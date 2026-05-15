@@ -75,9 +75,11 @@ LOG_EVERY   = 5
 
 
 # ── Task plumbing ────────────────────────────────────────────────────────────
+# Single-env mode: everything lives in envs/env.py. The --task flag is kept
+# as a label (drives runs/ape_<task>_mjx/ folder naming + MLflow experiment),
+# but the env module is always envs.env.
 def task_module_paths(task: str):
-    """Return (env_module_path, params_module_path) for the named task."""
-    return f"envs.{task}_env_mjx", f"envs.params_{task}_mjx"
+    return "envs.env", "envs.env"
 
 
 def task_runs_dir(task: str) -> pathlib.Path:
@@ -86,8 +88,7 @@ def task_runs_dir(task: str) -> pathlib.Path:
 
 def task_fingerprint_files(task: str):
     return [
-        pathlib.Path(f"envs/params_{task}_mjx.py"),
-        pathlib.Path(f"envs/{task}_env_mjx.py"),
+        pathlib.Path("envs/env.py"),
         pathlib.Path("data/scene.xml"),
         pathlib.Path("envs/_shared_load_model.py"),
         pathlib.Path("envs/_shared_dynamics.py"),

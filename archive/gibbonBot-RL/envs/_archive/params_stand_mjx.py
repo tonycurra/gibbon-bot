@@ -2,17 +2,17 @@
 
 # ─── Motor & action shaping (shared with all tasks) ──────────────────────────
 MOTOR_KP = 8.0
-MOTOR_SPEED_FRAC = 0.8
-MOTOR_ACCEL_RATIO = 2.0
-ACTION_SMOOTH_ALPHA = 0.20  # stronger lowpass for smoother movement
+MOTOR_SPEED_FRAC = 1.5
+MOTOR_ACCEL_RATIO = 5.0
+ACTION_SMOOTH_ALPHA = 1.0
 
 # ─── Reward shaping ────────────────────────────────────────────────────────
 TARGET_Z = 0.45
 TARGET_TOL = 0.08  # tighter tolerance for higher standing
-W_UPRIGHT = 5.0  # primary signal: torso z-axis aligned with world up
-W_HEIGHT = 2.0  # secondary: stay near 0.45m
+W_UPRIGHT = 50.0
+W_HEIGHT = 50.0
 W_ALIVE = 0.5  # per-step survival
-FLIP_PENALTY = 60.0  # one-shot at flip
+FLIP_PENALTY = 500.0
 W_STABLE_Z = 1.0  # penalty on |torso vertical velocity| (stops oscillation)
 W_ACTION = 0.01  # penalty on action magnitude (minimal motor effort)
 

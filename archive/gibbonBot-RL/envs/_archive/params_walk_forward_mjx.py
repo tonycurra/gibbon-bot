@@ -3,14 +3,14 @@
 
 # ─── Motor & action shaping ──────────────────────────────────────────────────
 MOTOR_KP = 8.0
-MOTOR_SPEED_FRAC = 0.8
-MOTOR_ACCEL_RATIO = 2.0
-ACTION_SMOOTH_ALPHA = 0.10  # stronger lowpass for smoother movement
+MOTOR_SPEED_FRAC = 0.05
+MOTOR_ACCEL_RATIO = 0.5
+ACTION_SMOOTH_ALPHA = 0.975
 
 # ─── Reward — minimal: forward velocity is the only positive driver ──────────
 W_FWD_VEL = 25.0  # primary signal: linvel_x (m/s)
 W_ALIVE = 0.5  # per-step survival
-FLIP_PENALTY = 60.0
+FLIP_PENALTY = 500.0
 GROUND_CLEARANCE = 0.18  # torso must stay above this z
 W_GROUND = 25.0  # quadratic penalty for dipping below
 

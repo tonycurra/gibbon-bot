@@ -9,9 +9,9 @@ MOTOR_MAX_ACCEL = 0.025  # legacy — unused
 # ACTION_SMOOTH_ALPHA is the EMA pole on policy output — LOWER = smoother.
 # Past experiments converged on these values; anything higher than ~0.6
 # alpha or 5.0 accel makes the limbs snap.
-MOTOR_SPEED_FRAC = 0.40
-MOTOR_ACCEL_RATIO = 0.5
-ACTION_SMOOTH_ALPHA = 0.15
+MOTOR_SPEED_FRAC = 0.4165
+MOTOR_ACCEL_RATIO = 2.285
+ACTION_SMOOTH_ALPHA = 0.5
 
 # Central Pattern Generator baseline — built-in trot rhythm added to policy
 # output before motor mapping. Lets policy learn corrections to a working gait
