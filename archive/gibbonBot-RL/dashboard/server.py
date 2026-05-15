@@ -155,11 +155,17 @@ def _bg(*args: str) -> dict:
       stops producing frames once training starts.
     - XLA_PYTHON_CLIENT_MEM_FRACTION=0.6: cap JAX growth to leave headroom.
     """
+    cache_dir = REPO_ROOT / "runs" / ".jax_cache"
+    cache_dir.mkdir(parents=True, exist_ok=True)
     env = {
         **os.environ,
         "ALLOW_GPU_SHARE": "1",
         "XLA_PYTHON_CLIENT_PREALLOCATE": "false",
         "XLA_PYTHON_CLIENT_MEM_FRACTION": "0.6",
+        # JAX/XLA persistent compilation cache — second start with same
+        # scene+code is ~5s instead of 60s. Cache survives reboots.
+        "JAX_COMPILATION_CACHE_DIR": str(cache_dir),
+        "JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS": "1",
     }
     res = subprocess.run(
         ["bash", str(TRAIN_BG), *args],
@@ -437,10 +443,9 @@ _CAMERA_PRESETS = {
     "side":        (180, -5, 1.8, 0.0),
 }
 _CAMERA_VIEW = "perspective"
-# Smoothed lookat — eases toward the robot's current position so the
-# camera follows without jitter or sudden teleports on reset.
-_CAMERA_LOOKAT = [0.0, 0.0, 0.3]
-_CAMERA_FOLLOW_ALPHA = 0.06  # 0=never moves, 1=snaps instantly; ~17 frames to settle
+# Fixed lookat at the arena mid-point between robot spawn (0,0) and
+# tree (3,0,0.8). World stays still, robot moves through frame.
+_CAMERA_LOOKAT_FIXED = [1.5, 0.0, 0.4]
 
 
 @app.get("/api/viewer/views")
@@ -868,20 +873,41 @@ def get_frame(width: int = 640, height: int = 480):
         )
 
 
-def _render_png_bytes() -> bytes:
-    """Single rendered frame as JPEG bytes — used by /stream ONLY.
+_IDLE_FRAME_CACHE: bytes | None = None
 
-    Tracks which thread "owns" the EGL context; if a different thread
-    sneaks in (request handlers etc.), it'll force a renderer rebuild on
-    that thread to recover, but normal traffic stays on the stream thread.
+
+def _idle_frame() -> bytes:
+    """A static dark placeholder shown when no training is running.
+
+    Don't render the robot pre-Start — user explicitly doesn't want
+    to see it. Generates a black JPEG with a tiny status line, once,
+    cached forever.
     """
+    global _IDLE_FRAME_CACHE
+    if _IDLE_FRAME_CACHE is not None:
+        return _IDLE_FRAME_CACHE
+    from PIL import Image, ImageDraw
+    img = Image.new("RGB", (1280, 960), (8, 8, 8))
+    d = ImageDraw.Draw(img)
+    msg = "PRESS START TO TRAIN"
+    # Approx-center the text without bothering with font metrics.
+    d.text((520, 470), msg, fill=(110, 110, 110))
+    buf = BytesIO()
+    img.save(buf, format="JPEG", quality=85)
+    _IDLE_FRAME_CACHE = buf.getvalue()
+    return _IDLE_FRAME_CACHE
+
+
+def _render_png_bytes() -> bytes:
+    """Single rendered frame as JPEG bytes — used by /stream ONLY."""
     import mujoco
     from PIL import Image
     global _RENDER_OWNER_THREAD, _renderer_cache
+    # Pre-Start: skip rendering entirely, return the idle placeholder.
+    if not _trainer_pids():
+        return _idle_frame()
     tid = threading.get_ident()
     with _SIM_LOCK:
-        # If a different thread is trying to render, drop the existing
-        # renderer (EGL context is bound to the previous thread).
         if _RENDER_OWNER_THREAD is not None and _RENDER_OWNER_THREAD != tid:
             _renderer_cache = None
         _RENDER_OWNER_THREAD = tid
@@ -914,19 +940,8 @@ def _render_png_bytes() -> bytes:
                 _apply_pose_from_ctrl()
         cam = mujoco.MjvCamera()
         az, el, dist, dz = _CAMERA_PRESETS.get(_CAMERA_VIEW, _CAMERA_PRESETS["perspective"])
-        # Target = robot's current torso position
-        tx = float(data.qpos[0]) if data.qpos.shape[0] >= 3 else 0.0
-        ty = float(data.qpos[1]) if data.qpos.shape[0] >= 3 else 0.0
-        tz = float(data.qpos[2]) if data.qpos.shape[0] >= 3 else 0.3
-        target = [tx, ty, tz + dz]
-        # Exponential moving average so the camera drifts toward the robot
-        # without snapping. Resets / teleports look like a smooth pan.
-        a = _CAMERA_FOLLOW_ALPHA
-        _CAMERA_LOOKAT[0] = _CAMERA_LOOKAT[0] * (1 - a) + target[0] * a
-        _CAMERA_LOOKAT[1] = _CAMERA_LOOKAT[1] * (1 - a) + target[1] * a
-        _CAMERA_LOOKAT[2] = _CAMERA_LOOKAT[2] * (1 - a) + target[2] * a
-        cam.lookat = list(_CAMERA_LOOKAT)
-        cam.distance = dist
+        cam.lookat = [_CAMERA_LOOKAT_FIXED[0], _CAMERA_LOOKAT_FIXED[1], _CAMERA_LOOKAT_FIXED[2] + dz]
+        cam.distance = dist * 1.6  # pull back so spawn + tree both fit
         cam.azimuth = az
         cam.elevation = el
         renderer.update_scene(data, camera=cam)
