@@ -739,10 +739,14 @@ def _render_png_bytes() -> bytes:
                 mujoco.mj_resetData(model, data)
                 _apply_pose_from_ctrl()
         cam = mujoco.MjvCamera()
-        cam.distance = 3.0
-        cam.azimuth = 90
-        cam.elevation = -20
-        cam.lookat = [0, 0, 1]
+        # Track the robot's torso so the camera follows the qpos even after
+        # the policy walks it across the arena.
+        torso_xy = data.qpos[0:2] if data.qpos.shape[0] >= 3 else np.zeros(2)
+        torso_z = float(data.qpos[2]) if data.qpos.shape[0] >= 3 else 0.3
+        cam.lookat = [float(torso_xy[0]), float(torso_xy[1]), torso_z]
+        cam.distance = 1.6
+        cam.azimuth = 135
+        cam.elevation = -18
         renderer.update_scene(data, camera=cam)
         img = renderer.render()
     buf = BytesIO()
