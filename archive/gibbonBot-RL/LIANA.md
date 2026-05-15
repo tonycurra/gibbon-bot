@@ -39,6 +39,18 @@ When you tell Claude "make it lean forward more" / "stop the wobble" /
 | turn_right   | `envs/turn_right_env_mjx.py`        | `runs/ape_turn_right_mjx/` (if any)  |
 | climb        | _not yet — see BACKLOG.md_          | —                                    |
 
+## Canonical scene
+
+`data/gibbonbot.xml` is the **frozen, do-not-edit** reference robot
+scene. If `data/scene.xml` gets corrupted by a swap or a bad edit:
+
+```
+cp data/gibbonbot.xml data/scene.xml
+```
+
+and we're back to a known-good world. No tree, no shadows, no visual
+overrides — just robot + floor + light. Future agents: don't touch it.
+
 ## Lessons (one-liner per learned thing)
 
 _(empty — add as we learn)_

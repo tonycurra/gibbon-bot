@@ -453,21 +453,35 @@ def _ensure_home():
 
 
 def _apply_pose_from_ctrl():
-    """Set qpos directly from ctrl so dragging sliders shows the pose instantly.
+    """Drag-slider feedback: qpos ← ctrl + a stable resting pose.
 
-    Also grounds the torso at a sensible standing height (0.30m) so the
-    robot isn't rendered floating in mid-air at the XML's default spawn.
-    Skips actuators that aren't bound to a single hinge/slide joint.
+    Without specific joint angles the robot's mid-range pose has legs spread
+    and arms out, leaving the torso hovering. We use mujoco's keyframe if
+    one exists ('home'); otherwise we apply a hand-tuned crouched pose so
+    the feet sit on the floor.
     """
     import mujoco
     model, data = get_model()
-    # Ground the free-flying torso (qpos[0:7] = xyz + quat for the world_to_torso joint).
-    if model.nq >= 7 and model.jnt_type[0] == 0:  # 0 = free joint
+
+    # Free-joint torso position. 0.16m torso z keeps the body close to the
+    # floor when arms+legs hang in their default config.
+    if model.nq >= 7 and model.jnt_type[0] == 0:
         data.qpos[0] = 0.0
         data.qpos[1] = 0.0
-        data.qpos[2] = 0.30
-        data.qpos[3] = 1.0  # quat w
-        data.qpos[4:7] = 0.0  # quat x,y,z
+        data.qpos[2] = 0.16
+        data.qpos[3] = 1.0
+        data.qpos[4:7] = 0.0
+
+    # If the model has a 'home' keyframe, use that as the baseline.
+    home_id = -1
+    try:
+        home_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, "home")
+    except Exception:
+        pass
+    if home_id >= 0:
+        data.qpos[:] = model.key_qpos[home_id]
+
+    # Then apply user's ctrl on top, joint by joint.
     for i in range(model.nu):
         if model.actuator_trntype[i] != 0:
             continue
@@ -899,12 +913,14 @@ def _render_png_bytes() -> bytes:
                 mujoco.mj_resetData(model, data)
                 _apply_pose_from_ctrl()
         cam = mujoco.MjvCamera()
-        # Fixed camera: aimed at the arena mid-point between robot spawn
-        # and the tree at (3, 0). Robot moves THROUGH the frame, world stays
-        # still — easier to read than a tracking camera.
+        # Aim at the robot's actual torso (qpos[0:3] of the free joint).
+        # Keeps the robot centred regardless of training/manual mode.
         az, el, dist, dz = _CAMERA_PRESETS.get(_CAMERA_VIEW, _CAMERA_PRESETS["perspective"])
-        cam.lookat = [1.5, 0.0, 0.3 + dz]
-        cam.distance = dist * 1.6  # pull back so the whole path fits in view
+        tx = float(data.qpos[0]) if data.qpos.shape[0] >= 3 else 0.0
+        ty = float(data.qpos[1]) if data.qpos.shape[0] >= 3 else 0.0
+        tz = float(data.qpos[2]) if data.qpos.shape[0] >= 3 else 0.3
+        cam.lookat = [tx, ty, tz + dz]
+        cam.distance = dist
         cam.azimuth = az
         cam.elevation = el
         renderer.update_scene(data, camera=cam)
