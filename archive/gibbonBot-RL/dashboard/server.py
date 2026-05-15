@@ -52,6 +52,13 @@ from fastapi.staticfiles import StaticFiles
 # handlers on a threadpool, and the renderer + MjData are not thread-safe.
 _SIM_LOCK = threading.Lock()
 
+# Last good JPEG frame produced by the stream loop. /api/viewer/frame returns
+# this snapshot instead of rendering, so EGL context contention can't happen
+# between the stream thread and request handlers.
+_LAST_FRAME_JPEG: bytes | None = None
+_LAST_FRAME_TS: float = 0.0
+_RENDER_OWNER_THREAD: int | None = None  # tid that created the EGL context
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 TRAIN_BG = REPO_ROOT / "scripts" / "train_bg.sh"
 ACTIVE_TASK_FILE = REPO_ROOT / "runs" / ".active_task"
@@ -778,15 +785,18 @@ def scenes_revert():
 
 @app.get("/api/viewer/frame")
 def get_frame(width: int = 640, height: int = 480):
-    """Get frame as PNG showing the current trained robot.
+    """Return the latest frame the stream thread rendered.
 
-    Reads runs/ape_<task>_mjx/live_qpos.npy (dumped by the trainer each batch),
-    applies it to the cached model, and renders. Falls back to the static
-    scene if no dump is available yet.
+    Does NOT render itself — that would fight the stream for the EGL
+    context. If the stream hasn't produced a frame yet, returns the
+    1x1 placeholder.
     """
+    global _LAST_FRAME_JPEG
+    if _LAST_FRAME_JPEG:
+        return Response(content=_LAST_FRAME_JPEG, media_type="image/jpeg")
+    # No frame yet — fall back to legacy direct render only on cold start.
     try:
         import mujoco
-
         with _SIM_LOCK:
             model, data = get_model()
             renderer = get_renderer()
@@ -839,10 +849,22 @@ def get_frame(width: int = 640, height: int = 480):
 
 
 def _render_png_bytes() -> bytes:
-    """Single rendered frame as JPEG bytes — used by /frame and /stream."""
+    """Single rendered frame as JPEG bytes — used by /stream ONLY.
+
+    Tracks which thread "owns" the EGL context; if a different thread
+    sneaks in (request handlers etc.), it'll force a renderer rebuild on
+    that thread to recover, but normal traffic stays on the stream thread.
+    """
     import mujoco
     from PIL import Image
+    global _RENDER_OWNER_THREAD, _renderer_cache
+    tid = threading.get_ident()
     with _SIM_LOCK:
+        # If a different thread is trying to render, drop the existing
+        # renderer (EGL context is bound to the previous thread).
+        if _RENDER_OWNER_THREAD is not None and _RENDER_OWNER_THREAD != tid:
+            _renderer_cache = None
+        _RENDER_OWNER_THREAD = tid
         model, data = get_model()
         renderer = get_renderer()
         task = _read_active(ACTIVE_TASK_FILE, "walk")
@@ -896,19 +918,33 @@ def viewer_stream(fps: int = 20):
     interval = 1.0 / fps
     boundary = b"liana-frame"
 
-    last_good = [None]
+    last_err = [None, 0]  # (msg, count)
 
     def gen():
+        global _LAST_FRAME_JPEG, _LAST_FRAME_TS
         while True:
             t0 = time.time()
             try:
                 jpg = _render_png_bytes()
-                last_good[0] = jpg
+                _LAST_FRAME_JPEG = jpg
+                _LAST_FRAME_TS = t0
+                last_err[1] = 0
             except Exception as e:
-                sys.stderr.write(f"[stream] render failed: {e}\n")
-                # Keep the connection alive — push the last good frame (or a
-                # 1x1 placeholder) so the <img> doesn't show as broken.
-                jpg = last_good[0] or b""
+                # Rate-limit: only log when the error changes or every 50 occurrences.
+                msg = f"{type(e).__name__}: {e}"[:200]
+                if msg != last_err[0]:
+                    last_err[0] = msg
+                    last_err[1] = 0
+                    sys.stderr.write(f"[stream] render failed: {msg}\n")
+                last_err[1] += 1
+                if last_err[1] % 50 == 0:
+                    sys.stderr.write(f"[stream] same error x{last_err[1]}\n")
+                jpg = _LAST_FRAME_JPEG or b""
+                # Drop the cached renderer so the next attempt rebuilds it
+                # on whichever thread we're on. Most EGL errors recover this way.
+                global _renderer_cache
+                with _SIM_LOCK:
+                    _renderer_cache = None
             if jpg:
                 yield (
                     b"--" + boundary + b"\r\n"

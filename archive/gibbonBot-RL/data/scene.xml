@@ -60,7 +60,7 @@
   </contact>
 
   <worldbody>
-    <light name="top" pos="0 0 3" dir="0 0 -1" directional="true" diffuse="0.8 0.8 0.8" castshadow="true"/>
+    <light name="top" pos="0 0 3" dir="0 0 -1" directional="true" diffuse="0.8 0.8 0.8" castshadow="false"/>
     <geom name="floor" type="plane" size="5 5 100" pos="0 0 0" condim="3"/>
 
     <body name="torso" pos="0 0 0.5310">
