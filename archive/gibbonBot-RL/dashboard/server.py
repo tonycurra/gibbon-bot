@@ -174,7 +174,8 @@ def _bg(*args: str) -> dict:
     return {"ok": res.returncode == 0, "stdout": res.stdout, "stderr": res.stderr}
 
 
-DEFAULT_TOTAL_STEPS = 1_000_000  # 100M is for production; demos use 1M.
+INFINITE_STEPS = 10_000_000_000  # 10B — effectively never reached; safety cap only.
+GOAL_SUCCESS_FRAC = 0.90          # auto-stop when policy succeeds in 90% of envs
 
 
 @app.post("/api/train/start")
@@ -185,7 +186,12 @@ def start_training(task: str = "walk", envs: int | None = None,
     args = ["start", task]
     if envs:
         args += ["--envs", str(envs)]
-    args += ["--total-steps", str(total_steps or DEFAULT_TOTAL_STEPS)]
+    # No step cap unless user gave one — the trainer auto-stops on goal
+    # (success_frac > 0.9 sustained for 20 updates) and on Ctrl-C/Stop.
+    args += ["--total-steps", str(total_steps or INFINITE_STEPS)]
+    args += ["--early-stop-metric", "success_frac",
+             "--early-stop-op", "gt",
+             "--early-stop-value", str(GOAL_SUCCESS_FRAC)]
     if resume:
         args += ["--resume"]
     res = _bg(*args)
@@ -217,7 +223,10 @@ def restart_training(task: str | None = None, envs: int | None = None, total_ste
     args = ["start", new_task]
     if new_envs:
         args += ["--envs", str(new_envs)]
-    args += ["--total-steps", str(total_steps or DEFAULT_TOTAL_STEPS)]
+    args += ["--total-steps", str(total_steps or INFINITE_STEPS)]
+    args += ["--early-stop-metric", "success_frac",
+             "--early-stop-op", "gt",
+             "--early-stop-value", str(GOAL_SUCCESS_FRAC)]
     if resume:
         args += ["--resume"]
     res = _bg(*args)
