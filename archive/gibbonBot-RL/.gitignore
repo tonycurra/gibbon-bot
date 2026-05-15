@@ -9,6 +9,11 @@
 *.gguf
 mlflow.db
 mlflow.db-journal
+*.sqlite
+*.sqlite-journal
+*.sqlite-shm
+*.sqlite-wal
+data/brain/
 mlruns/
 runs/
 rollouts/

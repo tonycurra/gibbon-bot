@@ -31,6 +31,109 @@ CREATE TABLE IF NOT EXISTS scene_metadata (
     description TEXT,
     timestamp INTEGER NOT NULL
 );
+
+-- ============================================================================
+-- Training-artifacts index (Addendum: ape_brain general-knowledge plan)
+-- ============================================================================
+-- One queryable surface across runs, checkpoints, lineage, fingerprints, logs.
+-- Populated by utils/training_index.py from the on-disk runs/ tree.
+
+CREATE TABLE IF NOT EXISTS runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task TEXT NOT NULL,
+    run_dir TEXT NOT NULL UNIQUE,
+    mlflow_run_id TEXT,
+    parent_run_id TEXT,
+    scene_hash TEXT,
+    fingerprint_hash TEXT,
+    started_at REAL,
+    ended_at REAL,
+    final_steps INTEGER,
+    stop_reason TEXT,
+    inherited_from TEXT,
+    label TEXT,
+    autopilot_phase TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_runs_task ON runs(task);
+CREATE INDEX IF NOT EXISTS idx_runs_started ON runs(started_at DESC);
+CREATE INDEX IF NOT EXISTS idx_runs_fp ON runs(fingerprint_hash);
+
+CREATE TABLE IF NOT EXISTS checkpoints (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id INTEGER,
+    task TEXT NOT NULL,
+    scene_hash TEXT,
+    path TEXT NOT NULL UNIQUE,
+    safetensors_path TEXT,
+    step_count INTEGER NOT NULL,
+    is_keeper INTEGER NOT NULL DEFAULT 0,
+    keeper_tag TEXT,
+    mean_reward REAL,
+    metrics_json TEXT,
+    fingerprint_hash TEXT,
+    wall_time REAL,
+    archived INTEGER NOT NULL DEFAULT 0,
+    FOREIGN KEY(run_id) REFERENCES runs(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_ckpt_task_rew ON checkpoints(task, mean_reward DESC);
+CREATE INDEX IF NOT EXISTS idx_ckpt_scene ON checkpoints(scene_hash);
+CREATE INDEX IF NOT EXISTS idx_ckpt_step ON checkpoints(step_count);
+CREATE INDEX IF NOT EXISTS idx_ckpt_keeper ON checkpoints(is_keeper);
+CREATE INDEX IF NOT EXISTS idx_ckpt_run ON checkpoints(run_id);
+
+CREATE TABLE IF NOT EXISTS lineage (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id INTEGER,
+    task TEXT NOT NULL,
+    seq INTEGER NOT NULL,
+    timestamp TEXT,
+    inherited_from TEXT,
+    n_envs INTEGER,
+    physics_json TEXT,
+    env_json TEXT,
+    UNIQUE(run_id, seq),
+    FOREIGN KEY(run_id) REFERENCES runs(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_lineage_inh ON lineage(inherited_from);
+
+CREATE TABLE IF NOT EXISTS fingerprints (
+    hash TEXT PRIMARY KEY,
+    parts_json TEXT,
+    first_seen REAL,
+    last_seen REAL,
+    n_runs INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS log_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id INTEGER,
+    wall_time REAL,
+    level TEXT,
+    source TEXT,
+    update_count INTEGER,
+    total_steps INTEGER,
+    metrics_json TEXT,
+    message TEXT,
+    UNIQUE(run_id, source, wall_time, message),
+    FOREIGN KEY(run_id) REFERENCES runs(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_log_run_time ON log_events(run_id, wall_time);
+CREATE INDEX IF NOT EXISTS idx_log_level ON log_events(level);
+
+CREATE TABLE IF NOT EXISTS autopilot_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id INTEGER,
+    task TEXT,
+    wall_time REAL,
+    step INTEGER,
+    from_phase TEXT,
+    to_phase TEXT,
+    fallback INTEGER NOT NULL DEFAULT 0,
+    reason TEXT,
+    UNIQUE(run_id, wall_time, to_phase),
+    FOREIGN KEY(run_id) REFERENCES runs(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_apevt_task ON autopilot_events(task);
 """
 
 @dataclass
@@ -144,11 +247,173 @@ class PolicyDatabase:
         else: cursor.execute("SELECT COUNT(*) FROM policies")
         return cursor.fetchone()[0]
 
+    # ------------------------------------------------------------------
+    # Training-artifacts upserts (used by utils/training_index.py)
+    # ------------------------------------------------------------------
+    def upsert_run(self, run_dir: str, task: str, **fields) -> int:
+        """Idempotent upsert of a run row. Returns runs.id."""
+        run_dir = str(run_dir)
+        cur = self._conn.cursor()
+        cur.execute("SELECT id FROM runs WHERE run_dir = ?", (run_dir,))
+        row = cur.fetchone()
+        cols = ("mlflow_run_id", "parent_run_id", "scene_hash", "fingerprint_hash",
+                "started_at", "ended_at", "final_steps", "stop_reason",
+                "inherited_from", "label", "autopilot_phase")
+        if row is None:
+            cur.execute(
+                "INSERT INTO runs (task, run_dir, " + ", ".join(cols) + ") "
+                "VALUES (?, ?, " + ",".join(["?"] * len(cols)) + ")",
+                (task, run_dir, *(fields.get(c) for c in cols)),
+            )
+            run_id = int(cur.lastrowid)
+        else:
+            run_id = int(row["id"])
+            sets = [f"{c} = COALESCE(?, {c})" for c in cols]
+            cur.execute(
+                f"UPDATE runs SET task = ?, {', '.join(sets)} WHERE id = ?",
+                (task, *(fields.get(c) for c in cols), run_id),
+            )
+        self._conn.commit()
+        return run_id
+
+    def upsert_checkpoint(self, path: str, task: str, step_count: int, *,
+                          run_id: Optional[int] = None,
+                          scene_hash: Optional[str] = None,
+                          safetensors_path: Optional[str] = None,
+                          is_keeper: bool = False, keeper_tag: Optional[str] = None,
+                          mean_reward: Optional[float] = None,
+                          metrics: Optional[Dict[str, Any]] = None,
+                          fingerprint_hash: Optional[str] = None,
+                          wall_time: Optional[float] = None,
+                          archived: bool = False) -> int:
+        path = str(path)
+        cur = self._conn.cursor()
+        cur.execute(
+            "INSERT INTO checkpoints "
+            "(run_id, task, scene_hash, path, safetensors_path, step_count, is_keeper, "
+            " keeper_tag, mean_reward, metrics_json, fingerprint_hash, wall_time, archived) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?) "
+            "ON CONFLICT(path) DO UPDATE SET "
+            "  run_id           = COALESCE(excluded.run_id, checkpoints.run_id), "
+            "  scene_hash       = COALESCE(excluded.scene_hash, checkpoints.scene_hash), "
+            "  safetensors_path = COALESCE(excluded.safetensors_path, checkpoints.safetensors_path), "
+            "  is_keeper        = excluded.is_keeper, "
+            "  keeper_tag       = COALESCE(excluded.keeper_tag, checkpoints.keeper_tag), "
+            "  mean_reward      = COALESCE(excluded.mean_reward, checkpoints.mean_reward), "
+            "  metrics_json     = COALESCE(excluded.metrics_json, checkpoints.metrics_json), "
+            "  fingerprint_hash = COALESCE(excluded.fingerprint_hash, checkpoints.fingerprint_hash), "
+            "  wall_time        = COALESCE(excluded.wall_time, checkpoints.wall_time), "
+            "  archived         = excluded.archived",
+            (run_id, task, scene_hash, path, safetensors_path, int(step_count),
+             1 if is_keeper else 0, keeper_tag, mean_reward,
+             json.dumps(metrics) if metrics is not None else None,
+             fingerprint_hash, wall_time, 1 if archived else 0),
+        )
+        self._conn.commit()
+        cur.execute("SELECT id FROM checkpoints WHERE path = ?", (path,))
+        return int(cur.fetchone()["id"])
+
+    def upsert_lineage_entry(self, run_id: int, task: str, seq: int, entry: Dict[str, Any]) -> None:
+        physics = entry.get("physics") or {}
+        env = entry.get("env") or {}
+        self._conn.execute(
+            "INSERT OR REPLACE INTO lineage "
+            "(run_id, task, seq, timestamp, inherited_from, n_envs, physics_json, env_json) "
+            "VALUES (?,?,?,?,?,?,?,?)",
+            (run_id, task, int(seq), entry.get("timestamp"),
+             entry.get("inherited_from"), entry.get("n_envs"),
+             json.dumps(physics), json.dumps(env)),
+        )
+        self._conn.commit()
+
+    def upsert_fingerprint(self, fp_hash: str, parts: Dict[str, str], wall_time: float) -> None:
+        cur = self._conn.cursor()
+        cur.execute("SELECT first_seen, n_runs FROM fingerprints WHERE hash = ?", (fp_hash,))
+        row = cur.fetchone()
+        if row is None:
+            cur.execute(
+                "INSERT INTO fingerprints (hash, parts_json, first_seen, last_seen, n_runs) "
+                "VALUES (?,?,?,?,1)",
+                (fp_hash, json.dumps(parts), wall_time, wall_time),
+            )
+        else:
+            cur.execute(
+                "UPDATE fingerprints SET parts_json = ?, last_seen = ?, n_runs = n_runs + 1 "
+                "WHERE hash = ?",
+                (json.dumps(parts), wall_time, fp_hash),
+            )
+        self._conn.commit()
+
+    def insert_log_event(self, run_id: Optional[int], wall_time: float, level: str,
+                         source: str, message: str = "", *,
+                         update_count: Optional[int] = None,
+                         total_steps: Optional[int] = None,
+                         metrics: Optional[Dict[str, Any]] = None) -> None:
+        try:
+            self._conn.execute(
+                "INSERT OR IGNORE INTO log_events "
+                "(run_id, wall_time, level, source, update_count, total_steps, metrics_json, message) "
+                "VALUES (?,?,?,?,?,?,?,?)",
+                (run_id, wall_time, level, source, update_count, total_steps,
+                 json.dumps(metrics) if metrics is not None else None, message),
+            )
+            self._conn.commit()
+        except sqlite3.IntegrityError:
+            pass
+
+    def insert_autopilot_event(self, run_id: Optional[int], task: str, wall_time: float, *,
+                               step: Optional[int] = None,
+                               from_phase: Optional[str] = None,
+                               to_phase: Optional[str] = None,
+                               fallback: bool = False, reason: str = "") -> None:
+        try:
+            self._conn.execute(
+                "INSERT OR IGNORE INTO autopilot_events "
+                "(run_id, task, wall_time, step, from_phase, to_phase, fallback, reason) "
+                "VALUES (?,?,?,?,?,?,?,?)",
+                (run_id, task, wall_time, step, from_phase, to_phase,
+                 1 if fallback else 0, reason),
+            )
+            self._conn.commit()
+        except sqlite3.IntegrityError:
+            pass
+
     def close(self):
         if self._conn: self._conn.close(); self._conn = None
 
     def __enter__(self): return self
     def __exit__(self, *args): self.close()
+
+
+def connect_readonly(policy_db_path: str = "runs/ape_policy_db.sqlite",
+                     attach: Optional[Dict[str, str]] = None) -> sqlite3.Connection:
+    """Open the policy DB read-only and ATTACH the brain + mlflow stores.
+
+    Default attached aliases (if files exist):
+      m -> mlflow.db
+      e -> data/brain/episodic.sqlite
+      s -> data/brain/semantic.sqlite
+      b -> data/brain/brain_state.sqlite
+
+    Returns a sqlite3.Connection with row_factory=sqlite3.Row.
+    """
+    if attach is None:
+        attach = {
+            "m": "mlflow.db",
+            "e": "data/brain/episodic.sqlite",
+            "s": "data/brain/semantic.sqlite",
+            "b": "data/brain/brain_state.sqlite",
+        }
+    uri = f"file:{policy_db_path}?mode=ro"
+    conn = sqlite3.connect(uri, uri=True)
+    conn.row_factory = sqlite3.Row
+    for alias, path in attach.items():
+        if Path(path).exists():
+            try:
+                conn.execute(f"ATTACH DATABASE 'file:{path}?mode=ro' AS {alias}")
+            except sqlite3.OperationalError:
+                pass
+    return conn
 
 def import_checkpoints_from_runs(db_path, runs_dir="runs", task=None):
     db = PolicyDatabase(db_path)

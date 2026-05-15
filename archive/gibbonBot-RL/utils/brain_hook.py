@@ -45,12 +45,19 @@ class BrainHook:
         sleep_replays: int = 64,
         sleep_lr_scale: float = 2.0,
         threat_threshold: float = -1.0,
+        task: str = "",
+        scene_hash: str = "",
+        run_id: Optional[str] = None,
     ):
         from brain.ape_brain import ApeBrain, ApeBrainConfig
         from brain.bus import EVENT_REPLAY_TICK, EVENT_THREAT
 
+        self.task = task
+        self.scene_hash = scene_hash
+        self.run_id = run_id
         self.brain = ApeBrain(ApeBrainConfig(
             obs_dim=obs_dim, act_dim=act_dim, training=True, persist_dir=persist_dir,
+            task=task, scene_hash=scene_hash, run_id=run_id,
         ))
         self.samples_per_rollout = samples_per_rollout
         self.sleep_every_updates = sleep_every_updates

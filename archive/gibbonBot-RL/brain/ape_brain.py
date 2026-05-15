@@ -24,6 +24,11 @@ class ApeBrainConfig:
     act_dim: int = 24
     training: bool = True
     persist_dir: Optional[str] = None  # if set, hippocampus + semantic map persist here
+    # Identity tags written into every persisted episode so a single shared
+    # store holds cross-task / cross-scene memories without losing provenance.
+    task: str = ""
+    scene_hash: str = ""
+    run_id: Optional[str] = None
 
 
 class ApeBrain:
@@ -90,6 +95,9 @@ class ApeBrain:
             obs_dim=self.config.obs_dim,
             act_dim=self.config.act_dim,
             persist_path=hippo_persist,
+            task=self.config.task,
+            scene_hash=self.config.scene_hash,
+            run_id=self.config.run_id,
         )
         self.modules["prefrontal_cortex"] = PrefrontalCortex(
             obs_dim=self.config.obs_dim,

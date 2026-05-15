@@ -104,6 +104,9 @@ class Hippocampus:
         act_dim: int = 24,
         config: Optional[HippocampusConfig] = None,
         persist_path: Optional[str] = None,
+        task: str = "",
+        scene_hash: str = "",
+        run_id: Optional[str] = None,
     ):
         """
         Initialize hippocampus.
@@ -112,10 +115,16 @@ class Hippocampus:
             obs_dim: Dimension of observation input
             act_dim: Dimension of action space
             config: Optional HippocampusConfig (defaults to standard values)
+            task / scene_hash / run_id: identity tags written into every
+                persisted episode so a single shared store can hold cross-task
+                memories without losing provenance.
         """
         self.obs_dim = obs_dim
         self.act_dim = act_dim
         self.config = config if config is not None else HippocampusConfig()
+        self.task = task
+        self.scene_hash = scene_hash
+        self.run_id = run_id
 
         # Memory storage
         self.memories: List[Memory] = []
@@ -274,6 +283,9 @@ class Hippocampus:
                 reward=float(reward),
                 punishment=float(punishment),
                 valence=valence,
+                task=self.task,
+                scene_hash=self.scene_hash,
+                run_id=self.run_id,
             )
 
         self._current_timestamp += 1
@@ -498,10 +510,12 @@ class Hippocampus:
 
         Intended to be called between rollouts (the "sleep" phase). Returns
         episodes the caller can replay into BG/cerebellum at elevated LR.
+        Episodes from tasks other than the current one are mildly upweighted
+        to drive cross-task generalization.
         """
         if self.store is None:
             return []
-        return self.store.sample_by_priority(n)
+        return self.store.sample_by_priority(n, current_task=self.task or None)
 
     def clear_memories(self) -> None:
         """Clear all stored memories."""

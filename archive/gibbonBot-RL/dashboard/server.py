@@ -1,14 +1,18 @@
 """
 GibbonBot Dashboard Server
-FastAPI backend for training control, brain state retrieval, and MuJoCo viewer.
+FastAPI backend for training control, brain state retrieval, and MuJoCo viewer frames.
 
 Run: uvicorn dashboard.server:app --reload --port 8000
 Access: http://localhost:8000/static/index.html
+
+Note: For MJX/Warp rendering, frames are generated on-demand.
 """
 
 import os
 import subprocess
 import sys
+import time
+from io import BytesIO
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Response
@@ -19,7 +23,6 @@ from fastapi.staticfiles import StaticFiles
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 app = FastAPI(title="GibbonBot Dashboard")
-
 app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
 )
@@ -28,6 +31,46 @@ app.mount("/static", StaticFiles(directory="dashboard/static"), name="static")
 # Global training process
 training_process = None
 training_log_file = "train.log"
+
+# MJX Model cache
+_model_cache = None
+_data_cache = None
+_renderer_cache = None
+
+
+def get_model():
+    """Load or cache MuJoCo model."""
+    global _model_cache, _data_cache, _renderer_cache
+    if _model_cache is None:
+        try:
+            import mujoco
+
+            scene_path = "data/scene.xml"
+            if not os.path.exists(scene_path):
+                scene_path = os.path.join(
+                    os.path.dirname(__file__), "..", "data", "scene.xml"
+                )
+            _model_cache = mujoco.MjModel.from_xml_path(scene_path)
+            _data_cache = mujoco.MjData(_model_cache)
+            # Reduce collision for faster rendering
+            for i in range(_model_cache.ngeom):
+                if _model_cache.geom_type[i] == 5:  # mjGEOM_MESH
+                    _model_cache.geom_contype[i] = 2
+                    _model_cache.geom_conaffinity[i] = 1
+            # Create renderer (uses OpenGL, works on systems with GL support)
+            _renderer_cache = mujoco.Renderer(_model_cache, height=480, width=640)
+        except Exception as e:
+            raise RuntimeError(f"Failed to load model: {e}")
+    return _model_cache, _data_cache
+
+
+def get_renderer():
+    """Get cached renderer."""
+    global _renderer_cache
+    if _renderer_cache is None:
+        get_model()  # This will initialize the renderer
+    return _renderer_cache
+
 
 # ============================================================================
 # TRAINING API
@@ -66,7 +109,6 @@ def get_status():
 
 @app.get("/api/train/metrics")
 def get_metrics():
-    metrics = {}
     if os.path.exists(training_log_file):
         with open(training_log_file, "r") as f:
             lines = f.readlines()[-100:]
@@ -123,12 +165,7 @@ def get_brain_state():
             if hasattr(module, "state"):
                 state[name] = {
                     "type": type(module.state).__name__,
-                    "fields": vars(module.state)
-                    if hasattr(module.state, "__dict__")
-                    else str(module.state),
                 }
-            elif hasattr(module, "get_state"):
-                state[name] = str(module.get_state())
             else:
                 state[name] = "No state attribute"
         return {"state": state}
@@ -168,36 +205,61 @@ def get_memory(limit: int = 10):
 # VIEWER API
 # ============================================================================
 
-_model_cache = None
-_data_cache = None
+
+def _create_transparent_png(width: int = 1, height: int = 1) -> bytes:
+    """Create a transparent PNG placeholder."""
+    from io import BytesIO
+
+    from PIL import Image
+
+    img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    buf = BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
 
 
-def get_model():
-    global _model_cache, _data_cache
-    if _model_cache is None:
-        try:
-            import mujoco
-
-            scene_path = "data/scene.xml"
-            if not os.path.exists(scene_path):
-                scene_path = os.path.join(
-                    os.path.dirname(__file__), "..", "data", "scene.xml"
-                )
-            _model_cache = mujoco.MjModel.from_xml_path(scene_path)
-            _data_cache = mujoco.MjData(_model_cache)
-        except Exception as e:
-            raise RuntimeError(f"Failed to load model: {e}")
-    return _model_cache, _data_cache
+# Pre-generate transparent PNG
+_TRANSPARENT_PNG = _create_transparent_png()
 
 
 @app.get("/api/viewer/frame")
 def get_frame(width: int = 640, height: int = 480):
-    """Get frame as PNG - Returns transparent 1x1 PNG placeholder.
+    """Get frame as PNG.
 
-    To enable real rendering, implement offscreen GL context or use MJX backend.
+    Uses mujoco.Renderer which works with standard OpenGL.
+    Falls back to transparent PNG if rendering fails.
     """
-    transparent_png = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\xf3\xffa\x00\x00\x00\x00IDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
-    return Response(content=transparent_png, media_type="image/png")
+    try:
+        import mujoco
+
+        model, data = get_model()
+        renderer = get_renderer()
+
+        # Step simulation forward
+        mujoco.mj_forward(model, data)
+
+        # Set up camera for good view
+        cam = mujoco.MjvCamera()
+        cam.distance = 3.0
+        cam.azimuth = 90
+        cam.elevation = -20
+        cam.lookat = [0, 0, 1]
+
+        # Render scene
+        renderer.update_scene(data, camera=cam)
+        img = renderer.render()
+
+        # Convert to PNG
+        from PIL import Image
+
+        img_pil = Image.fromarray(img)
+        buf = BytesIO()
+        img_pil.save(buf, format="PNG")
+        return Response(content=buf.getvalue(), media_type="image/png")
+
+    except Exception as e:
+        # Return transparent 1x1 PNG as fallback
+        return Response(content=_TRANSPARENT_PNG, media_type="image/png")
 
 
 @app.get("/api/viewer/state")
@@ -248,4 +310,5 @@ def root():
             "brain": ["/api/brain/modules", "/api/brain/state", "/api/brain/memory"],
             "viewer": ["/api/viewer/frame", "/api/viewer/state"],
         },
+        "note": "For MJX/Warp rendering, set MUJOCO_BACKEND=mjx before starting the server",
     }

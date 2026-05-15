@@ -9,7 +9,7 @@ inspired by ape and human neuroanatomy. It replaces the standard monolithic neur
 network policy with a modular, brain-like system that includes neurotransmitter
 modulation, reflexes, action selection, and memory systems.
 
-## Current integration status (2026-05-13)
+## Current integration status (2026-05-15)
 
 The architecture below describes the full vision. Today, only a subset is actually
 wired into PPO training in `train_mjx.py`:
@@ -17,7 +17,7 @@ wired into PPO training in `train_mjx.py`:
 | Module | Defined in `brain/` | In PPO loop | Integration Status |
 |---|---|---|---|
 | Hippocampus (episodic memory + consolidation replay) | ✅ | ✅ | Full integration via BrainHook |
-| Semantic map (persistent place memory) | ✅ | ✅ | Used by Hippocampus |
+| Semantic map (persistent place memory) | ✅ | ⚠️ | File created; never written from rollouts (Phase 2) |
 | Basal ganglia | ✅ | ✅ | Primary action selector in ApeBrain |
 | Amygdala | ✅ | ✅ | Fear/punishment modulation of BG dopamine + action penalties |
 | Prefrontal Cortex | ✅ | ✅ | Goal-directed action blending + inhibition |
@@ -27,8 +27,37 @@ wired into PPO training in `train_mjx.py`:
 | Neurotransmitters | ✅ | ✅ | Global modulation via BrainBus |
 | `ApeBrain.step()` integrator | ✅ | ✅ | Orchestrates all 8 modules |
 | **Decision Engine** | ✅ | ✅ | Multi-layer hierarchy with safety/risk/priorities |
-| **Brain State Persistence** | ✅ | ✅ | SQLite storage for complete brain states |
+| **Brain State Persistence** | ✅ | ✅ | SQLite save+load wired into `train_mjx.py` (start, every checkpoint, SIGINT, exit) |
+| **Shared cross-task episodic store** | ✅ | ✅ | `data/brain/episodic.sqlite` with `task`/`scene_hash`/`run_id` tags; default for all tasks |
+| **Cross-task replay bias** | ✅ | ✅ | `sample_by_priority(current_task=...)` upweights foreign-task episodes 1.5× during sleep |
+| **Training-artifacts index** | ✅ | ✅ | All historical checkpoints/lineage/logs queryable from `runs/ape_policy_db.sqlite` |
 | **Quantum Basal Ganglia** | ✅ | ⚠️ | JAX-simulated quantum circuits (stub) |
+
+### What changed 2026-05-15
+- **Phase 1 of the ape-brain plan landed**: a single shared `data/brain/episodic.sqlite`
+  now accumulates transitions across every task (was per-task isolated before). Every row
+  carries `task`, `scene_hash`, and the MLflow `run_id` so cross-task generalization is a
+  `WHERE` clause, not a file-merge.
+- **Brain state survives between runs**: `BrainStatePersistence` (`brain/brain_state_persistence.py`)
+  is loaded at trainer startup and saved at every PPO checkpoint, on SIGINT, and at exit.
+  Module weights and neuromodulator levels persist across restarts.
+- **`--brain-persist` defaults to `data/brain`**: brain memory is on by default for all
+  trainings. Pass `--no-brain` to disable.
+- **Training-artifacts index** (separate from brain memory but shares the DB story):
+  every checkpoint, lineage entry, fingerprint, and structured event in `runs/` is now
+  queryable from `runs/ape_policy_db.sqlite` via `python scripts/q.py …`. See the
+  **Training-Data Index** section below.
+
+### Still missing (next phases)
+- **Semantic facts extraction** (Phase 2): brainstem signals (fall, stable upright, novelty)
+  not yet upserted into `semantic.sqlite` during rollouts.
+- **Concept formation** (Phase 3): no online clustering of episodes into reusable schemas.
+- **PPO actor learns from replay** (Phase 4 — *the actual memory→policy bridge*): sleep
+  replay only nudges BG `action_values`; the trainer never calls `ApeBrain.step`, so
+  episodic memory does not yet shape the executed policy. This is the biggest remaining gap.
+- **Backfill of historical checkpoints into brain memory**: the 500+ existing `.npz`
+  checkpoints are weights, not transitions — they cannot be inserted into `episodic.sqlite`
+  without a separate "roll out each old policy and pipe through BrainHook" tool.
 
 PPO action selection uses ApeBrain (via BrainHook) for episodic memory + bioinspired
 modulation. The **amygdala** reduces BG dopamine based on fear level and applies action

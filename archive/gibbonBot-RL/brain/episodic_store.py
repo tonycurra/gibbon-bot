@@ -45,11 +45,26 @@ CREATE TABLE IF NOT EXISTS episodes (
     reward      REAL    NOT NULL,
     punishment  REAL    NOT NULL DEFAULT 0.0,
     valence     REAL    NOT NULL DEFAULT 0.0,
-    embedding   BLOB    NOT NULL
+    embedding   BLOB    NOT NULL,
+    task        TEXT    NOT NULL DEFAULT '',
+    scene_hash  TEXT    NOT NULL DEFAULT '',
+    concept_id  INTEGER,
+    run_id      TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_episodes_timestamp ON episodes(timestamp);
 CREATE INDEX IF NOT EXISTS idx_episodes_valence   ON episodes(valence);
+-- Indexes for migration-added columns are created in _migrate after ensuring
+-- those columns exist on legacy DBs (would fail here for pre-migration tables).
 """
+
+# Columns added after the original schema. Each entry is run as
+# `ALTER TABLE episodes ADD COLUMN <ddl>` once, only if missing.
+_EPISODES_MIGRATIONS = [
+    ("task",       "TEXT NOT NULL DEFAULT ''"),
+    ("scene_hash", "TEXT NOT NULL DEFAULT ''"),
+    ("concept_id", "INTEGER"),
+    ("run_id",     "TEXT"),
+]
 
 
 @dataclass
@@ -94,12 +109,24 @@ class EpisodicStore:
 
         self._conn = sqlite3.connect(str(self.path))
         self._conn.executescript(_SCHEMA)
+        self._migrate()
         self._conn.commit()
 
         # Cached embedding matrix for fast scan. Rebuilt on write.
         self._cache_ids: Optional[np.ndarray] = None
         self._cache_emb: Optional[np.ndarray] = None
         self._cache_dirty = True
+
+    def _migrate(self) -> None:
+        """Idempotently add columns introduced after the original schema."""
+        existing = {
+            row[1] for row in self._conn.execute("PRAGMA table_info(episodes)").fetchall()
+        }
+        for name, ddl in _EPISODES_MIGRATIONS:
+            if name not in existing:
+                self._conn.execute(f"ALTER TABLE episodes ADD COLUMN {name} {ddl}")
+        self._conn.execute("CREATE INDEX IF NOT EXISTS idx_episodes_task    ON episodes(task)")
+        self._conn.execute("CREATE INDEX IF NOT EXISTS idx_episodes_concept ON episodes(concept_id)")
 
     def close(self) -> None:
         self._conn.close()
@@ -118,6 +145,10 @@ class EpisodicStore:
         reward: float,
         punishment: float = 0.0,
         valence: float = 0.0,
+        task: str = "",
+        scene_hash: str = "",
+        run_id: Optional[str] = None,
+        concept_id: Optional[int] = None,
     ) -> int:
         emb = np.asarray(embedding, dtype=np.float32)
         norm = float(np.linalg.norm(emb))
@@ -125,7 +156,8 @@ class EpisodicStore:
             emb = emb / norm
         cur = self._conn.execute(
             "INSERT INTO episodes (timestamp, wall_time, obs, action, next_obs, "
-            "reward, punishment, valence, embedding) VALUES (?,?,?,?,?,?,?,?,?)",
+            "reward, punishment, valence, embedding, task, scene_hash, run_id, concept_id) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (
                 int(timestamp),
                 time.time(),
@@ -136,6 +168,10 @@ class EpisodicStore:
                 float(punishment),
                 float(valence),
                 _to_blob(emb),
+                str(task or ""),
+                str(scene_hash or ""),
+                run_id,
+                concept_id,
             ),
         )
         row_id = int(cur.lastrowid)
@@ -216,18 +252,29 @@ class EpisodicStore:
             ))
         return out
 
-    def sample_by_priority(self, n: int, rng: Optional[np.random.Generator] = None) -> List[Episode]:
+    def sample_by_priority(
+        self,
+        n: int,
+        rng: Optional[np.random.Generator] = None,
+        current_task: Optional[str] = None,
+        cross_task_boost: float = 1.5,
+    ) -> List[Episode]:
         """Sample n episodes with probability proportional to |valence| + small floor.
 
         Mirrors hippocampal replay: emotionally tagged episodes are revisited
-        more often during consolidation.
+        more often during consolidation. When `current_task` is provided,
+        episodes from *other* tasks are upweighted by `cross_task_boost`,
+        biasing replay toward foreign experience for cross-task generalization.
         """
         rng = rng or np.random.default_rng()
-        rows = self._conn.execute("SELECT id, valence FROM episodes").fetchall()
+        rows = self._conn.execute("SELECT id, valence, task FROM episodes").fetchall()
         if not rows:
             return []
         ids = np.array([r[0] for r in rows], dtype=np.int64)
         w = np.abs(np.array([r[1] for r in rows], dtype=np.float64)) + 1e-3
+        if current_task is not None and cross_task_boost != 1.0:
+            tasks = np.array([(r[2] or "") for r in rows])
+            w = np.where(tasks != current_task, w * float(cross_task_boost), w)
         p = w / w.sum()
         n = min(n, ids.shape[0])
         picked = rng.choice(ids, size=n, replace=False, p=p).tolist()

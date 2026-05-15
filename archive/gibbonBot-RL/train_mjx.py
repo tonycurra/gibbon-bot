@@ -39,6 +39,29 @@ import utils.lineage as lineage_mod
 from utils.gait_score import trot_coherence, stride_period
 
 
+def _reindex_silently(run_dir):
+    """Best-effort training-artifacts indexing. Never raises."""
+    try:
+        from brain.policy_database import PolicyDatabase
+        from utils.training_index import index_run
+        db = PolicyDatabase("runs/ape_policy_db.sqlite")
+        try:
+            index_run(pathlib.Path(run_dir), db)
+        finally:
+            db.close()
+    except Exception as e:
+        print(f"[index] reindex failed: {e}", flush=True)
+
+
+def _log_event_silently(run_dir, level, message, **kwargs):
+    """Append one structured event to <run_dir>/events.jsonl. Never raises."""
+    try:
+        from utils.structured_log import log_event
+        log_event(run_dir, level, message, **kwargs)
+    except Exception:
+        pass
+
+
 # ── PPO hyperparameters (task-agnostic) ──────────────────────────────────────
 N_STEPS     = 32
 EPOCHS      = 4
@@ -333,8 +356,12 @@ def main():
     parser.add_argument("--early-stop-window", type=int, default=20,
                         help="how many consecutive metric blocks satisfying the criterion")
     parser.add_argument("--mlflow-parent-run-id", default=None)
-    parser.add_argument("--brain-persist", default=None,
-                        help="If set, write ApeBrain episodic/semantic stores under this directory.")
+    parser.add_argument("--brain-persist", default="data/brain",
+                        help="Directory for shared ApeBrain episodic+semantic+state stores. "
+                             "Defaults to data/brain so all tasks accumulate one growing memory. "
+                             "Pass --no-brain to disable.")
+    parser.add_argument("--no-brain", dest="brain_persist", action="store_const", const=None,
+                        help="Disable ApeBrain persistence entirely.")
     parser.add_argument("--brain-samples-per-rollout", type=int, default=32,
                         help="Transitions to sample from each rollout into the episodic store.")
     parser.add_argument("--brain-sleep-every", type=int, default=20,
@@ -516,8 +543,18 @@ def main():
     clip_eps = jnp.float32(P.CLIP_EPS)
 
     brain_hook = None
+    brain_state_persist = None
     if args.brain_persist is not None:
         from utils.brain_hook import BrainHook
+        from brain.brain_state_persistence import BrainStatePersistence
+        from brain.policy_database import PolicyDatabase
+
+        scene_xml_path = pathlib.Path("data/scene.xml")
+        try:
+            brain_scene_hash = PolicyDatabase.compute_scene_hash(scene_xml_path)
+        except Exception:
+            brain_scene_hash = ""
+        brain_run_id = mlflow.active_run().info.run_id if mlflow.active_run() else None
         brain_hook = BrainHook(
             persist_dir=args.brain_persist,
             obs_dim=OBS_DIM,
@@ -525,9 +562,42 @@ def main():
             samples_per_rollout=args.brain_samples_per_rollout,
             sleep_every_updates=args.brain_sleep_every,
             sleep_replays=args.brain_sleep_replays,
+            task=TASK,
+            scene_hash=brain_scene_hash,
+            run_id=brain_run_id,
         )
+        # Brain-state persistence: cross-run continuity of module weights and
+        # neuromodulator levels. Lives in the same shared directory.
+        brain_state_db = pathlib.Path(args.brain_persist) / "brain_state.sqlite"
+        brain_state_persist = BrainStatePersistence(brain_state_db)
+        # Restore the most-recent brain state for this task; fall back to any
+        # task so task-agnostic modules (cerebellum/brainstem/neurotransmitters)
+        # carry transferable knowledge from the most recent prior run.
+        loaded = brain_state_persist.load(brain_hook.brain, task=TASK)
+        if not loaded:
+            loaded = brain_state_persist.load(brain_hook.brain)
+        if loaded:
+            print(f"[brain] restored prior brain state from {brain_state_db}", flush=True)
         mlflow.set_tag("brain_persist", args.brain_persist)
-        print(f"[brain] persisting episodic+semantic memory to {args.brain_persist}", flush=True)
+        mlflow.set_tag("brain_resumed", "1" if loaded else "0")
+        print(f"[brain] shared memory at {args.brain_persist} (task={TASK}, scene={brain_scene_hash[:8]})", flush=True)
+
+        def _save_brain_state(reason: str = "checkpoint") -> None:
+            if brain_state_persist is None or brain_hook is None:
+                return
+            try:
+                brain_state_persist.save(
+                    brain_hook.brain,
+                    step_count=int(total_steps),
+                    task=TASK,
+                    scene_hash=brain_scene_hash,
+                    metadata={"reason": reason, "mlflow_run_id": brain_run_id or ""},
+                )
+            except Exception as e:
+                print(f"[brain] save_brain_state failed ({reason}): {e}", flush=True)
+    else:
+        def _save_brain_state(reason: str = "checkpoint") -> None:
+            return
 
     while total_steps < TOTAL_STEPS and not _stop[0]:
         buf_obs, buf_act, buf_logp, buf_rew, buf_done, buf_val, buf_dist = [], [], [], [], [], [], []
@@ -536,6 +606,12 @@ def main():
             steps_here = total_steps + t * N_ENVS
             if _stop[0]:
                 save_checkpoint(train_state, RUNS, TASK, steps_here)
+                _save_brain_state(reason="sigint")
+                _reindex_silently(RUNS)
+                if brain_hook is not None:
+                    brain_hook.close()
+                if brain_state_persist is not None:
+                    brain_state_persist.close()
                 print("Done.", flush=True)
                 sys.exit(0)
 
@@ -613,6 +689,11 @@ def main():
             slept = brain_hook.maybe_sleep(update_count)
             if slept:
                 print(f"[brain] consolidation: replayed {brain_hook._last_sleep_replays} episodes", flush=True)
+                _log_event_silently(
+                    RUNS, "BRAIN",
+                    f"consolidation: replayed {brain_hook._last_sleep_replays} episodes",
+                    update_count=update_count, total_steps=int(total_steps),
+                )
 
         if update_count % LOG_EVERY == 0:
             sps = (total_steps - start_steps) / (time.time() - t0)
@@ -665,6 +746,11 @@ def main():
             if brain_hook is not None:
                 metrics.update(brain_hook.metrics())
             mlflow.log_metrics(metrics, step=total_steps)
+            _log_event_silently(
+                RUNS, "METRIC", "rollout metrics",
+                update_count=update_count, total_steps=int(total_steps),
+                metrics=metrics,
+            )
 
             # Per-task keeper criterion (env may override).
             is_keeper_fn = getattr(env_mod, "is_keeper", None)
@@ -698,6 +784,11 @@ def main():
                     }
                     (kdir / f"auto_{tag}.json").write_text(json.dumps(sidecar, indent=2))
                     print(f"[keeper] saved {kpath.name} + sidecar", flush=True)
+                    _log_event_silently(
+                        RUNS, "KEEPER", f"saved {kpath.name}",
+                        total_steps=int(total_steps), metrics=metrics,
+                    )
+                    _reindex_silently(RUNS)
 
             # Early stop: if a sustained criterion is met, signal completion.
             if args.early_stop_metric is not None and args.early_stop_value is not None:
@@ -715,16 +806,23 @@ def main():
 
         if total_steps - last_save >= save_every:
             save_checkpoint(train_state, RUNS, TASK, total_steps)
+            _save_brain_state(reason="checkpoint")
+            _reindex_silently(RUNS)
             last_save = total_steps
 
     reason = _stop_reason[0] if _stop[0] else "completed"
     print(f"[stop] {reason} — saving at {total_steps:,} steps")
     save_checkpoint(train_state, RUNS, TASK, total_steps)
+    _save_brain_state(reason=reason)
+    _log_event_silently(RUNS, "STOP", reason, total_steps=int(total_steps))
     mlflow.set_tag("stop_reason", reason)
     mlflow.set_tag("final_steps", str(total_steps))
     mlflow.end_run()
+    _reindex_silently(RUNS)
     if brain_hook is not None:
         brain_hook.close()
+    if brain_state_persist is not None:
+        brain_state_persist.close()
     if watcher is not None:
         watcher.terminate()
     print("Done.")
