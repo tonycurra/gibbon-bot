@@ -39,6 +39,19 @@ When you tell Claude "make it lean forward more" / "stop the wobble" /
 | turn_right   | `envs/turn_right_env_mjx.py`        | `runs/ape_turn_right_mjx/` (if any)  |
 | climb        | _not yet — see BACKLOG.md_          | —                                    |
 
+## Architecture & where knowledge lives
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full data-flow
+diagram and which artifact answers which question. TL;DR:
+
+| What | Where |
+|---|---|
+| Scene, robot, reward code | git: `data/scene.xml`, `envs/env.py` |
+| Policy weights | `runs/ape_<task>_mjx/keepers/*.npz` |
+| Per-run metrics + params | MLflow (`mlruns/` + `mlflow.db`) |
+| Episodic memory | `data/brain/*.sqlite` |
+| Human notes | `LIANA.md` (this file) + `LIANA_LOG.md` |
+
 ## Canonical scene
 
 `data/gibbonbot.xml` is the **frozen, do-not-edit** reference robot

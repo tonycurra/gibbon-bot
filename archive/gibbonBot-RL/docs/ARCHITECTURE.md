@@ -1,0 +1,123 @@
+# LIANA — Architecture & Persistence
+
+> Demo north star: **robot walks to the olive tree on command, reliably**.
+
+This document answers the question: **when something works, where does
+that knowledge live?** And: **how does LIANA connect to the brain?**
+
+## The five places knowledge lives
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                                                                         │
+│   CODE & SCENE (immutable per commit)                                   │
+│     git: envs/env.py · data/scene.xml · data/gibbonbot.xml              │
+│     ← reward shaping, reset logic, motor limits, robot mesh, gravity    │
+│                                                                         │
+│   ─ feeds ▼                                                             │
+│                                                                         │
+│   TRAINER (train_mjx.py, GPU MJX, many envs in parallel)                │
+│     produces ┐                                                          │
+│              │                                                          │
+│   ─────────── ▼ ────────────                                            │
+│                                                                         │
+│   ┌─ runs/ape_<task>_mjx/        ── checkpoints & per-run logs ──┐      │
+│   │     mjx_<step>.npz            rolling, last few              │      │
+│   │     keepers/<tag>.npz         promoted on success_frac > 0   │      │
+│   │     keepers/<tag>.json        sidecar: metrics + mlflow run  │      │
+│   │     train.log                 per-update metrics, plain text │      │
+│   │     events.jsonl              structured event stream        │      │
+│   │     autopilot_state.json      phase tracker (legacy)         │      │
+│   │     lineage.json              what previous .npz seeded this │      │
+│   └─────────────────────────────────────────────────────────────┘       │
+│                                                                         │
+│   ┌─ mlruns/  +  mlflow.db ─── tracking & comparison ──────────┐        │
+│   │     experiment = ape_<task>_mjx                            │        │
+│   │     run_name   = YYYYMMDD-HHMMSS                           │        │
+│   │     params     = every W_*, MOTOR_*, PPO knob              │        │
+│   │     metrics    = mean_rew, mean_dist, success_frac, …      │        │
+│   │     tags       = task, inherited_from, jax_backend, …      │        │
+│   │     fingerprint= sha256 of scene + env code + params       │        │
+│   └────────────────────────────────────────────────────────────┘        │
+│                                                                         │
+│   ┌─ data/brain/                  brain memory (SQLite) ───────┐        │
+│   │     brain_state.sqlite        episodic memories, rewards   │        │
+│   │     policy_db.sqlite          policy index across runs     │        │
+│   │   restored by trainer on every start (see brain_hook)      │        │
+│   └────────────────────────────────────────────────────────────┘        │
+│                                                                         │
+│   ┌─ LIANA.md  +  LIANA_LOG.md  · human narrative ─────────────┐        │
+│   │     index of north star, tasks, lessons, manual notes      │        │
+│   └────────────────────────────────────────────────────────────┘        │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+## Which one answers which question
+
+| Question | Answer source |
+|---|---|
+| What policy walks best? | `runs/ape_walk_mjx/keepers/` — filenames encode `succ` and `min_d` |
+| Which params produced that policy? | The run's `params` in MLflow (per-key) |
+| Were physics / scene different that day? | The run's `fingerprint` tag in MLflow (sha256 of scene + env code) |
+| Where did this policy come from before? | `runs/ape_<task>_mjx/lineage.json` + MLflow `inherited_from` tag |
+| What episodes has the brain remembered? | `data/brain/brain_state.sqlite` (hippocampus) |
+| What did I try last Tuesday? | `LIANA_LOG.md` |
+| What does this whole project aim at? | `LIANA.md` (north star, tasks summary) |
+
+## Versioning model
+
+- **Scene + env code + params live in git.** A commit captures all three.
+- **Policy weights live on disk (`runs/…/.npz`)** and are gitignored.
+  They’re linked back to git via the MLflow run’s scene/params
+  fingerprint.
+- **Training data (raw rollouts) is not persisted.** Mirror only the
+  artifacts you care about — currently keepers + train logs — to
+  Scaleway (per `feedback_track_training_data.md`).
+
+When the scene XML or env code changes, MLflow records a new fingerprint
+and the trainer's `--resume` either continues from the previous .npz
+(force-resume) or branches into a new lineage.
+
+## How the brain integrates with LIANA
+
+The `brain/` package contains 18 bioinspired modules (ApeBrain,
+Hippocampus, BasalGanglia, etc.). Today it's wired as follows:
+
+```
+TRAINER (train_mjx.py)
+  │
+  ├─ on start  → brain_hook.restore()    ← loads data/brain/*.sqlite
+  ├─ per ep    → brain_hook.observe(...) ← logs reward/punishment
+  └─ on stop   → brain_hook.save()       ← persists episodic memory
+
+DASHBOARD (dashboard/server.py)
+  │
+  ├─ /api/brain/modules    ← list of 18 brain modules
+  ├─ /api/brain/state      ← current state of each module
+  └─ /api/brain/memory     ← last N hippocampus entries
+
+LIANA (the user-facing layer)
+  │
+  ├─ ./liana go            ← launches dashboard
+  ├─ ./liana log "…"       ← appends to LIANA_LOG.md
+  └─ LIANA.md              ← human knowledge index
+```
+
+The brain currently **records** what happens during training. It does
+not yet **drive** training decisions (curriculum, action priors). That's
+the next integration step; for the demo we don't need it.
+
+## When something works
+
+1. Trainer auto-saves a keeper with a descriptive filename:
+   `auto_min_d0.07_succ1.00_step4416.npz`
+2. Sidecar JSON `auto_min_d0.07_succ1.00_step4416.json` records the
+   metrics, the params snapshot, the scene fingerprint, the env code
+   fingerprint.
+3. The trial subprocess automatically picks the highest-success keeper
+   to play in the viewer (see `scripts/play_trial.py:latest_checkpoint`).
+4. To preserve forever: commit the relevant params + scene XML to git;
+   the keeper itself stays on disk (Scaleway-mirrored).
+
+That's the persistence model. Nothing else needs to move.
