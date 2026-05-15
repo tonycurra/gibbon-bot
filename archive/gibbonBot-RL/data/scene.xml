@@ -22,6 +22,10 @@
 <mujoco model="ape_robot">
   <compiler angle="radian"/>
 
+  <visual>
+    <global offwidth="1280" offheight="960"/>
+  </visual>
+
   <asset>
     <mesh name="base_link"   file="meshes/base_link.stl"   scale="0.001 0.001 0.001"/>
     <mesh name="link1"       file="meshes/link1.stl"       scale="0.001 0.001 0.001"/>

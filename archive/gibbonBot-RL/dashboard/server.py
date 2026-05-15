@@ -95,7 +95,9 @@ def get_model():
                     _model_cache.geom_contype[i] = 2
                     _model_cache.geom_conaffinity[i] = 1
             # Create renderer (uses OpenGL, works on systems with GL support)
-            _renderer_cache = mujoco.Renderer(_model_cache, height=480, width=640)
+            # 1280x960 (4:3) is plenty for the dashboard's viewer card —
+            # higher resolutions make EGL slow without visible benefit.
+            _renderer_cache = mujoco.Renderer(_model_cache, height=960, width=1280)
         except Exception as e:
             raise RuntimeError(f"Failed to load model: {e}")
     return _model_cache, _data_cache
@@ -678,7 +680,7 @@ def _render_png_bytes() -> bytes:
         renderer.update_scene(data, camera=cam)
         img = renderer.render()
     buf = BytesIO()
-    Image.fromarray(img).save(buf, format="JPEG", quality=80)
+    Image.fromarray(img).save(buf, format="JPEG", quality=92, optimize=False)
     return buf.getvalue()
 
 

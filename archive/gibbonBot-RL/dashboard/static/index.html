@@ -103,13 +103,24 @@ select:focus, input:focus { outline: none; border-color: var(--accent); }
 .status .v.off { color: var(--muted); }
 
 #viewer-container {
-    background: #000; border: 1px solid var(--line);
-    border-radius: var(--radius); overflow: hidden;
-    width: 100%; aspect-ratio: 4/3;
+    position: relative;
+    background: #000;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    overflow: hidden;
+    width: 100%;
+    aspect-ratio: 4/3;
     max-height: 75vh;
-    display: flex; align-items: center; justify-content: center;
 }
-#viewer-container img { width: 100%; height: 100%; object-fit: contain; }
+#viewer-container img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    image-rendering: auto;
+    display: block;
+}
 .viewer-info { margin-top: 8px; font-size: 0.75em; color: var(--muted); }
 
 #metrics, #logs {
