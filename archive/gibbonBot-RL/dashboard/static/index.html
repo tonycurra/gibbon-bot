@@ -121,6 +121,29 @@ select:focus, input:focus { outline: none; border-color: var(--accent); }
     image-rendering: auto;
     display: block;
 }
+.viewer-badge {
+    position: absolute;
+    top: 10px; left: 10px;
+    padding: 4px 10px;
+    font-size: 0.7em;
+    letter-spacing: 0.18em;
+    font-weight: 600;
+    border-radius: 3px;
+    background: rgba(0,0,0,0.7);
+    border: 1px solid var(--line-2);
+    color: var(--muted);
+    pointer-events: none;
+}
+.viewer-badge.live { color: var(--ok); border-color: var(--ok); }
+.viewer-badge.compiling { color: var(--warn); border-color: var(--warn); }
+.viewer-badge.manual { color: var(--muted); }
+.viewer-badge .dot {
+    display: inline-block; width: 6px; height: 6px;
+    border-radius: 50%; margin-right: 6px; background: currentColor;
+}
+.viewer-badge.live .dot { animation: pulse 1s infinite; }
+.viewer-badge.compiling .dot { animation: pulse 0.5s infinite; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
 .viewer-info { margin-top: 8px; font-size: 0.75em; color: var(--muted); }
 
 #metrics, #logs {
@@ -296,7 +319,10 @@ select:focus, input:focus { outline: none; border-color: var(--accent); }
 
   <div class="card">
     <h2>Viewer</h2>
-    <div id="viewer-container"><img id="frame" src="/api/viewer/stream?fps=20" alt="robot"/></div>
+    <div id="viewer-container">
+      <img id="frame" src="/api/viewer/stream?fps=20" alt="robot"/>
+      <div id="viewer-badge" class="viewer-badge">MANUAL</div>
+    </div>
     <div class="viewer-info" id="viewer-info">—</div>
   </div>
 
@@ -496,6 +522,27 @@ async function simZero() {
 async function setSimMode(mode) {
     try { await fetch(API + "/sim/mode?mode=" + mode, {method:"POST"}); } catch(e) { console.error(e); }
 }
+async function refreshViewerInfo() {
+    try {
+        const r = await fetch(API + "/viewer/info");
+        const d = await r.json();
+        const b = document.getElementById("viewer-badge");
+        b.className = "viewer-badge " + d.state;
+        const label = d.state === "live" ? "POLICY LIVE"
+                    : d.state === "compiling" ? "COMPILING…"
+                    : "MANUAL (sliders)";
+        b.innerHTML = "<span class=\"dot\"></span>" + label;
+        const info = document.getElementById("viewer-info");
+        if (d.state === "live") {
+            info.textContent = `task=${d.task} · qpos age ${(d.live_age_s*1000).toFixed(0)}ms`;
+        } else if (d.state === "compiling") {
+            info.textContent = "Trainer is JIT-compiling MJX step function. First frames in 30–60s.";
+        } else {
+            info.textContent = `manual sim, ${d.mode} mode. Drag sliders to pose the robot.`;
+        }
+    } catch(e) {}
+}
+
 async function loadSimMode() {
     try {
         const r = await fetch(API + "/sim/mode");
@@ -591,6 +638,7 @@ setInterval(refreshLogs, 2000);
 setInterval(refreshStatus, 3000);
 setInterval(refreshSystem, 1500);
 setInterval(refreshJoints, 250);    // live-follow slider positions to robot state
+setInterval(refreshViewerInfo, 1000);
 document.addEventListener("DOMContentLoaded", () => {
     refreshStatus();
     refreshSystem();
@@ -598,6 +646,7 @@ document.addEventListener("DOMContentLoaded", () => {
     loadJoints();
     loadScenes();
     loadSimMode();
+    refreshViewerInfo();
     refreshMetrics();
     refreshLogs();
     document.getElementById("task-select").addEventListener("change", loadParams);

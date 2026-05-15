@@ -30,9 +30,9 @@ from pathlib import Path
 # access logs. Errors and warnings still print, plus state-changing POSTs.
 class _AccessFilter(logging.Filter):
     SPAMMY = (
-        "/api/viewer/frame", "/api/viewer/stream", "/api/train/metrics",
-        "/api/train/logs", "/api/train/status", "/api/system/stats",
-        "/api/params/get", "/api/sim/joints",
+        "/api/viewer/frame", "/api/viewer/stream", "/api/viewer/info",
+        "/api/train/metrics", "/api/train/logs", "/api/train/status",
+        "/api/system/stats", "/api/params/get", "/api/sim/joints",
     )
     def filter(self, record):
         msg = record.getMessage()
@@ -793,6 +793,28 @@ def viewer_stream(fps: int = 20):
         gen(),
         media_type=f"multipart/x-mixed-replace; boundary={boundary.decode()}",
     )
+
+
+@app.get("/api/viewer/info")
+def viewer_info():
+    """Tells the UI what the viewer is actually showing right now:
+
+    - manual    : no trainer, sim driven by slider ctrl
+    - compiling : trainer running but no fresh qpos yet (MJX JIT)
+    - live      : trainer running and qpos is being updated
+    """
+    task = _read_active(ACTIVE_TASK_FILE, "walk")
+    p = REPO_ROOT / "runs" / f"ape_{task}_mjx" / "live_qpos.npy"
+    age = None
+    if p.exists():
+        age = time.time() - p.stat().st_mtime
+    if not _trainer_pids():
+        state = "manual"
+    elif age is None or age > 3.0:
+        state = "compiling"
+    else:
+        state = "live"
+    return {"state": state, "task": task, "live_age_s": age, "mode": _SIM_MODE}
 
 
 @app.get("/api/viewer/state")
