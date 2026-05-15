@@ -398,15 +398,27 @@ def _create_transparent_png(width: int = 1, height: int = 1) -> bytes:
 _TRANSPARENT_PNG = _create_transparent_png()
 
 
+_LIVE_QPOS_CACHE: dict = {"qpos": None, "ts": 0.0, "src_mtime": 0.0}
+LIVE_QPOS_MIN_INTERVAL = 0.2  # 5fps — slow enough that resets don't blink past
+
+
 def _load_live_qpos(task: str):
-    """Read the latest qpos snapshot the trainer dumps each PPO batch."""
+    """Read the trainer's qpos dump, rate-limited so the viewer doesn't
+    flicker every reset. Returns the SAME cached value if the read is
+    still within LIVE_QPOS_MIN_INTERVAL of the previous read."""
     p = REPO_ROOT / "runs" / f"ape_{task}_mjx" / "live_qpos.npy"
     if not p.exists():
         return None
+    now = time.time()
+    if (now - _LIVE_QPOS_CACHE["ts"]) < LIVE_QPOS_MIN_INTERVAL and _LIVE_QPOS_CACHE["qpos"] is not None:
+        return _LIVE_QPOS_CACHE["qpos"]
     try:
-        return np.load(str(p))
+        arr = np.load(str(p))
+        _LIVE_QPOS_CACHE["qpos"] = arr
+        _LIVE_QPOS_CACHE["ts"] = now
+        return arr
     except Exception:
-        return None
+        return _LIVE_QPOS_CACHE["qpos"]
 
 
 # ───── Manual joint control (used when no training is running) ─────
