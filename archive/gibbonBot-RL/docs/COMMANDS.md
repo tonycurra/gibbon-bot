@@ -87,7 +87,7 @@ python look.py data/scene.xml
 
 ## 📊 Monitoring & Metrics
 
-### Local Dashboard
+### MLflow Dashboard
 ```bash
 # Start MLflow metrics dashboard
 scripts/dashboard.sh start
@@ -100,6 +100,38 @@ scripts/dashboard.sh status
 
 # Access: http://127.0.0.1:8765
 ```
+
+### FastAPI Dashboard (Training + Brain + Viewer)
+```bash
+# Start the FastAPI dashboard server
+uvicorn dashboard.server:app --reload --port 8000
+
+# Access: http://localhost:8000/static/index.html
+
+# Or just the API: http://localhost:8000/
+# API docs: http://localhost:8000/docs
+```
+
+**Features**:
+- **Training Control**: Start/stop training, monitor status
+- **Brain State**: View all 8 brain modules, their states, and memory
+- **MuJoCo Viewer**: Live robot visualization (requires OpenGL)
+- **Real-time Metrics**: Training metrics with auto-refresh
+- **Training Logs**: View recent log entries
+
+**API Endpoints**:
+| Endpoint | Method | Description |
+|---|---|---|
+| `/api/train/start` | POST | Start training with optional `task` param |
+| `/api/train/stop` | POST | Stop current training |
+| `/api/train/status` | GET | Check if training is running |
+| `/api/train/metrics` | GET | Get latest training metrics |
+| `/api/train/logs` | GET | Get training logs (optional `tail=N` param) |
+| `/api/brain/modules` | GET | List all brain modules |
+| `/api/brain/state` | GET | Get state of all brain modules |
+| `/api/brain/memory` | GET | Get hippocampus memories (optional `limit=N` param) |
+| `/api/viewer/frame` | GET | Get current viewer frame as PNG |
+| `/api/viewer/state` | GET | Get viewer state (joint/body positions) |
 
 ### System Status
 ```bash
@@ -293,5 +325,5 @@ scripts/status.sh           # Full system status
 
 ---
 
-**Last updated**: 2026-05-14  
+**Last updated**: 2026-05-15  
 **Branch**: brain-modeling
