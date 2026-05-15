@@ -346,6 +346,9 @@ select:focus, input:focus { outline: none; border-color: var(--accent); }
       <button class="btn ghost" onclick="refreshStatus()" title="refresh">↻</button>
     </div>
     <div class="row" style="margin-top:10px;">
+      <label class="field">Trial s
+        <input id="trial-seconds-input" type="number" min="2" max="120" step="1" value="20" title="how long each trial episode runs before forced reset"/>
+      </label>
       <button class="btn" onclick="runTrial()" title="play one real-time episode of the latest policy">Run Trial</button>
       <button class="btn ghost" onclick="stopTrial()">Stop Trial</button>
     </div>
@@ -675,8 +678,9 @@ async function refreshViewerInfo() {
 
 async function runTrial() {
     const task = document.getElementById("task-select").value;
+    const secs = document.getElementById("trial-seconds-input").value || 20;
     try {
-        const r = await fetch(API + "/trial/start?task=" + task, {method:"POST"});
+        const r = await fetch(API + `/trial/start?task=${task}&seconds=${secs}`, {method:"POST"});
         const d = await r.json();
         if (!r.ok) alert("Trial failed: " + (d.detail || r.statusText));
     } catch(e) { alert(e.message); }

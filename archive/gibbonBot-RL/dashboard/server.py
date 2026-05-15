@@ -176,6 +176,7 @@ def _bg(*args: str) -> dict:
 
 INFINITE_STEPS = 10_000_000_000  # 10B — effectively never reached; safety cap only.
 GOAL_SUCCESS_FRAC = 0.90          # auto-stop when policy succeeds in 90% of envs
+_DEFAULT_TRIAL_STEPS = 600        # ~20s per trial episode before forced reset
 
 
 @app.post("/api/train/start")
@@ -205,7 +206,7 @@ def start_training(task: str = "walk", envs: int | None = None,
     # playback of the latest checkpoint while the trainer churns.
     global _trial_proc
     if _trial_proc is None or _trial_proc.poll() is not None:
-        try: _spawn_trial(task, 600, 1.0, loop=True)
+        try: _spawn_trial(task, _DEFAULT_TRIAL_STEPS, 1.0, loop=True)
         except Exception as e: sys.stderr.write(f"[liana] auto-trial failed to start: {e}\n")
     return {"status": "started", "task": task, "envs": envs, "detail": res["stdout"].strip()}
 
@@ -498,17 +499,18 @@ def _spawn_trial(task: str, max_steps: int, realtime: float, loop: bool) -> int:
 
 
 @app.post("/api/trial/start")
-def trial_start(task: str = "walk", max_steps: int = 600, realtime: float = 1.0, loop: bool = True):
+def trial_start(task: str = "walk", seconds: float = 20.0, realtime: float = 1.0, loop: bool = True):
     """Run real-time playback of the latest policy in a CPU subprocess.
 
-    Default is loop=true: episodes back-to-back, reloading the latest
-    checkpoint between each so the viewer always shows the freshest
-    policy. Set loop=false for a single episode."""
+    `seconds`: max wall-clock per episode before forced reset.
+    Loop=true (default): reload latest checkpoint between episodes."""
     global _trial_proc
     if _trial_proc is not None and _trial_proc.poll() is None:
         raise HTTPException(status_code=400, detail="trial already running — stop it first")
+    # 1 action step = PHYSICS_STEPS_PER_ACTION * dt ≈ 0.032s.
+    max_steps = max(30, int(seconds / 0.032))
     pid = _spawn_trial(task, max_steps, realtime, loop)
-    return {"ok": True, "pid": pid, "loop": loop}
+    return {"ok": True, "pid": pid, "loop": loop, "max_steps": max_steps, "seconds": seconds}
 
 
 @app.post("/api/trial/stop")
