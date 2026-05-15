@@ -1,4 +1,6 @@
-# Liana — the gibbonBot's running notebook
+# LIANA — Live Interactive Ape Neural Architecture
+
+_The gibbonBot's running notebook + control interface._
 
 > **Demo north star:** Customer sees the robot in MuJoCo, doing increasingly
 > complex stuff (stand → walk → reach tree). You can pause and tell Claude
@@ -49,3 +51,6 @@ _New entries appended below by `./liana log "..."` and by Claude when changes ar
 
 ## 2026-05-15 12:37
 started: task=walk
+
+## 2026-05-15 12:45
+started: task=walk  (dashboard http://localhost:8000/static/index.html)

@@ -4,7 +4,8 @@
 > complex stuff (stand → walk → reach tree). You can pause and tell Claude
 > to change something on the spot; the change shows up within seconds.
 >
-> **Quick start:** `./liana go` — trainer + viewer + tail in one terminal.
+> **Quick start:** `./liana go` — trainer + dashboard + tail in one terminal.
+> **LIANA** = *Live Interactive Ape Neural Architecture*.
 > See [LIANA.md](LIANA.md) for the running notebook, [BACKLOG.md](BACKLOG.md)
 > for parked ideas.
 
