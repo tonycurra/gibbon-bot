@@ -395,9 +395,7 @@ def main():
         os.environ["AUTO_PUSH"] = "1"
 
     N_ENVS = args.envs or _auto_envs()
-    if args.total_steps:
-        global TOTAL_STEPS
-        TOTAL_STEPS = int(args.total_steps)
+    total_steps_budget = int(args.total_steps) if args.total_steps else TOTAL_STEPS
     save_every = max(1_000, min(100_000, N_ENVS * 50))
 
     print(f"JAX devices: {jax.devices()}")
@@ -467,7 +465,7 @@ def main():
         "GAE_LAMBDA": GAE_LAMBDA,
         "VF_COEF": VF_COEF,
         "MAX_GRAD": MAX_GRAD,
-        "TOTAL_STEPS": TOTAL_STEPS,
+        "TOTAL_STEPS": total_steps_budget,
         "save_every": save_every,
         "MAX_STEPS_episode": int(MAX_STEPS),
         "OBS_DIM": OBS_DIM,
@@ -499,7 +497,7 @@ def main():
         except Exception as e:
             print(f"[watch] failed to spawn: {e}", flush=True)
 
-    print(f"Training — {TOTAL_STEPS:,} total steps.")
+    print(f"Training — {total_steps_budget:,} total steps.")
     print(f"{'updates':>8}  {'steps':>12}  {'sps':>8}  {'mean_rew':>10}  metrics")
     print("-" * 60)
 
@@ -604,7 +602,7 @@ def main():
         def _save_brain_state(reason: str = "checkpoint") -> None:
             return
 
-    while total_steps < TOTAL_STEPS and not _stop[0]:
+    while total_steps < total_steps_budget and not _stop[0]:
         buf_obs, buf_act, buf_logp, buf_rew, buf_done, buf_val, buf_dist = [], [], [], [], [], [], []
 
         for t in range(N_STEPS):
