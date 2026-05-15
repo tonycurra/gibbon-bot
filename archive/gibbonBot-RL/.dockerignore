@@ -25,3 +25,10 @@ mlflow.db
 .vscode/
 .idea/
 *.swp
+
+# Large unnecessary data directories (already volume-mounted)
+data/trees/
+data/roarm_ws/
+data/OpenApePose/
+data/scenes_archive/
+archive/
