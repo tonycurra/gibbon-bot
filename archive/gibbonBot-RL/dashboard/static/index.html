@@ -355,19 +355,6 @@ select:focus, input:focus { outline: none; border-color: var(--accent); }
     <input type="hidden" id="steps-input" value=""/>
   </div>
 
-  <div class="card">
-    <h2>Params <span class="hint">trainer-only · restart to apply</span></h2>
-    <div class="state-det" style="margin-bottom:10px;">
-      These shape how the trainer rewards / drives the policy. The viewer
-      shows an <em>already-trained</em> policy, so sliders won't move it.
-      Restart training to apply.
-    </div>
-    <div id="param-sliders"><span class="loading">Loading…</span></div>
-    <div class="row" style="margin-top:10px;">
-      <button class="btn" onclick="restartTraining()" title="stop trainer, save params, start fresh run">Restart training</button>
-      <button class="btn ghost" onclick="resetParams()">Reset</button>
-    </div>
-  </div>
 
   <div class="card">
     <h2>Runs <span class="hint">last 20</span></h2>
