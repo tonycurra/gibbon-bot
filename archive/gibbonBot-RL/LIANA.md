@@ -54,3 +54,6 @@ started: task=walk
 
 ## 2026-05-15 12:45
 started: task=walk  (dashboard http://localhost:8000/static/index.html)
+
+## 2026-05-15 12:46
+fixed: re-injected t0_trunk capsule into data/scene.xml at (3,0) — walk env was failing on missing tree geom
