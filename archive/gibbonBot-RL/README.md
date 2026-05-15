@@ -1,8 +1,7 @@
 # gibbonBot-RL
 
-> **Demo north star:** Customer sees the robot in MuJoCo, doing increasingly
-> complex stuff (stand → walk → reach tree). You can pause and tell Claude
-> to change something on the spot; the change shows up within seconds.
+> **Demo north star:** Robot walks to the olive tree on command, reliably.
+> Locked 2026-05-15. Anything that doesn't move this forward is a tangent.
 >
 > **Quick start:** `./liana go` — trainer + dashboard + tail in one terminal.
 > **LIANA** = *Live Interactive Ape Neural Architecture*.

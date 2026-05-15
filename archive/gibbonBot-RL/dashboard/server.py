@@ -100,10 +100,16 @@ def _read_active(path: Path, default: str) -> str:
 
 
 def _bg(*args: str) -> dict:
-    """Invoke scripts/train_bg.sh — returns {ok, stdout, stderr}."""
+    """Invoke scripts/train_bg.sh — returns {ok, stdout, stderr}.
+
+    ALLOW_GPU_SHARE=1: the dashboard process holds a small chunk of GPU for
+    its MuJoCo renderer; without this flag train_bg.sh sees it via nvidia-smi
+    and refuses to launch the trainer.
+    """
+    env = {**os.environ, "ALLOW_GPU_SHARE": "1"}
     res = subprocess.run(
         ["bash", str(TRAIN_BG), *args],
-        cwd=str(REPO_ROOT), capture_output=True, text=True, timeout=60,
+        cwd=str(REPO_ROOT), capture_output=True, text=True, timeout=60, env=env,
     )
     return {"ok": res.returncode == 0, "stdout": res.stdout, "stderr": res.stderr}
 
@@ -341,6 +347,70 @@ def _load_live_qpos(task: str):
         return None
 
 
+# ───── Manual joint control (used when no training is running) ─────
+_HOME_CTRL = None
+_LAST_STEP_TIME = None
+
+
+def _ensure_home():
+    """Initialize ctrl to mid-range on first access."""
+    global _HOME_CTRL
+    model, data = get_model()
+    if _HOME_CTRL is None:
+        lo = model.actuator_ctrlrange[:, 0]
+        hi = model.actuator_ctrlrange[:, 1]
+        _HOME_CTRL = ((lo + hi) / 2.0).copy()
+        data.ctrl[:] = _HOME_CTRL
+
+
+@app.get("/api/sim/joints")
+def sim_joints():
+    """List actuators with name, ctrl range, and current ctrl value."""
+    import mujoco
+    model, data = get_model()
+    _ensure_home()
+    out = []
+    for i in range(model.nu):
+        name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_ACTUATOR, i) or f"act_{i}"
+        lo, hi = float(model.actuator_ctrlrange[i, 0]), float(model.actuator_ctrlrange[i, 1])
+        out.append({
+            "i": i, "name": name, "lo": lo, "hi": hi,
+            "ctrl": float(data.ctrl[i]),
+        })
+    return {"actuators": out}
+
+
+@app.post("/api/sim/ctrl")
+def sim_ctrl(i: int, value: float):
+    """Set one actuator's ctrl value. Takes effect on next /api/viewer/frame."""
+    model, data = get_model()
+    _ensure_home()
+    if i < 0 or i >= model.nu:
+        raise HTTPException(status_code=400, detail=f"actuator {i} out of range")
+    lo, hi = float(model.actuator_ctrlrange[i, 0]), float(model.actuator_ctrlrange[i, 1])
+    data.ctrl[i] = float(np.clip(value, lo, hi))
+    return {"ok": True, "i": i, "value": float(data.ctrl[i])}
+
+
+@app.post("/api/sim/reset")
+def sim_reset():
+    """Reset robot to default qpos with mid-range ctrl."""
+    import mujoco
+    model, data = get_model()
+    mujoco.mj_resetData(model, data)
+    _ensure_home()
+    data.ctrl[:] = _HOME_CTRL
+    return {"ok": True}
+
+
+@app.post("/api/sim/zero")
+def sim_zero():
+    """Zero all ctrls (let robot fall / relax)."""
+    model, data = get_model()
+    data.ctrl[:] = 0.0
+    return {"ok": True}
+
+
 @app.get("/api/viewer/frame")
 def get_frame(width: int = 640, height: int = 480):
     """Get frame as PNG showing the current trained robot.
@@ -356,13 +426,22 @@ def get_frame(width: int = 640, height: int = 480):
         renderer = get_renderer()
 
         task = _read_active(ACTIVE_TASK_FILE, "walk")
-        live = _load_live_qpos(task)
+        live = _load_live_qpos(task) if _trainer_pids() else None
         if live is not None and live.shape == data.qpos.shape:
+            # Training is active — show the policy's actual state.
             data.qpos[:] = live
             data.qvel[:] = 0.0
-
-        # Step simulation forward
-        mujoco.mj_forward(model, data)
+            mujoco.mj_forward(model, data)
+        else:
+            # No training — run a free-running sim driven by /api/sim/ctrl sliders.
+            _ensure_home()
+            global _LAST_STEP_TIME
+            now = time.time()
+            dt = min(0.1, now - _LAST_STEP_TIME) if _LAST_STEP_TIME else model.opt.timestep * 20
+            _LAST_STEP_TIME = now
+            n_steps = max(1, int(dt / model.opt.timestep))
+            for _ in range(min(n_steps, 50)):  # cap to avoid hangs
+                mujoco.mj_step(model, data)
 
         # Set up camera for good view
         cam = mujoco.MjvCamera()

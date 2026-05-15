@@ -2,9 +2,9 @@
 
 _The gibbonBot's running notebook + control interface._
 
-> **Demo north star:** Customer sees the robot in MuJoCo, doing increasingly
-> complex stuff (stand → walk → reach tree). You can pause and tell Claude
-> to change something on the spot; the change shows up within seconds.
+> **Demo north star (locked 2026-05-15):** Robot walks to the olive tree
+> on command, reliably. Customer hits a button, the robot does it. Anything
+> that doesn't move this forward is a tangent — push back, don't build it.
 
 This file is the brain's diary. Append-only. Every meaningful tweak gets a
 dated entry — what was changed, why, and (later) the result. Scrolling this
@@ -63,3 +63,9 @@ started: task=walk  (dashboard http://localhost:8000/static/index.html)
 
 ## 2026-05-15 12:49
 flow change: ./liana go now launches dashboard only. Training is started from the web UI. Default envs=1 for real-time viewing; trainer dumps qpos every step when envs<=8.
+
+## 2026-05-15 12:51
+started: dashboard only (no trainer)  → http://localhost:8000/static/index.html
+
+## 2026-05-15 12:56
+demo north star locked: walk to olive tree on command, reliably. UI rewrite: black theme, training left, viewer right, joint sliders panel (24 actuators, grouped FL/FR/BL/BR). Fixed Start button: pass ALLOW_GPU_SHARE=1 so train_bg.sh doesn't refuse when dashboard holds GPU for rendering. Viewer falls back to manual sim driven by joint sliders when no training running.

@@ -3,235 +3,230 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GibbonBot Dashboard</title>
+<title>LIANA</title>
 <style>
 :root {
-    --bg: #1a1a2e;
-    --panel: #16213e;
-    --border: #0f3460;
-    --text: #eaeaea;
-    --muted: #888;
-    --accent: #e94560;
-    --ok: #28a745;
-    --warn: #ffc107;
-    --gap: clamp(8px, 1.2vw, 20px);
-    --pad: clamp(10px, 1.4vw, 20px);
-    --radius: 10px;
+    --bg: #000;
+    --panel: #0a0a0a;
+    --line: #1a1a1a;
+    --line-2: #262626;
+    --text: #e8e8e8;
+    --muted: #6e6e6e;
+    --accent: #ff3860;
+    --ok: #25d366;
+    --warn: #ffb020;
+    --pad: clamp(10px, 1.2vw, 18px);
+    --gap: clamp(8px, 1vw, 16px);
+    --radius: 6px;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; }
 body {
-    font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;
+    font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
     background: var(--bg);
     color: var(--text);
-    min-height: 100vh;
-    font-size: clamp(13px, 0.95vw, 15px);
+    font-size: clamp(13px, 0.9vw, 14px);
     line-height: 1.4;
+    letter-spacing: 0.01em;
 }
-.container {
-    width: 100%;
-    max-width: 1800px;
-    margin: 0 auto;
-    padding: var(--pad);
-}
+.container { width: 100%; max-width: 1800px; margin: 0 auto; padding: var(--pad); }
 header {
-    display: flex;
-    align-items: baseline;
-    gap: 12px;
-    flex-wrap: wrap;
-    margin-bottom: var(--gap);
+    display: flex; align-items: baseline; gap: 12px;
+    margin-bottom: var(--gap); padding-bottom: 8px;
+    border-bottom: 1px solid var(--line);
 }
-h1 { font-size: clamp(1.4em, 2.4vw, 2em); color: var(--text); letter-spacing: 0.05em; }
-.subtitle { color: var(--muted); font-size: 0.85em; }
+h1 { font-size: 1.3em; font-weight: 600; letter-spacing: 0.18em; }
+.subtitle { color: var(--muted); font-size: 0.8em; letter-spacing: 0.04em; }
+.northstar { margin-left: auto; color: var(--muted); font-size: 0.8em; font-style: italic; }
 
-/* Two-column app layout: viewer dominant on the left, controls stack on right.
-   Auto-collapses to single column when there's no horizontal room. */
 .app {
-    display: grid;
-    gap: var(--gap);
+    display: grid; gap: var(--gap);
     grid-template-columns: minmax(0, 1fr);
 }
 @media (min-width: 1000px) {
-    .app { grid-template-columns: minmax(0, 2.1fr) minmax(320px, 1fr); }
+    .app { grid-template-columns: minmax(340px, 1fr) minmax(0, 1.8fr); }
 }
 @media (min-width: 1500px) {
-    .app { grid-template-columns: minmax(0, 2.4fr) minmax(360px, 1fr); }
+    .app { grid-template-columns: minmax(380px, 1fr) minmax(0, 2.2fr); }
 }
-
 .col { display: flex; flex-direction: column; gap: var(--gap); min-width: 0; }
 
 .card {
     background: var(--panel);
+    border: 1px solid var(--line);
     border-radius: var(--radius);
     padding: var(--pad);
-    border: 1px solid var(--border);
     min-width: 0;
 }
 .card h2 {
-    color: var(--text);
-    margin-bottom: 12px;
-    font-size: 1em;
+    font-size: 0.78em;
     font-weight: 600;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.18em;
     text-transform: uppercase;
-    border-bottom: 1px solid var(--border);
+    color: var(--muted);
+    margin-bottom: 12px;
     padding-bottom: 8px;
+    border-bottom: 1px solid var(--line);
 }
-.card h2 .hint { color: var(--muted); font-weight: 400; font-size: 0.75em; text-transform: none; letter-spacing: 0; margin-left: 6px; }
+.card h2 .hint { color: var(--line-2); font-weight: 400; margin-left: 6px; letter-spacing: 0.02em; text-transform: none; font-size: 0.9em; }
 
-/* Two-up grid that collapses on small panes */
-.two-up { display: grid; gap: var(--gap); grid-template-columns: 1fr; }
-@media (min-width: 700px) { .two-up { grid-template-columns: 1fr 1fr; } }
-
-.controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-.controls label { display: inline-flex; align-items: center; gap: 6px; font-size: 0.9em; color: var(--muted); }
-.controls select, .controls input[type=number], .controls input[type=text] {
-    background: var(--bg);
-    color: var(--text);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 6px 8px;
-    font-size: 0.9em;
-    min-width: 0;
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.row + .row { margin-top: 8px; }
+label.field { display: inline-flex; flex-direction: column; gap: 4px; font-size: 0.78em; color: var(--muted); }
+select, input[type=number], input[type=text] {
+    background: #000; color: var(--text);
+    border: 1px solid var(--line-2); border-radius: 4px;
+    padding: 6px 8px; font-size: 0.95em;
+    font-family: inherit;
 }
-.controls input[type=number] { width: 90px; }
+input[type=number] { width: 80px; }
+select:focus, input:focus { outline: none; border-color: var(--accent); }
 
 .btn {
-    padding: 8px 14px;
-    background: var(--border);
-    color: var(--text);
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 0.9em;
-    transition: filter 0.1s;
+    padding: 7px 12px;
+    background: #000; color: var(--text);
+    border: 1px solid var(--line-2); border-radius: 4px;
+    cursor: pointer; font-size: 0.85em;
+    font-family: inherit;
+    transition: border-color 0.1s, background 0.1s;
 }
-.btn:hover { filter: brightness(1.2); }
-.btn.primary { background: var(--accent); }
-.btn.warning { background: var(--warn); color: #000; }
+.btn:hover { border-color: var(--text); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #000; font-weight: 600; }
+.btn.primary:hover { filter: brightness(1.1); }
+.btn.ghost { color: var(--muted); }
+.btn.ghost:hover { color: var(--text); }
 
-/* Viewer — fills its column, capped so it never pushes everything else off-screen */
+.status { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 0.85em; }
+.status .k { color: var(--muted); }
+.status .v { color: var(--text); font-variant-numeric: tabular-nums; }
+.status .v.ok { color: var(--ok); }
+.status .v.off { color: var(--muted); }
+
 #viewer-container {
-    background: #000;
-    border-radius: 8px;
-    overflow: hidden;
-    width: 100%;
-    aspect-ratio: 4/3;
-    max-height: 70vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    background: #000; border: 1px solid var(--line);
+    border-radius: var(--radius); overflow: hidden;
+    width: 100%; aspect-ratio: 4/3;
+    max-height: 75vh;
+    display: flex; align-items: center; justify-content: center;
 }
 #viewer-container img { width: 100%; height: 100%; object-fit: contain; }
-.viewer-controls { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.viewer-info { margin-top: 8px; font-size: 0.75em; color: var(--muted); }
 
-/* Mono blocks */
 #metrics, #logs {
-    background: #000;
-    padding: 12px;
-    border-radius: 8px;
+    background: #000; border: 1px solid var(--line);
+    padding: 10px; border-radius: 4px;
     font-family: ui-monospace, Menlo, Consolas, monospace;
-    font-size: 0.8em;
-    max-height: 38vh;
-    overflow: auto;
-    white-space: pre-wrap;
-    word-break: break-word;
+    font-size: 0.78em; color: var(--text);
+    max-height: 32vh; overflow: auto;
+    white-space: pre-wrap; word-break: break-word;
 }
 
-.status-item { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 0.9em; }
-.status-item:last-child { border-bottom: 0; }
-.status-value { color: var(--accent); font-variant-numeric: tabular-nums; }
-
-.memory-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; }
-.memory-item { background: var(--border); padding: 8px; border-radius: 6px; font-size: 0.8em; }
-
-.loading { color: var(--muted); font-style: italic; }
-.error { color: var(--accent); }
-
-/* Slider rows */
 .param-row { margin: 6px 0; }
-.param-row label { display: flex; justify-content: space-between; font-size: 0.8em; color: var(--muted); }
-.param-row .val { color: var(--accent); font-variant-numeric: tabular-nums; }
+.param-row .lbl { display: flex; justify-content: space-between; font-size: 0.75em; color: var(--muted); margin-bottom: 2px; }
+.param-row .val { color: var(--text); font-variant-numeric: tabular-nums; }
 .param-row input[type=range] { width: 100%; accent-color: var(--accent); }
+
+/* Joint panel: grouped sliders */
+.joint-tabs { display: flex; gap: 4px; margin-bottom: 10px; flex-wrap: wrap; }
+.joint-tab {
+    padding: 5px 10px; font-size: 0.75em; letter-spacing: 0.1em;
+    background: #000; border: 1px solid var(--line-2); color: var(--muted);
+    border-radius: 4px; cursor: pointer;
+}
+.joint-tab.active { color: var(--text); border-color: var(--text); }
+.joint-row { display: grid; grid-template-columns: 130px 1fr 56px; gap: 8px; align-items: center; padding: 4px 0; font-size: 0.78em; }
+.joint-row .jname { color: var(--muted); font-family: ui-monospace, Menlo, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.joint-row .jval { color: var(--text); font-variant-numeric: tabular-nums; text-align: right; font-family: ui-monospace, Menlo, monospace; }
+.joint-row input[type=range] { width: 100%; accent-color: var(--accent); }
+
+.loading { color: var(--muted); font-style: italic; font-size: 0.85em; }
+.error { color: var(--accent); }
+.divider { height: 1px; background: var(--line); margin: 12px 0; }
 </style>
 </head>
 <body>
 <div class="container">
+
 <header>
 <h1>LIANA</h1>
 <span class="subtitle">Live Interactive Ape Neural Architecture</span>
+<span class="northstar">→ demo: walk to the olive tree, on command</span>
 </header>
 
 <div class="app">
-  <!-- Left column: viewer + telemetry -->
-  <div class="col">
-    <div class="card">
-      <h2>Viewer <span class="hint">env-0 qpos, refreshed each PPO batch</span></h2>
-      <div id="viewer-container"><img id="frame" src="/api/viewer/frame" alt="robot"/></div>
-      <div class="viewer-controls">
-        <button class="btn" onclick="refreshFrame()">Refresh Frame</button>
-        <button class="btn" onclick="getViewerState()">Get State</button>
-      </div>
-      <div id="viewer-state" style="margin-top:10px;font-size:0.8em;color:var(--muted);"></div>
-    </div>
 
-    <div class="two-up">
-      <div class="card"><h2>Metrics</h2><pre id="metrics">Loading...</pre></div>
-      <div class="card"><h2>Logs</h2><div id="logs">Loading...</div></div>
+<!-- LEFT: training controls + tuning + brain -->
+<div class="col">
+
+  <div class="card">
+    <h2>Training</h2>
+    <div class="row">
+      <label class="field">Task
+        <select id="task-select">
+          <option value="walk">walk</option>
+          <option value="stand">stand</option>
+          <option value="walk_forward">walk_forward</option>
+          <option value="turn_left">turn_left</option>
+          <option value="turn_right">turn_right</option>
+        </select>
+      </label>
+      <label class="field">Envs
+        <input id="envs-input" type="number" min="1" max="4096" step="1" value="1" title="1 = real-time viewing; raise for faster learning"/>
+      </label>
+    </div>
+    <div class="row" style="margin-top:10px;">
+      <button class="btn primary" onclick="startTraining()">Start</button>
+      <button class="btn" onclick="stopTraining()">Stop</button>
+      <button class="btn" onclick="restartTraining()">Restart</button>
+      <button class="btn ghost" onclick="refreshStatus()" title="refresh">↻</button>
+    </div>
+    <div class="divider"></div>
+    <div class="status">
+      <div class="k">Status</div><div class="v off" id="status-value">—</div>
+      <div class="k">PID</div><div class="v" id="pid-value">—</div>
+      <div class="k">Active task</div><div class="v" id="active-task">—</div>
+      <div class="k">Active envs</div><div class="v" id="active-envs">—</div>
     </div>
   </div>
 
-  <!-- Right column: controls + brain -->
-  <div class="col">
-    <div class="card">
-      <h2>Training</h2>
-      <div class="controls" style="margin-bottom:10px;">
-        <label>Task
-          <select id="task-select">
-            <option value="walk">walk</option>
-            <option value="stand">stand</option>
-            <option value="walk_forward">walk_forward</option>
-            <option value="turn_left">turn_left</option>
-            <option value="turn_right">turn_right</option>
-          </select>
-        </label>
-        <label>Envs
-          <input id="envs-input" type="number" min="1" max="4096" step="1" value="1" title="1 = real-time viewing; raise for faster learning (less visible)"/>
-        </label>
-      </div>
-      <div class="controls" style="margin-bottom:12px;">
-        <button class="btn primary" onclick="startTraining()">Start</button>
-        <button class="btn warning" onclick="stopTraining()">Stop</button>
-        <button class="btn" onclick="restartTraining()">Restart</button>
-        <button class="btn" onclick="refreshStatus()">↻</button>
-      </div>
-      <div class="status-item"><span>Status</span><span class="status-value" id="status-value">Unknown</span></div>
-      <div class="status-item"><span>PID</span><span class="status-value" id="pid-value">-</span></div>
-      <div class="status-item"><span>Active task</span><span class="status-value" id="active-task">-</span></div>
-      <div class="status-item"><span>Active envs</span><span class="status-value" id="active-envs">-</span></div>
-    </div>
-
-    <div class="card">
-      <h2>Live Tuning <span class="hint">applied next episode</span></h2>
-      <div id="param-sliders"></div>
-    </div>
-
-    <div class="card">
-      <h2>Brain</h2>
-      <div class="controls">
-        <button class="btn" onclick="loadBrainState()">State</button>
-        <button class="btn" onclick="loadMemory()">Memory</button>
-        <button class="btn" onclick="listModules()">Modules</button>
-      </div>
-      <div id="modules-list" style="margin-top:8px;font-size:0.85em;color:var(--muted);"></div>
-      <div id="memory-container" class="memory-grid" style="margin-top:10px;"><span class="loading">Memory not loaded</span></div>
+  <div class="card">
+    <h2>Joint Control <span class="hint">drives sim when no training active</span></h2>
+    <div class="joint-tabs" id="joint-tabs"></div>
+    <div id="joint-sliders"><span class="loading">Loading…</span></div>
+    <div class="row" style="margin-top:10px;">
+      <button class="btn" onclick="simReset()">Reset Pose</button>
+      <button class="btn ghost" onclick="simZero()">Zero Ctrl</button>
     </div>
   </div>
+
+  <div class="card">
+    <h2>Live Tuning <span class="hint">applied next episode</span></h2>
+    <div id="param-sliders"><span class="loading">Loading…</span></div>
+  </div>
+
+</div>
+
+<!-- RIGHT: viewer + metrics + logs -->
+<div class="col">
+
+  <div class="card">
+    <h2>Viewer</h2>
+    <div id="viewer-container"><img id="frame" src="/api/viewer/frame" alt="robot"/></div>
+    <div class="viewer-info" id="viewer-info">—</div>
+  </div>
+
+  <div class="card"><h2>Metrics</h2><pre id="metrics">—</pre></div>
+  <div class="card"><h2>Logs</h2><div id="logs">—</div></div>
+
+</div>
+
 </div>
 </div>
+
 <script>
-const API_BASE = window.location.origin + "/api";
+const API = window.location.origin + "/api";
 
+// ── Training ──────────────────────────────────────────────────────────
 function _qs() {
     const task = document.getElementById("task-select").value;
     const envs = document.getElementById("envs-input").value;
@@ -239,171 +234,160 @@ function _qs() {
     if (envs) q += "&envs=" + encodeURIComponent(envs);
     return q;
 }
-
 async function startTraining() {
     try {
-        const resp = await fetch(API_BASE + "/train/start?" + _qs(), {method: "POST"});
-        const data = await resp.json();
-        if (!resp.ok) { alert("Error: " + (data.detail || resp.statusText)); return; }
-        refreshStatus();
-        loadParams();
-    } catch(e) { alert("Error: " + e.message); }
+        const r = await fetch(API + "/train/start?" + _qs(), {method:"POST"});
+        const d = await r.json();
+        if (!r.ok) { alert("Start failed: " + (d.detail || r.statusText)); return; }
+        refreshStatus(); loadParams();
+    } catch(e) { alert("Network error: " + e.message); }
 }
-
 async function stopTraining() {
-    try {
-        const resp = await fetch(API_BASE + "/train/stop", {method: "POST"});
-        await resp.json();
-        refreshStatus();
-    } catch(e) { alert("Error: " + e.message); }
+    try { await fetch(API + "/train/stop", {method:"POST"}); refreshStatus(); }
+    catch(e) { alert(e.message); }
 }
-
 async function restartTraining() {
     try {
-        const resp = await fetch(API_BASE + "/train/restart?" + _qs(), {method: "POST"});
-        const data = await resp.json();
-        if (!resp.ok) { alert("Error: " + (data.detail || resp.statusText)); return; }
-        refreshStatus();
-        loadParams();
-    } catch(e) { alert("Error: " + e.message); }
+        const r = await fetch(API + "/train/restart?" + _qs(), {method:"POST"});
+        const d = await r.json();
+        if (!r.ok) { alert("Restart failed: " + (d.detail || r.statusText)); return; }
+        refreshStatus(); loadParams();
+    } catch(e) { alert(e.message); }
 }
-
 async function refreshStatus() {
     try {
-        const resp = await fetch(API_BASE + "/train/status");
-        const data = await resp.json();
-        document.getElementById("status-value").textContent = data.running ? "Running" : "Stopped";
-        document.getElementById("status-value").style.color = data.running ? "#28a745" : "#e94560";
-        document.getElementById("pid-value").textContent = data.pid || "-";
-        document.getElementById("active-task").textContent = data.task || "-";
-        document.getElementById("active-envs").textContent = data.envs || "(auto)";
-    } catch(e) { console.error("Status error:", e); }
+        const r = await fetch(API + "/train/status");
+        const d = await r.json();
+        const sv = document.getElementById("status-value");
+        sv.textContent = d.running ? "RUNNING" : "STOPPED";
+        sv.className = "v " + (d.running ? "ok" : "off");
+        document.getElementById("pid-value").textContent = d.pid || "—";
+        document.getElementById("active-task").textContent = d.task || "—";
+        document.getElementById("active-envs").textContent = d.envs || "auto";
+    } catch(e) {}
 }
 
+// ── Param sliders ─────────────────────────────────────────────────────
 async function loadParams() {
     const task = document.getElementById("task-select").value;
     try {
-        const resp = await fetch(API_BASE + "/params/get?task=" + encodeURIComponent(task));
-        const data = await resp.json();
-        if (data.error || !data.params) {
-            document.getElementById("param-sliders").innerHTML = "<span class=\"loading\">No params for " + task + "</span>";
+        const r = await fetch(API + "/params/get?task=" + encodeURIComponent(task));
+        const d = await r.json();
+        if (!d.params) {
+            document.getElementById("param-sliders").innerHTML = "<span class=\"loading\">no params for " + task + "</span>";
             return;
         }
         let html = "";
-        for (const [key, val] of Object.entries(data.params)) {
-            const [lo, hi] = data.bounds[key];
+        for (const [k, v] of Object.entries(d.params)) {
+            const [lo, hi] = d.bounds[k];
             const step = (hi - lo) / 200;
             html += "<div class=\"param-row\">";
-            html += "<label><span>" + key + "</span><span class=\"val\" id=\"v-" + key + "\">" + val.toFixed(3) + "</span></label>";
-            html += "<input type=\"range\" min=\"" + lo + "\" max=\"" + hi + "\" step=\"" + step + "\" value=\"" + val + "\" oninput=\"document.getElementById('v-" + key + "').textContent=parseFloat(this.value).toFixed(3)\" onchange=\"setParam('" + key + "', this.value)\"/>";
+            html += "<div class=\"lbl\"><span>" + k + "</span><span class=\"val\" id=\"pv-" + k + "\">" + v.toFixed(3) + "</span></div>";
+            html += "<input type=\"range\" min=\"" + lo + "\" max=\"" + hi + "\" step=\"" + step + "\" value=\"" + v + "\" ";
+            html += "oninput=\"document.getElementById('pv-" + k + "').textContent=parseFloat(this.value).toFixed(3)\" ";
+            html += "onchange=\"setParam('" + k + "', this.value)\"/>";
             html += "</div>";
         }
         document.getElementById("param-sliders").innerHTML = html;
     } catch(e) {
-        document.getElementById("param-sliders").innerHTML = "<span class=\"error\">Error: " + e.message + "</span>";
+        document.getElementById("param-sliders").innerHTML = "<span class=\"error\">" + e.message + "</span>";
     }
 }
-
 async function setParam(key, value) {
     const task = document.getElementById("task-select").value;
-    try {
-        await fetch(API_BASE + "/params/set?task=" + task + "&key=" + key + "&value=" + value, {method: "POST"});
-    } catch(e) { console.error("setParam error:", e); }
+    try { await fetch(API + "/params/set?task=" + task + "&key=" + key + "&value=" + value, {method:"POST"}); }
+    catch(e) { console.error(e); }
 }
 
-async function listModules() {
-    try {
-        const resp = await fetch(API_BASE + "/brain/modules");
-        const data = await resp.json();
-        document.getElementById("modules-list").innerHTML = data.modules.map(function(m) {
-            return "<span style="margin-right:10px;">" + m + "</span>";
-        }).join("");
-    } catch(e) { document.getElementById("modules-list").innerHTML = "<span class="error">Error: " + e.message + "</span>"; }
+// ── Joint sliders ─────────────────────────────────────────────────────
+let JOINTS = [];
+let JOINT_GROUP = "FL";
+function _group(name) {
+    const m = name.match(/^act_([fb][lr])_/);
+    return m ? m[1].toUpperCase() : "OTHER";
 }
-
-async function loadBrainState() {
+async function loadJoints() {
     try {
-        const resp = await fetch(API_BASE + "/brain/state");
-        const data = await resp.json();
-        alert("Brain state:
-" + JSON.stringify(data.state, null, 2));
-    } catch(e) { alert("Error: " + e.message); }
-}
-
-async function loadMemory() {
-    try {
-        const resp = await fetch(API_BASE + "/brain/memory?limit=20");
-        const data = await resp.json();
-        renderMemory(data.memories);
-    } catch(e) { console.error("Memory error:", e); }
-}
-
-function renderMemory(memories) {
-    var container = document.getElementById("memory-container");
-    if (memories.length === 0) {
-        container.innerHTML = "<span class="loading">No memories found</span>";
-        return;
+        const r = await fetch(API + "/sim/joints");
+        const d = await r.json();
+        JOINTS = d.actuators || [];
+        const groups = Array.from(new Set(JOINTS.map(j => _group(j.name))));
+        const tabs = document.getElementById("joint-tabs");
+        tabs.innerHTML = groups.map(g =>
+            "<button class=\"joint-tab" + (g === JOINT_GROUP ? " active" : "") + "\" onclick=\"selectJointGroup('" + g + "')\">" + g + "</button>"
+        ).join("");
+        renderJoints();
+    } catch(e) {
+        document.getElementById("joint-sliders").innerHTML = "<span class=\"error\">" + e.message + "</span>";
     }
-    var html = "";
-    memories.forEach(function(mem) {
-        html += "<div class="memory-item">";
-        html += "<div><strong>#" + mem.index + "</strong></div>";
-        html += "<div>Reward: " + (mem.reward ? mem.reward.toFixed(2) : "N/A") + "</div>";
-        html += "<div>Punish: " + (mem.punishment ? mem.punishment.toFixed(2) : "N/A") + "</div>";
-        html += "<div>Time: " + (mem.timestamp || "N/A") + "</div>";
-        html += "</div>";
+}
+function selectJointGroup(g) {
+    JOINT_GROUP = g;
+    document.querySelectorAll(".joint-tab").forEach(el => {
+        el.classList.toggle("active", el.textContent === g);
     });
-    container.innerHTML = html;
+    renderJoints();
+}
+function renderJoints() {
+    const filtered = JOINTS.filter(j => _group(j.name) === JOINT_GROUP);
+    const html = filtered.map(j => {
+        const step = (j.hi - j.lo) / 200;
+        const short = j.name.replace(/^act_/, "");
+        return (
+            "<div class=\"joint-row\">" +
+                "<span class=\"jname\" title=\"" + j.name + "\">" + short + "</span>" +
+                "<input type=\"range\" min=\"" + j.lo + "\" max=\"" + j.hi + "\" step=\"" + step + "\" value=\"" + j.ctrl + "\" " +
+                    "oninput=\"document.getElementById('jv-" + j.i + "').textContent=parseFloat(this.value).toFixed(2)\" " +
+                    "onchange=\"setCtrl(" + j.i + ", this.value)\"/>" +
+                "<span class=\"jval\" id=\"jv-" + j.i + "\">" + j.ctrl.toFixed(2) + "</span>" +
+            "</div>"
+        );
+    }).join("");
+    document.getElementById("joint-sliders").innerHTML = html || "<span class=\"loading\">no joints in group</span>";
+}
+async function setCtrl(i, value) {
+    try { await fetch(API + "/sim/ctrl?i=" + i + "&value=" + value, {method:"POST"}); }
+    catch(e) { console.error(e); }
+}
+async function simReset() {
+    try { await fetch(API + "/sim/reset", {method:"POST"}); loadJoints(); } catch(e) { console.error(e); }
+}
+async function simZero() {
+    try { await fetch(API + "/sim/zero", {method:"POST"}); loadJoints(); } catch(e) { console.error(e); }
 }
 
-async function refreshFrame() {
-    var frame = document.getElementById("frame");
-    frame.src = "/api/viewer/frame?" + Date.now();
+// ── Viewer / metrics / logs ───────────────────────────────────────────
+function refreshFrame() {
+    document.getElementById("frame").src = "/api/viewer/frame?" + Date.now();
 }
-
-async function getViewerState() {
-    try {
-        const resp = await fetch(API_BASE + "/viewer/state");
-        const data = await resp.json();
-        document.getElementById("viewer-state").innerHTML = "<pre>" + JSON.stringify(data, null, 2) + "</pre>";
-    } catch(e) { document.getElementById("viewer-state").innerHTML = "<span class="error">Error: " + e.message + "</span>"; }
-}
-
 async function refreshMetrics() {
     try {
-        const resp = await fetch(API_BASE + "/train/metrics");
-        const data = await resp.json();
-        if (data.error) {
-            document.getElementById("metrics").textContent = data.error;
-        } else {
-            document.getElementById("metrics").textContent = JSON.stringify(data, null, 2);
-        }
-    } catch(e) { document.getElementById("metrics").textContent = "Error: " + e.message; }
+        const r = await fetch(API + "/train/metrics");
+        const d = await r.json();
+        const el = document.getElementById("metrics");
+        if (d.error) { el.textContent = d.error; }
+        else { el.textContent = Object.entries(d).map(([k,v]) => k.padEnd(12) + " " + v).join("\n"); }
+    } catch(e) { document.getElementById("metrics").textContent = e.message; }
 }
-
 async function refreshLogs() {
     try {
-        const resp = await fetch(API_BASE + "/train/logs?tail=20");
-        const data = await resp.json();
-        document.getElementById("logs").textContent = data.logs.join("
-");
-    } catch(e) { document.getElementById("logs").textContent = "Error: " + e.message; }
+        const r = await fetch(API + "/train/logs?tail=20");
+        const d = await r.json();
+        document.getElementById("logs").textContent = (d.logs || []).join("");
+    } catch(e) {}
 }
 
-// Auto-refresh
+// ── Boot ──────────────────────────────────────────────────────────────
 setInterval(refreshFrame, 100);
 setInterval(refreshMetrics, 500);
 setInterval(refreshLogs, 1000);
 setInterval(refreshStatus, 2000);
-
-// Initial load
-document.addEventListener("DOMContentLoaded", function() {
+document.addEventListener("DOMContentLoaded", () => {
     refreshStatus();
-    listModules();
-    loadMemory();
+    loadParams();
+    loadJoints();
     refreshMetrics();
     refreshLogs();
-    loadParams();
     document.getElementById("task-select").addEventListener("change", loadParams);
 });
 </script>
