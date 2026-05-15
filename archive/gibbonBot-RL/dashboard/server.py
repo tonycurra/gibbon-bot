@@ -9,9 +9,17 @@ Note: For MJX/Warp rendering, frames are generated on-demand.
 """
 
 import os
+
+# Force headless EGL for MuJoCo rendering. Under WSL2 / no-X environments,
+# the default glfw backend hits an X11 assertion and the server crashes.
+# Must be set before mujoco is imported (anywhere — including via brain/).
+os.environ.setdefault("MUJOCO_GL", "egl")
+os.environ.setdefault("PYOPENGL_PLATFORM", "egl")
+
 import re
 import subprocess
 import sys
+import threading
 import time
 from io import BytesIO
 from pathlib import Path
@@ -20,6 +28,10 @@ import numpy as np
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+
+# Serialize MuJoCo model/data/renderer access — FastAPI dispatches sync
+# handlers on a threadpool, and the renderer + MjData are not thread-safe.
+_SIM_LOCK = threading.Lock()
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 TRAIN_BG = REPO_ROOT / "scripts" / "train_bg.sh"
@@ -367,47 +379,51 @@ def _ensure_home():
 def sim_joints():
     """List actuators with name, ctrl range, and current ctrl value."""
     import mujoco
-    model, data = get_model()
-    _ensure_home()
-    out = []
-    for i in range(model.nu):
-        name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_ACTUATOR, i) or f"act_{i}"
-        lo, hi = float(model.actuator_ctrlrange[i, 0]), float(model.actuator_ctrlrange[i, 1])
-        out.append({
-            "i": i, "name": name, "lo": lo, "hi": hi,
-            "ctrl": float(data.ctrl[i]),
-        })
+    with _SIM_LOCK:
+        model, data = get_model()
+        _ensure_home()
+        out = []
+        for i in range(model.nu):
+            name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_ACTUATOR, i) or f"act_{i}"
+            lo, hi = float(model.actuator_ctrlrange[i, 0]), float(model.actuator_ctrlrange[i, 1])
+            out.append({
+                "i": i, "name": name, "lo": lo, "hi": hi,
+                "ctrl": float(data.ctrl[i]),
+            })
     return {"actuators": out}
 
 
 @app.post("/api/sim/ctrl")
 def sim_ctrl(i: int, value: float):
     """Set one actuator's ctrl value. Takes effect on next /api/viewer/frame."""
-    model, data = get_model()
-    _ensure_home()
-    if i < 0 or i >= model.nu:
-        raise HTTPException(status_code=400, detail=f"actuator {i} out of range")
-    lo, hi = float(model.actuator_ctrlrange[i, 0]), float(model.actuator_ctrlrange[i, 1])
-    data.ctrl[i] = float(np.clip(value, lo, hi))
-    return {"ok": True, "i": i, "value": float(data.ctrl[i])}
+    with _SIM_LOCK:
+        model, data = get_model()
+        _ensure_home()
+        if i < 0 or i >= model.nu:
+            raise HTTPException(status_code=400, detail=f"actuator {i} out of range")
+        lo, hi = float(model.actuator_ctrlrange[i, 0]), float(model.actuator_ctrlrange[i, 1])
+        data.ctrl[i] = float(np.clip(value, lo, hi))
+        return {"ok": True, "i": i, "value": float(data.ctrl[i])}
 
 
 @app.post("/api/sim/reset")
 def sim_reset():
     """Reset robot to default qpos with mid-range ctrl."""
     import mujoco
-    model, data = get_model()
-    mujoco.mj_resetData(model, data)
-    _ensure_home()
-    data.ctrl[:] = _HOME_CTRL
+    with _SIM_LOCK:
+        model, data = get_model()
+        mujoco.mj_resetData(model, data)
+        _ensure_home()
+        data.ctrl[:] = _HOME_CTRL
     return {"ok": True}
 
 
 @app.post("/api/sim/zero")
 def sim_zero():
     """Zero all ctrls (let robot fall / relax)."""
-    model, data = get_model()
-    data.ctrl[:] = 0.0
+    with _SIM_LOCK:
+        model, data = get_model()
+        data.ctrl[:] = 0.0
     return {"ok": True}
 
 
@@ -422,37 +438,36 @@ def get_frame(width: int = 640, height: int = 480):
     try:
         import mujoco
 
-        model, data = get_model()
-        renderer = get_renderer()
+        with _SIM_LOCK:
+            model, data = get_model()
+            renderer = get_renderer()
 
-        task = _read_active(ACTIVE_TASK_FILE, "walk")
-        live = _load_live_qpos(task) if _trainer_pids() else None
-        if live is not None and live.shape == data.qpos.shape:
-            # Training is active — show the policy's actual state.
-            data.qpos[:] = live
-            data.qvel[:] = 0.0
-            mujoco.mj_forward(model, data)
-        else:
-            # No training — run a free-running sim driven by /api/sim/ctrl sliders.
-            _ensure_home()
-            global _LAST_STEP_TIME
-            now = time.time()
-            dt = min(0.1, now - _LAST_STEP_TIME) if _LAST_STEP_TIME else model.opt.timestep * 20
-            _LAST_STEP_TIME = now
-            n_steps = max(1, int(dt / model.opt.timestep))
-            for _ in range(min(n_steps, 50)):  # cap to avoid hangs
-                mujoco.mj_step(model, data)
+            task = _read_active(ACTIVE_TASK_FILE, "walk")
+            live = _load_live_qpos(task) if _trainer_pids() else None
+            if live is not None and live.shape == data.qpos.shape:
+                # Training is active — show the policy's actual state.
+                data.qpos[:] = live
+                data.qvel[:] = 0.0
+                mujoco.mj_forward(model, data)
+            else:
+                # No training — run a free-running sim driven by /api/sim/ctrl sliders.
+                _ensure_home()
+                global _LAST_STEP_TIME
+                now = time.time()
+                dt = min(0.1, now - _LAST_STEP_TIME) if _LAST_STEP_TIME else model.opt.timestep * 20
+                _LAST_STEP_TIME = now
+                n_steps = max(1, int(dt / model.opt.timestep))
+                for _ in range(min(n_steps, 50)):
+                    mujoco.mj_step(model, data)
 
-        # Set up camera for good view
-        cam = mujoco.MjvCamera()
-        cam.distance = 3.0
-        cam.azimuth = 90
-        cam.elevation = -20
-        cam.lookat = [0, 0, 1]
+            cam = mujoco.MjvCamera()
+            cam.distance = 3.0
+            cam.azimuth = 90
+            cam.elevation = -20
+            cam.lookat = [0, 0, 1]
 
-        # Render scene
-        renderer.update_scene(data, camera=cam)
-        img = renderer.render()
+            renderer.update_scene(data, camera=cam)
+            img = renderer.render()
 
         # Convert to PNG
         from PIL import Image
@@ -473,27 +488,28 @@ def get_viewer_state():
     try:
         import mujoco
 
-        model, data = get_model()
-        mujoco.mj_forward(model, data)
+        with _SIM_LOCK:
+            model, data = get_model()
+            mujoco.mj_forward(model, data)
 
-        qpos = data.qpos.tolist() if hasattr(data, "qpos") else []
+            qpos = data.qpos.tolist() if hasattr(data, "qpos") else []
 
-        body_pos = {}
-        for i in range(min(model.nbody, 10)):
-            try:
-                name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, i)
-                if name:
-                    body_pos[name] = {
-                        "pos": data.xpos[i].tolist() if hasattr(data, "xpos") else []
-                    }
-            except:
-                pass
+            body_pos = {}
+            for i in range(min(model.nbody, 10)):
+                try:
+                    name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, i)
+                    if name:
+                        body_pos[name] = {
+                            "pos": data.xpos[i].tolist() if hasattr(data, "xpos") else []
+                        }
+                except:
+                    pass
 
-        return {
-            "qpos": qpos,
-            "bodies": body_pos,
-            "time": float(data.time) if hasattr(data, "time") else 0.0,
-        }
+            return {
+                "qpos": qpos,
+                "bodies": body_pos,
+                "time": float(data.time) if hasattr(data, "time") else 0.0,
+            }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
