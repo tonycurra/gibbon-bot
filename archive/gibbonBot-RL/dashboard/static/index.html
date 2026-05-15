@@ -259,6 +259,23 @@ select:focus, input:focus { outline: none; border-color: var(--accent); }
 .stat .bar { height: 4px; background: var(--line-2); border-radius: 2px; margin-top: 4px; overflow: hidden; }
 .stat .bar .fill { height: 100%; background: var(--accent); transition: width 0.2s; }
 
+.task-row {
+    display: grid;
+    grid-template-columns: 100px 1fr 70px 70px;
+    gap: 8px; align-items: center;
+    padding: 5px 0;
+    font-size: 0.82em;
+    border-bottom: 1px solid var(--line);
+}
+.task-row:last-child { border-bottom: 0; }
+.task-row.head { color: var(--muted); border-bottom: 1px solid var(--line); padding-bottom: 6px; margin-bottom: 4px; letter-spacing: 0.06em; font-size: 0.75em; }
+.task-row .tname { color: var(--text); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; font-size: 0.85em; }
+.task-row .tprog { color: var(--muted); font-family: ui-monospace, Menlo, monospace; font-size: 0.85em; }
+.task-row .num { text-align: right; font-variant-numeric: tabular-nums; font-family: ui-monospace, Menlo, monospace; }
+.task-row .num.best { color: var(--ok); }
+.task-row .num.ckpts { color: var(--muted); }
+.task-row .num.none { color: var(--line-2); }
+
 .sys-procs { font-family: ui-monospace, Menlo, monospace; font-size: 0.78em; }
 .proc-row { display: grid; grid-template-columns: 36px 70px 1fr 60px 60px; gap: 8px; padding: 3px 0; align-items: center; }
 .proc-row.head { color: var(--muted); border-bottom: 1px solid var(--line); padding-bottom: 6px; margin-bottom: 4px; letter-spacing: 0.06em; }
@@ -350,6 +367,11 @@ select:focus, input:focus { outline: none; border-color: var(--accent); }
       <div id="view-buttons" class="view-buttons"></div>
     </div>
     <div class="viewer-info" id="viewer-info">—</div>
+  </div>
+
+  <div class="card">
+    <h2>Tasks <span class="hint">progress per skill</span></h2>
+    <div id="tasks-overview">—</div>
   </div>
 
   <div class="card">
@@ -619,6 +641,32 @@ async function refreshLogs() {
     } catch(e) {}
 }
 
+// ── Tasks overview ────────────────────────────────────────────────────
+async function refreshTasks() {
+    try {
+        const r = await fetch(API + "/tasks/overview");
+        const d = await r.json();
+        let html = `<div class="task-row head"><span>TASK</span><span>LAST UPDATE</span><span class="num">BEST REW</span><span class="num">CKPTS</span></div>`;
+        if (!d.tasks?.length) {
+            html += "<span class=\"loading\">no tasks trained yet</span>";
+        } else {
+            for (const t of d.tasks) {
+                const best = t.best_rew !== null ? t.best_rew.toFixed(1) : "—";
+                const ckpts = t.checkpoints + (t.keepers ? `+${t.keepers}k` : "");
+                const ts = t.latest_iso || (t.last_step !== null ? `step ${t.last_step}` : "never");
+                const bestClass = t.best_rew !== null ? "num best" : "num none";
+                html += `<div class="task-row">
+                    <span class="tname">${t.task}</span>
+                    <span class="tprog">${ts}</span>
+                    <span class="${bestClass}">${best}</span>
+                    <span class="num ckpts">${ckpts}</span>
+                </div>`;
+            }
+        }
+        document.getElementById("tasks-overview").innerHTML = html;
+    } catch(e) {}
+}
+
 // ── System stats ──────────────────────────────────────────────────────
 async function refreshSystem() {
     try {
@@ -679,9 +727,10 @@ setInterval(refreshFrame, 3000);    // stream is persistent; just probe for dead
 setInterval(refreshMetrics, 1000);
 setInterval(refreshLogs, 2000);
 setInterval(refreshStatus, 3000);
-setInterval(refreshSystem, 1500);
+setInterval(refreshSystem, 2000);
 setInterval(refreshJoints, 250);    // live-follow slider positions to robot state
 setInterval(refreshViewerInfo, 1000);
+setInterval(refreshTasks, 5000);
 document.addEventListener("DOMContentLoaded", () => {
     refreshStatus();
     refreshSystem();
@@ -690,6 +739,7 @@ document.addEventListener("DOMContentLoaded", () => {
     loadScenes();
     loadSimMode();
     refreshViewerInfo();
+    refreshTasks();
     loadViews();
     refreshMetrics();
     refreshLogs();

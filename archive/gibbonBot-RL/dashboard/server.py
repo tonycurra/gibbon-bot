@@ -33,6 +33,7 @@ class _AccessFilter(logging.Filter):
         "/api/viewer/frame", "/api/viewer/stream", "/api/viewer/info",
         "/api/train/metrics", "/api/train/logs", "/api/train/status",
         "/api/system/stats", "/api/params/get", "/api/sim/joints",
+        "/api/tasks/overview",
     )
     def filter(self, record):
         msg = record.getMessage()
@@ -155,12 +156,17 @@ def _bg(*args: str) -> dict:
 
 
 @app.post("/api/train/start")
-def start_training(task: str = "walk", envs: int | None = None):
+def start_training(task: str = "walk", envs: int | None = None, total_steps: int | None = None, resume: bool = True):
     if _trainer_pids():
         raise HTTPException(status_code=400, detail="Trainer already running — use /api/train/restart")
     args = ["start", task]
     if envs:
         args += ["--envs", str(envs)]
+    if total_steps:
+        args += ["--total-steps", str(total_steps)]
+    if resume:
+        # Don't trash checkpoints on minor scene/param tweaks.
+        args += ["--resume"]
     res = _bg(*args)
     if not res["ok"]:
         raise HTTPException(status_code=500, detail=res["stderr"] or res["stdout"])
@@ -178,7 +184,7 @@ def stop_training():
 
 
 @app.post("/api/train/restart")
-def restart_training(task: str | None = None, envs: int | None = None):
+def restart_training(task: str | None = None, envs: int | None = None, total_steps: int | None = None, resume: bool = True):
     """Stop + start with new task / num_envs. Required for changing batch size mid-run
     (MJX recompiles on batch-shape change)."""
     cur_task = _read_active(ACTIVE_TASK_FILE, "walk")
@@ -186,11 +192,14 @@ def restart_training(task: str | None = None, envs: int | None = None):
     new_task = task or cur_task
     new_envs = envs if envs is not None else (int(cur_envs) if cur_envs else None)
     _bg("stop")
-    # Give kernel a beat to release the GPU.
     time.sleep(2)
     args = ["start", new_task]
     if new_envs:
         args += ["--envs", str(new_envs)]
+    if total_steps:
+        args += ["--total-steps", str(total_steps)]
+    if resume:
+        args += ["--resume"]
     res = _bg(*args)
     if not res["ok"]:
         raise HTTPException(status_code=500, detail=res["stderr"] or res["stdout"])
@@ -432,18 +441,27 @@ def _ensure_home():
 
 def _apply_pose_from_ctrl():
     """Set qpos directly from ctrl so dragging sliders shows the pose instantly.
-    Skips actuators that aren't bound to a single hinge/slide joint."""
+
+    Also grounds the torso at a sensible standing height (0.30m) so the
+    robot isn't rendered floating in mid-air at the XML's default spawn.
+    Skips actuators that aren't bound to a single hinge/slide joint.
+    """
     import mujoco
     model, data = get_model()
+    # Ground the free-flying torso (qpos[0:7] = xyz + quat for the world_to_torso joint).
+    if model.nq >= 7 and model.jnt_type[0] == 0:  # 0 = free joint
+        data.qpos[0] = 0.0
+        data.qpos[1] = 0.0
+        data.qpos[2] = 0.30
+        data.qpos[3] = 1.0  # quat w
+        data.qpos[4:7] = 0.0  # quat x,y,z
     for i in range(model.nu):
-        # actuator_trntype[i] == 0 (TRNTYPE_JOINT) means it drives one joint
         if model.actuator_trntype[i] != 0:
             continue
         jid = int(model.actuator_trnid[i, 0])
         if jid < 0:
             continue
         adr = int(model.jnt_qposadr[jid])
-        # Only set for hinge (3) or slide (2) joints — single qpos.
         if model.jnt_type[jid] in (2, 3):
             data.qpos[adr] = float(data.ctrl[i])
     data.qvel[:] = 0.0
@@ -625,6 +643,58 @@ def system_stats():
         "active_task": _read_active(ACTIVE_TASK_FILE, "walk"),
         "active_envs": _read_active(ACTIVE_ENVS_FILE, "auto"),
     }
+
+
+# ───── Per-task training overview ─────
+@app.get("/api/tasks/overview")
+def tasks_overview():
+    """Scan runs/ape_*_mjx/ to summarize what we know about every task.
+
+    Returns one entry per task with: best mean_rew + step, last update,
+    checkpoint count, keeper count. Lets the UI show 'stand vs walk vs
+    turn_left' progress at a glance.
+    """
+    out = []
+    for d in sorted((REPO_ROOT / "runs").glob("ape_*_mjx")):
+        if not d.is_dir():
+            continue
+        task = d.name[len("ape_"):-len("_mjx")]
+        ckpts = sorted(d.glob("mjx_*.npz"))
+        keepers = sorted((d / "keepers").glob("*.npz")) if (d / "keepers").exists() else []
+        last_log = d / "train.log"
+        best_rew = None
+        last_rew = None
+        last_step = None
+        if last_log.exists():
+            try:
+                # Parse the structured per-update lines emitted in train_mjx.py.
+                # Format: "%8d %12d %8d  rew=%+.2f  d=%.2f  vx=%+.2f  z=%.2f ..."
+                tail = subprocess.check_output(
+                    ["tail", "-200", str(last_log)], text=True
+                ).splitlines()
+                for line in tail:
+                    m = re.search(r"\s+(\d{1,3}(?:,\d{3})*)\s+\d+\s+rew=([+-]?[\d.]+)", line)
+                    if m:
+                        step = int(m.group(1).replace(",", ""))
+                        rew = float(m.group(2))
+                        last_step = step
+                        last_rew = rew
+                        if best_rew is None or rew > best_rew:
+                            best_rew = rew
+            except Exception:
+                pass
+        latest_ts = max((p.stat().st_mtime for p in ckpts), default=None)
+        out.append({
+            "task": task,
+            "checkpoints": len(ckpts),
+            "keepers": len(keepers),
+            "last_rew": last_rew,
+            "best_rew": best_rew,
+            "last_step": last_step,
+            "latest_ts": latest_ts,
+            "latest_iso": time.strftime("%Y-%m-%d %H:%M", time.localtime(latest_ts)) if latest_ts else None,
+        })
+    return {"tasks": out}
 
 
 # ───── Scene selection ─────

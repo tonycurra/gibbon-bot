@@ -336,6 +336,8 @@ def main():
                         help="skill to train (stand, walk, walk_forward, turn_left, turn_right). "
                              "Default is `stand` — the currently-active training focus.")
     parser.add_argument("--envs", type=int, default=None)
+    parser.add_argument("--total-steps", type=int, default=None,
+                        help=f"environment steps to train for (default {TOTAL_STEPS:,})")
     parser.add_argument("--resume", action="store_true",
                         help="force-resume even if training inputs changed")
     parser.add_argument("--no-resume", dest="auto_resume", action="store_false",
@@ -393,6 +395,9 @@ def main():
         os.environ["AUTO_PUSH"] = "1"
 
     N_ENVS = args.envs or _auto_envs()
+    if args.total_steps:
+        global TOTAL_STEPS
+        TOTAL_STEPS = int(args.total_steps)
     save_every = max(1_000, min(100_000, N_ENVS * 50))
 
     print(f"JAX devices: {jax.devices()}")
