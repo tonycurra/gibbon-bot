@@ -481,7 +481,8 @@ def _load_live_qpos(task: str):
 _trial_proc: subprocess.Popen | None = None
 
 
-def _spawn_trial(task: str, max_steps: int, realtime: float, loop: bool) -> int:
+def _spawn_trial(task: str, max_steps: int, realtime: float, loop: bool,
+                 stuck_window: float = 3.0, stuck_dist: float = 0.05) -> int:
     """Spawn the play_trial subprocess. Caller owns the global _trial_proc."""
     global _trial_proc
     cmd = [
@@ -490,6 +491,8 @@ def _spawn_trial(task: str, max_steps: int, realtime: float, loop: bool) -> int:
         "--task", task,
         "--max-steps", str(max_steps),
         "--realtime", str(realtime),
+        "--stuck-window", str(stuck_window),
+        "--stuck-dist", str(stuck_dist),
     ]
     if loop:
         cmd.append("--loop")

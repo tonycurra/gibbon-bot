@@ -321,12 +321,9 @@ select:focus, input:focus { outline: none; border-color: var(--accent); }
     <h2>Training</h2>
     <div class="row">
       <label class="field">Task
-        <select id="task-select">
+        <select id="task-select" title="walk = main demo target. stand = sanity check.">
           <option value="walk">walk</option>
-          <option value="stand">stand</option>
-          <option value="walk_forward">walk_forward</option>
-          <option value="turn_left">turn_left</option>
-          <option value="turn_right">turn_right</option>
+          <option value="stand">stand (sanity)</option>
         </select>
       </label>
       <label class="field">Envs

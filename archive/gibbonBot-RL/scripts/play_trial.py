@@ -106,6 +106,10 @@ def main():
                         help="real-time multiplier; 1.0 = real time, 0.5 = half-speed")
     parser.add_argument("--loop", action="store_true",
                         help="run episodes back-to-back, reloading latest checkpoint each time")
+    parser.add_argument("--stuck-window", type=float, default=3.0,
+                        help="if torso xy moves less than --stuck-dist for this many seconds, abort the episode")
+    parser.add_argument("--stuck-dist", type=float, default=0.05,
+                        help="meters of xy travel within --stuck-window below which the episode is 'stuck'")
     args = parser.parse_args()
 
     model = mujoco.MjModel.from_xml_path(str(SCENE))
@@ -155,6 +159,8 @@ def main():
 
         t_start = time.time()
         outcome = "timeout"
+        # Stuck detection: ring buffer of (time, xy) — kill if range < dist over window.
+        stuck_buf = []
         for step_i in range(args.max_steps):
             if predict is not None:
                 obs = build_obs(model, data, tree_xy, step_i)
@@ -177,6 +183,17 @@ def main():
             if float(np.linalg.norm(tree_xy - data.qpos[0:2])) < 0.6:
                 outcome = "success"
                 break
+
+            # Stuck check: keep only samples newer than `stuck_window`. If the
+            # xy bounding box across all kept samples is < stuck_dist, abort.
+            now = time.time()
+            stuck_buf.append((now, float(data.qpos[0]), float(data.qpos[1])))
+            stuck_buf = [s for s in stuck_buf if (now - s[0]) <= args.stuck_window]
+            if (now - t_start) > args.stuck_window and len(stuck_buf) > 5:
+                xs = [s[1] for s in stuck_buf]; ys = [s[2] for s in stuck_buf]
+                if (max(xs) - min(xs)) < args.stuck_dist and (max(ys) - min(ys)) < args.stuck_dist:
+                    outcome = "stuck"
+                    break
 
             elapsed = time.time() - t_start
             target_elapsed = (step_i + 1) * sleep_per_action
