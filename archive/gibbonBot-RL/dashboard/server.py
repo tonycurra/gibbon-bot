@@ -437,6 +437,10 @@ _CAMERA_PRESETS = {
     "side":        (180, -5, 1.8, 0.0),
 }
 _CAMERA_VIEW = "perspective"
+# Smoothed lookat — eases toward the robot's current position so the
+# camera follows without jitter or sudden teleports on reset.
+_CAMERA_LOOKAT = [0.0, 0.0, 0.3]
+_CAMERA_FOLLOW_ALPHA = 0.06  # 0=never moves, 1=snaps instantly; ~17 frames to settle
 
 
 @app.get("/api/viewer/views")
@@ -925,13 +929,19 @@ def _render_png_bytes() -> bytes:
                 mujoco.mj_resetData(model, data)
                 _apply_pose_from_ctrl()
         cam = mujoco.MjvCamera()
-        # Aim at the robot's actual torso (qpos[0:3] of the free joint).
-        # Keeps the robot centred regardless of training/manual mode.
         az, el, dist, dz = _CAMERA_PRESETS.get(_CAMERA_VIEW, _CAMERA_PRESETS["perspective"])
+        # Target = robot's current torso position
         tx = float(data.qpos[0]) if data.qpos.shape[0] >= 3 else 0.0
         ty = float(data.qpos[1]) if data.qpos.shape[0] >= 3 else 0.0
         tz = float(data.qpos[2]) if data.qpos.shape[0] >= 3 else 0.3
-        cam.lookat = [tx, ty, tz + dz]
+        target = [tx, ty, tz + dz]
+        # Exponential moving average so the camera drifts toward the robot
+        # without snapping. Resets / teleports look like a smooth pan.
+        a = _CAMERA_FOLLOW_ALPHA
+        _CAMERA_LOOKAT[0] = _CAMERA_LOOKAT[0] * (1 - a) + target[0] * a
+        _CAMERA_LOOKAT[1] = _CAMERA_LOOKAT[1] * (1 - a) + target[1] * a
+        _CAMERA_LOOKAT[2] = _CAMERA_LOOKAT[2] * (1 - a) + target[2] * a
+        cam.lookat = list(_CAMERA_LOOKAT)
         cam.distance = dist
         cam.azimuth = az
         cam.elevation = el
