@@ -84,12 +84,13 @@ _renderer_cache = None
 
 
 def get_model():
-    """Load or cache MuJoCo model."""
-    global _model_cache, _data_cache, _renderer_cache
+    """Load or cache MuJoCo model + data only. Does NOT create the renderer
+    — that must be created on the rendering thread (EGL contexts are
+    thread-bound). Safe to call from any handler."""
+    global _model_cache, _data_cache
     if _model_cache is None:
         try:
             import mujoco
-
             scene_path = "data/scene.xml"
             if not os.path.exists(scene_path):
                 scene_path = os.path.join(
@@ -97,27 +98,30 @@ def get_model():
                 )
             _model_cache = mujoco.MjModel.from_xml_path(scene_path)
             _data_cache = mujoco.MjData(_model_cache)
-            # Reduce collision for faster rendering
             for i in range(_model_cache.ngeom):
-                if _model_cache.geom_type[i] == 5:  # mjGEOM_MESH
+                if _model_cache.geom_type[i] == 5:
                     _model_cache.geom_contype[i] = 2
                     _model_cache.geom_conaffinity[i] = 1
-            # Create renderer (uses OpenGL, works on systems with GL support)
-            # 1280x960 (4:3) is plenty for the dashboard's viewer card —
-            # higher resolutions make EGL slow without visible benefit.
-            _renderer_cache = mujoco.Renderer(_model_cache, height=960, width=1280)
         except Exception as e:
             raise RuntimeError(f"Failed to load model: {e}")
     return _model_cache, _data_cache
 
 
 def get_renderer():
-    """Get cached renderer; rebuild if it was invalidated for thread/EGL reasons."""
-    global _renderer_cache
-    if _renderer_cache is None:
-        import mujoco
+    """Create or recreate the renderer ON THE CURRENT THREAD. Only the
+    stream generator should call this — other endpoints don't render."""
+    global _renderer_cache, _RENDER_OWNER_THREAD
+    import mujoco
+    tid = threading.get_ident()
+    if _renderer_cache is None or _RENDER_OWNER_THREAD != tid:
+        # Drop the old renderer explicitly so its EGL context releases
+        # before we make a new one. Otherwise EGL_BAD_ACCESS piles up.
+        if _renderer_cache is not None:
+            try: _renderer_cache.close()
+            except Exception: pass
         model, _ = get_model()
         _renderer_cache = mujoco.Renderer(model, height=960, width=1280)
+        _RENDER_OWNER_THREAD = tid
     return _renderer_cache
 
 
@@ -895,11 +899,12 @@ def _render_png_bytes() -> bytes:
                 mujoco.mj_resetData(model, data)
                 _apply_pose_from_ctrl()
         cam = mujoco.MjvCamera()
-        torso_xy = data.qpos[0:2] if data.qpos.shape[0] >= 3 else np.zeros(2)
-        torso_z = float(data.qpos[2]) if data.qpos.shape[0] >= 3 else 0.3
+        # Fixed camera: aimed at the arena mid-point between robot spawn
+        # and the tree at (3, 0). Robot moves THROUGH the frame, world stays
+        # still — easier to read than a tracking camera.
         az, el, dist, dz = _CAMERA_PRESETS.get(_CAMERA_VIEW, _CAMERA_PRESETS["perspective"])
-        cam.lookat = [float(torso_xy[0]), float(torso_xy[1]), torso_z + dz]
-        cam.distance = dist
+        cam.lookat = [1.5, 0.0, 0.3 + dz]
+        cam.distance = dist * 1.6  # pull back so the whole path fits in view
         cam.azimuth = az
         cam.elevation = el
         renderer.update_scene(data, camera=cam)
