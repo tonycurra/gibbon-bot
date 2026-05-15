@@ -33,7 +33,7 @@ class _AccessFilter(logging.Filter):
         "/api/viewer/frame", "/api/viewer/stream", "/api/viewer/info",
         "/api/train/metrics", "/api/train/logs", "/api/train/status",
         "/api/system/stats", "/api/params/get", "/api/sim/joints",
-        "/api/tasks/overview",
+        "/api/tasks/overview", "/api/whats-happening", "/api/sim/mode",
     )
     def filter(self, record):
         msg = record.getMessage()
@@ -1090,6 +1090,64 @@ def viewer_stream(fps: int = 20):
         gen(),
         media_type=f"multipart/x-mixed-replace; boundary={boundary.decode()}",
     )
+
+
+@app.get("/api/whats-happening")
+def whats_happening():
+    """Plain-English summary of viewer state + training state.
+
+    Always returns BOTH sides so the UI can show them side by side and
+    the user never has to wonder which subsystem they're looking at.
+    """
+    task = _read_active(ACTIVE_TASK_FILE, "walk")
+    trial_running = _trial_proc is not None and _trial_proc.poll() is None
+    trainer_pids = _trainer_pids()
+    training_running = bool(trainer_pids)
+    qpos_path = REPO_ROOT / "runs" / f"ape_{task}_mjx" / "live_qpos.npy"
+    qpos_age = (time.time() - qpos_path.stat().st_mtime) if qpos_path.exists() else None
+
+    # VIEWER: what's the user looking at?
+    if trial_running:
+        viewer = {
+            "label": "TRIAL — REAL-TIME PLAYBACK",
+            "detail": "Single CPU robot, loops episodes, reloads latest checkpoint between each.",
+            "color": "ok",
+        }
+    elif training_running and qpos_age is not None and qpos_age < 3.0:
+        viewer = {
+            "label": "TRAINING PEEK (env-0)",
+            "detail": "Raw view of the trainer's first env — fast, resets visible, NOT for the customer.",
+            "color": "warn",
+        }
+    elif training_running:
+        viewer = {
+            "label": "WAITING FOR FIRST FRAME",
+            "detail": "Trainer is JIT-compiling (~30–60s first run, ~5s cached).",
+            "color": "warn",
+        }
+    else:
+        viewer = {
+            "label": "IDLE — nothing to show",
+            "detail": "Press Start to launch trainer + auto-playback.",
+            "color": "muted",
+        }
+
+    # TRAINING: what's actually being trained?
+    if training_running:
+        envs_val = _read_active(ACTIVE_ENVS_FILE, "auto")
+        training = {
+            "label": f"RUNNING · task={task} · envs={envs_val}",
+            "detail": f"PID {trainer_pids[0]}. GPU MJX. Auto-stops at 90% success or on user Stop.",
+            "color": "ok",
+        }
+    else:
+        training = {
+            "label": "NOT RUNNING",
+            "detail": "No policy is improving right now. Press Start.",
+            "color": "muted",
+        }
+
+    return {"viewer": viewer, "training": training, "task": task}
 
 
 @app.get("/api/viewer/info")

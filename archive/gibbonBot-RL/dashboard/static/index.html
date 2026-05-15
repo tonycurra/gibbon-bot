@@ -169,6 +169,24 @@ select:focus, input:focus { outline: none; border-color: var(--accent); }
 }
 .view-btn:hover { color: var(--text); }
 .view-btn.active { color: var(--text); background: var(--line-2); }
+
+/* VIEWER vs TRAINING state strip — always visible under the viewer
+   so the user never has to wonder what's on screen vs what's training. */
+.state-strip {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 1px;
+    margin-top: 10px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    overflow: hidden;
+}
+.state-cell { background: var(--bg); padding: 10px 12px; min-width: 0; }
+.state-cap { color: var(--muted); font-size: 0.65em; letter-spacing: 0.18em; text-transform: uppercase; margin-bottom: 4px; }
+.state-lbl { font-size: 0.85em; font-weight: 600; letter-spacing: 0.04em; }
+.state-lbl.ok { color: var(--ok); }
+.state-lbl.warn { color: var(--warn); }
+.state-lbl.muted { color: var(--muted); }
+.state-det { color: var(--muted); font-size: 0.75em; margin-top: 3px; }
 .viewer-info { margin-top: 8px; font-size: 0.75em; color: var(--muted); }
 
 #metrics, #logs {
@@ -373,7 +391,18 @@ select:focus, input:focus { outline: none; border-color: var(--accent); }
       <div id="viewer-badge" class="viewer-badge">MANUAL</div>
       <div id="view-buttons" class="view-buttons"></div>
     </div>
-    <div class="viewer-info" id="viewer-info">—</div>
+    <div class="state-strip">
+      <div class="state-cell">
+        <div class="state-cap">VIEWER · what you see</div>
+        <div class="state-lbl" id="state-viewer-lbl">—</div>
+        <div class="state-det" id="state-viewer-det">—</div>
+      </div>
+      <div class="state-cell">
+        <div class="state-cap">TRAINING · background</div>
+        <div class="state-lbl" id="state-training-lbl">—</div>
+        <div class="state-det" id="state-training-det">—</div>
+      </div>
+    </div>
   </div>
 
   <div class="card">
@@ -596,6 +625,20 @@ async function setView(name) {
     } catch(e) {}
 }
 
+async function refreshWhatsHappening() {
+    try {
+        const r = await fetch(API + "/whats-happening");
+        const d = await r.json();
+        const v = d.viewer, t = d.training;
+        const vl = document.getElementById("state-viewer-lbl");
+        const tl = document.getElementById("state-training-lbl");
+        vl.textContent = v.label; vl.className = "state-lbl " + v.color;
+        tl.textContent = t.label; tl.className = "state-lbl " + t.color;
+        document.getElementById("state-viewer-det").textContent = v.detail;
+        document.getElementById("state-training-det").textContent = t.detail;
+    } catch(e) {}
+}
+
 async function refreshViewerInfo() {
     try {
         const r = await fetch(API + "/viewer/info");
@@ -756,6 +799,7 @@ setInterval(refreshStatus, 3000);
 setInterval(refreshSystem, 2000);
 setInterval(refreshJoints, 250);    // live-follow slider positions to robot state
 setInterval(refreshViewerInfo, 1000);
+setInterval(refreshWhatsHappening, 1000);
 setInterval(refreshTasks, 5000);
 document.addEventListener("DOMContentLoaded", () => {
     refreshStatus();
@@ -765,6 +809,7 @@ document.addEventListener("DOMContentLoaded", () => {
     loadScenes();
     loadSimMode();
     refreshViewerInfo();
+    refreshWhatsHappening();
     refreshTasks();
     loadViews();
     refreshMetrics();
