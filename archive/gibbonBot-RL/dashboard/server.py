@@ -443,18 +443,36 @@ def sim_get_mode():
 
 @app.get("/api/sim/joints")
 def sim_joints():
-    """List actuators with name, ctrl range, and current ctrl value."""
+    """Actuators with name, range, target ctrl, and *current* joint qpos.
+
+    `ctrl` = where the user (or policy) wants the joint to go.
+    `qpos` = where it actually is right now. UI mirrors this back into
+    the slider so you can watch the robot move during training.
+    """
     import mujoco
     with _SIM_LOCK:
         model, data = get_model()
         _ensure_home()
+        # If training is running, overlay the trainer's live qpos so we
+        # report what the real robot is doing, not our local stale data.
+        task = _read_active(ACTIVE_TASK_FILE, "walk")
+        live = _load_live_qpos(task) if _trainer_pids() else None
+        if live is not None and live.shape == data.qpos.shape:
+            data.qpos[:] = live
+            mujoco.mj_forward(model, data)
         out = []
         for i in range(model.nu):
             name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_ACTUATOR, i) or f"act_{i}"
             lo, hi = float(model.actuator_ctrlrange[i, 0]), float(model.actuator_ctrlrange[i, 1])
+            qpos = None
+            if model.actuator_trntype[i] == 0:  # joint actuator
+                jid = int(model.actuator_trnid[i, 0])
+                if jid >= 0 and model.jnt_type[jid] in (2, 3):
+                    qpos = float(data.qpos[int(model.jnt_qposadr[jid])])
             out.append({
                 "i": i, "name": name, "lo": lo, "hi": hi,
                 "ctrl": float(data.ctrl[i]),
+                "qpos": qpos if qpos is not None else float(data.ctrl[i]),
             })
     return {"actuators": out}
 

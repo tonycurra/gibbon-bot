@@ -145,10 +145,54 @@ select:focus, input:focus { outline: none; border-color: var(--accent); }
     border-radius: 4px; cursor: pointer;
 }
 .joint-tab.active { color: var(--text); border-color: var(--text); }
-.joint-row { display: grid; grid-template-columns: 130px 1fr 56px; gap: 8px; align-items: center; padding: 4px 0; font-size: 0.78em; }
-.joint-row .jname { color: var(--muted); font-family: ui-monospace, Menlo, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.joint-row .jval { color: var(--text); font-variant-numeric: tabular-nums; text-align: right; font-family: ui-monospace, Menlo, monospace; }
-.joint-row input[type=range] { width: 100%; accent-color: var(--accent); }
+
+.joint-row {
+    display: grid;
+    grid-template-columns: 110px 1fr 86px;
+    gap: 10px;
+    align-items: center;
+    padding: 4px 0;
+    font-size: 0.78em;
+}
+.joint-row .jname {
+    color: var(--muted);
+    font-family: ui-monospace, Menlo, monospace;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.joint-row .jvals {
+    text-align: right;
+    font-family: ui-monospace, Menlo, monospace;
+    font-variant-numeric: tabular-nums;
+    font-size: 0.85em;
+    line-height: 1.1;
+}
+.joint-row .jvals .qpos { color: var(--ok); }
+.joint-row .jvals .ctrl { color: var(--accent); font-size: 0.9em; }
+
+/* Custom slider track that shows two markers: current qpos (green) +
+   target ctrl thumb (accent). The range input is layered above. */
+.joint-track {
+    position: relative; height: 22px; cursor: pointer;
+}
+.joint-track .bg {
+    position: absolute; top: 50%; left: 0; right: 0; height: 4px;
+    transform: translateY(-50%);
+    background: var(--line-2); border-radius: 2px;
+}
+.joint-track .qpos-marker {
+    position: absolute; top: 50%; height: 14px; width: 2px;
+    background: var(--ok); border-radius: 1px;
+    transform: translate(-1px, -50%);
+    transition: left 0.12s linear;
+    pointer-events: none;
+}
+.joint-track input[type=range] {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    background: transparent;
+    accent-color: var(--accent);
+    cursor: pointer;
+}
 
 .loading { color: var(--muted); font-style: italic; font-size: 0.85em; }
 .error { color: var(--accent); }
@@ -347,28 +391,35 @@ async function setParam(key, value) {
     catch(e) { console.error(e); }
 }
 
-// ── Joint sliders ─────────────────────────────────────────────────────
+// ── Joint sliders (live-following + target setting) ──────────────────
 let JOINTS = [];
 let JOINT_GROUP = "FL";
+const _userDragging = new Set();  // actuator indices the user is currently dragging
+
 function _group(name) {
     const m = name.match(/^act_([fb][lr])_/);
     return m ? m[1].toUpperCase() : "OTHER";
 }
+function _pct(v, lo, hi) {
+    return 100 * Math.max(0, Math.min(1, (v - lo) / (hi - lo)));
+}
+
 async function loadJoints() {
+    // Initial structural render + group tabs.
     try {
         const r = await fetch(API + "/sim/joints");
         const d = await r.json();
         JOINTS = d.actuators || [];
         const groups = Array.from(new Set(JOINTS.map(j => _group(j.name))));
-        const tabs = document.getElementById("joint-tabs");
-        tabs.innerHTML = groups.map(g =>
-            "<button class=\"joint-tab" + (g === JOINT_GROUP ? " active" : "") + "\" onclick=\"selectJointGroup('" + g + "')\">" + g + "</button>"
+        document.getElementById("joint-tabs").innerHTML = groups.map(g =>
+            `<button class="joint-tab ${g === JOINT_GROUP ? "active" : ""}" onclick="selectJointGroup('${g}')">${g}</button>`
         ).join("");
         renderJoints();
     } catch(e) {
-        document.getElementById("joint-sliders").innerHTML = "<span class=\"error\">" + e.message + "</span>";
+        document.getElementById("joint-sliders").innerHTML = `<span class="error">${e.message}</span>`;
     }
 }
+
 function selectJointGroup(g) {
     JOINT_GROUP = g;
     document.querySelectorAll(".joint-tab").forEach(el => {
@@ -376,32 +427,71 @@ function selectJointGroup(g) {
     });
     renderJoints();
 }
+
 function renderJoints() {
     const filtered = JOINTS.filter(j => _group(j.name) === JOINT_GROUP);
     const html = filtered.map(j => {
         const step = (j.hi - j.lo) / 200;
         const short = j.name.replace(/^act_/, "");
-        return (
-            "<div class=\"joint-row\">" +
-                "<span class=\"jname\" title=\"" + j.name + "\">" + short + "</span>" +
-                "<input type=\"range\" min=\"" + j.lo + "\" max=\"" + j.hi + "\" step=\"" + step + "\" value=\"" + j.ctrl + "\" " +
-                    "oninput=\"document.getElementById('jv-" + j.i + "').textContent=parseFloat(this.value).toFixed(2)\" " +
-                    "onchange=\"setCtrl(" + j.i + ", this.value)\"/>" +
-                "<span class=\"jval\" id=\"jv-" + j.i + "\">" + j.ctrl.toFixed(2) + "</span>" +
-            "</div>"
-        );
+        const qposPct = _pct(j.qpos, j.lo, j.hi);
+        return `
+            <div class="joint-row" data-i="${j.i}">
+                <span class="jname" title="${j.name}">${short}</span>
+                <div class="joint-track">
+                    <div class="bg"></div>
+                    <div class="qpos-marker" id="qm-${j.i}" style="left:${qposPct}%"></div>
+                    <input type="range" min="${j.lo}" max="${j.hi}" step="${step}" value="${j.ctrl}"
+                        id="js-${j.i}"
+                        onpointerdown="_userDragging.add(${j.i})"
+                        onpointerup="_userDragging.delete(${j.i})"
+                        onpointercancel="_userDragging.delete(${j.i})"
+                        oninput="setCtrl(${j.i}, this.value)"/>
+                </div>
+                <div class="jvals">
+                    <div class="qpos" id="qv-${j.i}">${j.qpos.toFixed(2)}</div>
+                    <div class="ctrl" id="cv-${j.i}">→ ${j.ctrl.toFixed(2)}</div>
+                </div>
+            </div>`;
     }).join("");
     document.getElementById("joint-sliders").innerHTML = html || "<span class=\"loading\">no joints in group</span>";
 }
+
+// 1Hz-ish: refresh qpos values + slider positions to follow what the robot
+// is actually doing. Skip any slider the user is currently dragging.
+async function refreshJoints() {
+    try {
+        const r = await fetch(API + "/sim/joints");
+        const d = await r.json();
+        JOINTS = d.actuators || [];
+        for (const j of JOINTS) {
+            if (_group(j.name) !== JOINT_GROUP) continue;
+            const slider = document.getElementById("js-" + j.i);
+            if (!slider) continue;
+            if (!_userDragging.has(j.i)) {
+                slider.value = j.ctrl;
+                const cv = document.getElementById("cv-" + j.i);
+                if (cv) cv.textContent = "→ " + j.ctrl.toFixed(2);
+            }
+            const qm = document.getElementById("qm-" + j.i);
+            if (qm) qm.style.left = _pct(j.qpos, j.lo, j.hi) + "%";
+            const qv = document.getElementById("qv-" + j.i);
+            if (qv) qv.textContent = j.qpos.toFixed(2);
+        }
+    } catch(e) {}
+}
+
 async function setCtrl(i, value) {
+    // Optimistic UI: update the target label immediately, don't wait for poll.
+    const cv = document.getElementById("cv-" + i);
+    if (cv) cv.textContent = "→ " + parseFloat(value).toFixed(2);
     try { await fetch(API + "/sim/ctrl?i=" + i + "&value=" + value, {method:"POST"}); }
     catch(e) { console.error(e); }
 }
 async function simReset() {
-    try { await fetch(API + "/sim/reset", {method:"POST"}); loadJoints(); } catch(e) { console.error(e); }
+    try { await fetch(API + "/sim/reset", {method:"POST"}); refreshJoints(); } catch(e) { console.error(e); }
 }
 async function simZero() {
-    try { await fetch(API + "/sim/zero", {method:"POST"}); loadJoints(); } catch(e) { console.error(e); }
+    try { await fetch(API + "/sim/zero", {method:"POST"}); refreshJoints(); } catch(e) { console.error(e); }
 }
 async function setSimMode(mode) {
     try { await fetch(API + "/sim/mode?mode=" + mode, {method:"POST"}); } catch(e) { console.error(e); }
@@ -500,6 +590,7 @@ setInterval(refreshMetrics, 1000);
 setInterval(refreshLogs, 2000);
 setInterval(refreshStatus, 3000);
 setInterval(refreshSystem, 1500);
+setInterval(refreshJoints, 250);    // live-follow slider positions to robot state
 document.addEventListener("DOMContentLoaded", () => {
     refreshStatus();
     refreshSystem();
