@@ -646,15 +646,35 @@ def scenes_list():
 
 @app.post("/api/scenes/select")
 def scenes_select(path: str):
-    """Switch the active scene. Refuses while training is running."""
+    """Switch the active scene. Refuses while training is running.
+
+    - Tries to load the candidate XML BEFORE clobbering data/scene.xml.
+      If MuJoCo can't compile it (missing meshes, broken refs, …) we
+      bail out with a 400 instead of corrupting the active scene.
+    - Backs the current scene up to runs/.scene_backup.xml so /api/scenes/revert
+      can recover.
+    """
     import shutil
+    import mujoco
     if _trainer_pids():
         raise HTTPException(status_code=400, detail="stop training first — scene swap would corrupt the trainer's view")
     src = REPO_ROOT / path
     if not src.exists() or src.suffix != ".xml":
         raise HTTPException(status_code=404, detail=f"scene not found: {path}")
     target = SCENES_DIR / "scene.xml"
+
+    # Validate: try to load the candidate XML in isolation. Catches missing
+    # meshes, bad meshdir, syntax errors before they clobber the active scene.
+    try:
+        mujoco.MjModel.from_xml_path(str(src))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"candidate scene won't load: {e}")
+
     if src.resolve() != target.resolve():
+        # Back up before overwriting so /api/scenes/revert works.
+        backup = REPO_ROOT / "runs" / ".scene_backup.xml"
+        backup.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(target, backup)
         shutil.copy2(src, target)
     ACTIVE_SCENE_FILE.parent.mkdir(parents=True, exist_ok=True)
     ACTIVE_SCENE_FILE.write_text(str(target.relative_to(REPO_ROOT)))
@@ -666,6 +686,24 @@ def scenes_select(path: str):
         _renderer_cache = None
         _HOME_CTRL = None
     return {"ok": True, "active": path}
+
+
+@app.post("/api/scenes/revert")
+def scenes_revert():
+    """Restore data/scene.xml from the last backup written by scenes_select."""
+    import shutil
+    backup = REPO_ROOT / "runs" / ".scene_backup.xml"
+    if not backup.exists():
+        raise HTTPException(status_code=404, detail="no backup to revert to")
+    target = SCENES_DIR / "scene.xml"
+    shutil.copy2(backup, target)
+    global _model_cache, _data_cache, _renderer_cache, _HOME_CTRL
+    with _SIM_LOCK:
+        _model_cache = None
+        _data_cache = None
+        _renderer_cache = None
+        _HOME_CTRL = None
+    return {"ok": True}
 
 
 @app.get("/api/viewer/frame")
