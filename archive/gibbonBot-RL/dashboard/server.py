@@ -486,7 +486,7 @@ _HOME_CTRL = None
 _LAST_STEP_TIME = None
 # pose | physics — pose drives joints kinematically (no gravity, won't blow up
 # when you drag a slider). physics runs mj_step with current ctrl as target.
-_SIM_MODE = "pose"
+_SIM_MODE = "physics"
 
 # (azimuth, elevation, distance, lookat_z_offset)
 _CAMERA_PRESETS = {
