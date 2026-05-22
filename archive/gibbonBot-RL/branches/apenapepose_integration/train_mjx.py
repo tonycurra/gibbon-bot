@@ -36,6 +36,7 @@ import optax
 from flax.training.train_state import TrainState
 
 import utils.lineage as lineage_mod
+from envs.pose_prior import PosePrior
 from utils.gait_score import stride_period, trot_coherence
 
 # ── PPO hyperparameters (task-agnostic) ──────────────────────────────────────
@@ -418,6 +419,12 @@ def main():
         help="If set, write ApeBrain episodic/semantic stores under this directory.",
     )
     parser.add_argument(
+        "--pose-prior-weight",
+        type=float,
+        default=0.0,
+        help="Weight for pose prior reward term (0.0 disables, higher values encourage more biologically plausible poses).",
+    )
+    parser.add_argument(
         "--brain-samples-per-rollout",
         type=int,
         default=32,
@@ -471,6 +478,14 @@ def main():
     mx, jnt_lo, jnt_hi, motor_max_speed, motor_max_accel, rest_pose, target_xy = (
         env_mod.load_model()
     )
+
+    # Initialize pose prior with MuJoCo model
+    pose_prior = PosePrior(mj_model=mx) if args.pose_prior_weight != 0.0 else None
+    if pose_prior is not None:
+        print(
+            f"[pose_prior] loaded, available={pose_prior.available}, weight={args.pose_prior_weight}",
+            flush=True,
+        )
 
     rng = jax.random.PRNGKey(42)
     rng, init_rng, env_rng = jax.random.split(rng, 3)
@@ -572,6 +587,7 @@ def main():
             "MAX_STEPS_episode": int(MAX_STEPS),
             "OBS_DIM": OBS_DIM,
             "ACT_DIM": ACT_DIM,
+            "pose_prior_weight": args.pose_prior_weight,
         }
     )
     mlflow.set_tags(
@@ -693,6 +709,7 @@ def main():
             [],
             [],
         )
+        buf_qpos = []  # Track full qpos for pose prior
 
         for t in range(N_STEPS):
             steps_here = total_steps + t * N_ENVS
@@ -714,6 +731,7 @@ def main():
             buf_act.append(actions)
             buf_logp.append(log_probs)
             buf_val.append(values)
+            buf_qpos.append(dx_batch.qpos)
 
             (
                 dx_batch,
@@ -779,6 +797,18 @@ def main():
         done_t = jnp.stack(buf_done)
         val_t = jnp.stack(buf_val)
 
+        # Add pose prior rewards if enabled
+        if pose_prior is not None and pose_prior.available:
+            qpos_t = jnp.stack(buf_qpos)
+            # Convert JAX arrays to numpy for pose prior scoring
+            qpos_np = np.array(qpos_t)
+            # Reshape to (N_STEPS * N_ENVS, n_qpos) for batch scoring
+            qpos_flat = qpos_np.reshape(-1, qpos_np.shape[-1])
+            pose_scores = pose_prior.score_batch(qpos_flat)
+            # Reshape back to (N_STEPS, N_ENVS) and add weighted scores to rewards
+            pose_scores_2d = pose_scores.reshape(rew_t.shape[:2])
+            rew_t = rew_t + args.pose_prior_weight * pose_scores_2d
+
         _, _, last_val = jax.vmap(
             lambda o, r: sample_action(train_state.params, train_state.apply_fn, o, r)
         )(obs_batch, jax.random.split(rng, N_ENVS))
@@ -815,6 +845,19 @@ def main():
             stacked_done = jnp.stack(buf_done)
             stacked_obs = jnp.stack(buf_obs)
             mean_rew = float(jnp.mean(stacked_rew))
+
+            # Pose prior metrics
+            if pose_prior is not None and pose_prior.available:
+                qpos_np = np.array(jnp.stack(buf_qpos))
+                qpos_flat = qpos_np.reshape(-1, qpos_np.shape[-1])
+                pose_scores_all = pose_prior.score_batch(qpos_flat)
+                mean_pose_score = float(np.mean(pose_scores_all))
+                std_pose_score = float(np.std(pose_scores_all))
+                min_pose_score = float(np.min(pose_scores_all))
+            else:
+                mean_pose_score = 0.0
+                std_pose_score = 0.0
+                min_pose_score = 0.0
             mean_dist = float(jnp.mean(stacked_dist))
             min_dist = float(jnp.min(stacked_dist))
             max_dist = float(jnp.max(stacked_dist))
@@ -870,10 +913,13 @@ def main():
                 "asym_torque": asym,
                 "gait_coherence": gait_coh,
                 "stride_period_s": stride_s,
+                "mean_pose_score": mean_pose_score,
+                "std_pose_score": std_pose_score,
+                "min_pose_score": min_pose_score,
             }
 
             print(
-                f"{update_count:>8}  {total_steps:>12,}  {sps:>8,.0f}  rew={mean_rew:+.2f}  d={mean_dist:.2f}  vx={mean_speed_x:+.2f}  z={mean_z:.2f}  upr={mean_upright:.2f}  ωz={mean_angvel_z:+.2f}",
+                f"{update_count:>8}  {total_steps:>12,}  {sps:>8,.0f}  rew={mean_rew:+.2f}  d={mean_dist:.2f}  vx={mean_speed_x:+.2f}  z={mean_z:.2f}  upr={mean_upright:.2f}  ωz={mean_angvel_z:+.2f}  pp={mean_pose_score:+.2f}",
                 flush=True,
             )
             if brain_hook is not None:
