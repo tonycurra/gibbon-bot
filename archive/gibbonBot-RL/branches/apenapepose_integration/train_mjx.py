@@ -34,6 +34,7 @@ import mlflow
 import numpy as np
 import optax
 from flax.training.train_state import TrainState
+from torch.utils.tensorboard import SummaryWriter
 
 import utils.lineage as lineage_mod
 from envs.pose_prior import PosePrior
@@ -52,9 +53,15 @@ LOG_EVERY = 5
 
 
 # ── Task plumbing ────────────────────────────────────────────────────────────
+def normalize_task_name(task: str) -> str:
+    """Normalize task name by replacing hyphens with underscores."""
+    return task.replace("-", "_")
+
+
 def task_module_paths(task: str):
     """Return (env_module_path, params_module_path) for the named task."""
-    return f"envs.{task}_env_mjx", f"envs.params_{task}_mjx"
+    normalized_task = normalize_task_name(task)
+    return f"envs.{normalized_task}_env_mjx", f"envs.params_{normalized_task}_mjx"
 
 
 def task_runs_dir(task: str) -> pathlib.Path:
@@ -62,9 +69,10 @@ def task_runs_dir(task: str) -> pathlib.Path:
 
 
 def task_fingerprint_files(task: str):
+    normalized_task = normalize_task_name(task)
     return [
-        pathlib.Path(f"envs/params_{task}_mjx.py"),
-        pathlib.Path(f"envs/{task}_env_mjx.py"),
+        pathlib.Path(f"envs/params_{normalized_task}_mjx.py"),
+        pathlib.Path(f"envs/{normalized_task}_env_mjx.py"),
         pathlib.Path("data/scene.xml"),
         pathlib.Path("envs/_shared_load_model.py"),
         pathlib.Path("envs/_shared_dynamics.py"),
@@ -449,6 +457,9 @@ def main():
     RUNS.mkdir(parents=True, exist_ok=True)
     _install_log_tee(RUNS)
 
+    # TensorBoard writer
+    tb_writer = SummaryWriter(str(RUNS))
+
     # Dynamic imports
     env_mod_path, params_mod_path = task_module_paths(TASK)
     try:
@@ -510,7 +521,7 @@ def main():
     )
     v_step = jax.jit(
         jax.vmap(
-            lambda dx, a, mp, mv, pa, pd, si: env_mod.step(
+            lambda dx, a, mp, mv, pa, pd, si, ix: env_mod.step(
                 mx,
                 jnt_lo,
                 jnt_hi,
@@ -526,6 +537,7 @@ def main():
                 pd,
                 si,
                 rparams,
+                ix,
             )
         )
     )
@@ -539,6 +551,7 @@ def main():
         prev_action_batch,
         prev_dist_batch,
         step_idx_batch,
+        initial_x_pos_batch,
     ) = v_reset(env_rngs)
     step_counts = jnp.zeros(N_ENVS, dtype=jnp.int32)
 
@@ -555,7 +568,7 @@ def main():
         N_ENVS,
         inherited_from,
         pathlib.Path("data/scene.xml"),
-        pathlib.Path(f"envs/{TASK}_env_mjx.py"),
+        pathlib.Path(f"envs/{normalize_task_name(TASK)}_env_mjx.py"),
     )
 
     mlflow.set_tracking_uri("sqlite:///mlflow.db")
@@ -700,7 +713,17 @@ def main():
         )
 
     while total_steps < TOTAL_STEPS and not _stop[0]:
-        buf_obs, buf_act, buf_logp, buf_rew, buf_done, buf_val, buf_dist = (
+        (
+            buf_obs,
+            buf_act,
+            buf_logp,
+            buf_rew,
+            buf_done,
+            buf_val,
+            buf_dist,
+            buf_forward_displacement,
+        ) = (
+            [],
             [],
             [],
             [],
@@ -743,6 +766,7 @@ def main():
                 prev_action_batch,
                 prev_dist_batch,
                 step_idx_batch,
+                forward_displacement_batch,
             ) = v_step(
                 dx_batch,
                 actions,
@@ -751,6 +775,7 @@ def main():
                 prev_action_batch,
                 prev_dist_batch,
                 step_idx_batch,
+                initial_x_pos_batch,
             )
             step_counts = step_counts + 1
             done_mask = dones | (step_counts >= MAX_STEPS)
@@ -758,8 +783,8 @@ def main():
             if jnp.any(done_mask):
                 rng, reset_rng = jax.random.split(rng)
                 reset_rngs = jax.random.split(reset_rng, N_ENVS)
-                new_dx, new_obs, new_mp, new_mv, new_pa, new_pd, new_si = v_reset(
-                    reset_rngs
+                new_dx, new_obs, new_mp, new_mv, new_pa, new_pd, new_si, new_ix = (
+                    v_reset(reset_rngs)
                 )
                 dx_batch = jax.tree.map(
                     lambda n, o: (
@@ -782,11 +807,13 @@ def main():
                 )
                 prev_dist_batch = jnp.where(done_mask, new_pd, prev_dist_batch)
                 step_idx_batch = jnp.where(done_mask, new_si, step_idx_batch)
+                initial_x_pos_batch = jnp.where(done_mask, new_ix, initial_x_pos_batch)
                 step_counts = jnp.where(done_mask, 0, step_counts)
 
             buf_rew.append(rewards)
             buf_done.append(done_mask.astype(jnp.float32))
             buf_dist.append(prev_dist_batch)
+            buf_forward_displacement.append(forward_displacement_batch)
 
         total_steps += N_ENVS * N_STEPS
 
@@ -844,6 +871,7 @@ def main():
             stacked_dist = jnp.stack(buf_dist)
             stacked_done = jnp.stack(buf_done)
             stacked_obs = jnp.stack(buf_obs)
+            stacked_forward_displacement = jnp.stack(buf_forward_displacement)
             mean_rew = float(jnp.mean(stacked_rew))
 
             # Pose prior metrics
@@ -866,6 +894,8 @@ def main():
             success_frac = float(
                 jnp.mean(stacked_dist < 0.6)
             )  # walk-specific but harmless for others
+            mean_forward_displacement = float(jnp.mean(stacked_forward_displacement))
+            max_forward_displacement = float(jnp.max(stacked_forward_displacement))
             # obs layout (frozen contract, see envs/_shared_obs.py):
             torso_z = stacked_obs[..., 0]
             uprightness = stacked_obs[..., 1]  # quat_w
@@ -916,15 +946,34 @@ def main():
                 "mean_pose_score": mean_pose_score,
                 "std_pose_score": std_pose_score,
                 "min_pose_score": min_pose_score,
+                "mean_forward_displacement": mean_forward_displacement,
+                "max_forward_displacement": max_forward_displacement,
             }
 
             print(
-                f"{update_count:>8}  {total_steps:>12,}  {sps:>8,.0f}  rew={mean_rew:+.2f}  d={mean_dist:.2f}  vx={mean_speed_x:+.2f}  z={mean_z:.2f}  upr={mean_upright:.2f}  ωz={mean_angvel_z:+.2f}  pp={mean_pose_score:+.2f}",
+                f"{update_count:>8}  {total_steps:>12,}  {sps:>8,.0f}  rew={mean_rew:+.2f}  d={mean_dist:.2f}  vx={mean_speed_x:+.2f}  z={mean_z:.2f}  upr={mean_upright:.2f}  ωz={mean_angvel_z:+.2f}  pp={mean_pose_score:+.2f}  fd={mean_forward_displacement:.2f}",
                 flush=True,
             )
             if brain_hook is not None:
                 metrics.update(brain_hook.metrics())
             mlflow.log_metrics(metrics, step=total_steps)
+
+            # TensorBoard logging
+            tb_writer.add_scalar("Performance/SPS", sps, total_steps)
+            tb_writer.add_scalar("Reward/Mean", mean_rew, total_steps)
+            tb_writer.add_scalar("Reward/Best", best_rew, total_steps)
+            tb_writer.add_scalar("Distance/Mean", mean_dist, total_steps)
+            tb_writer.add_scalar("Distance/Max", max_dist, total_steps)
+            tb_writer.add_scalar("PosePrior/Mean", mean_pose_score, total_steps)
+            tb_writer.add_scalar("Height/Mean", float(jnp.mean(torso_z)), total_steps)
+            tb_writer.add_scalar(
+                "Uprightness/Mean", float(jnp.mean(uprightness)), total_steps
+            )
+            tb_writer.add_scalar(
+                "Performance/ForwardDisplacement",
+                mean_forward_displacement,
+                total_steps,
+            )
 
             # Per-task keeper criterion (env may override).
             is_keeper_fn = getattr(env_mod, "is_keeper", None)
@@ -997,6 +1046,7 @@ def main():
     mlflow.set_tag("stop_reason", reason)
     mlflow.set_tag("final_steps", str(total_steps))
     mlflow.end_run()
+    tb_writer.close()
     if brain_hook is not None:
         brain_hook.close()
     if watcher is not None:
