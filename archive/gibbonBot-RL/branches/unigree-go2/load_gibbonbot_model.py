@@ -1,30 +1,13 @@
-"""
-Load custom quadruped robot environments
-========================================
-
-In this tutorial create a mujoco quadruped walking environment using a model file (ending in `.xml`) without having to create a new class.
-
-Steps:
-
-0. Get your **MJCF** (or **URDF**) model file of your robot.
-    - Create your own model (see the MuJoCo Guide) or,
-    - Find a ready-made model (in this tutorial, we will use a model from the MuJoCo Menagerie collection).
-1. Load the model with the `xml_file` argument.
-2. Tweak the environment parameters to get the desired behavior.
-    1. Tweak the environment simulation parameters.
-    2. Tweak the environment termination parameters.
-    3. Tweak the environment reward parameters.
-    4. Tweak the environment observation parameters.
-3. Train an agent to move your robot.
-"""
-
 from datetime import datetime
 from pathlib import Path
 
 import gymnasium as gym
 import numpy as np
+from gymnasium.wrappers import TimeLimit
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import CheckpointCallback
+
+from gibbonbot_env import GibbonbotEnv
 
 # Create output directories
 Path("models").mkdir(exist_ok=True)
@@ -39,8 +22,7 @@ def main():
     # Note: The original tutorial includes an image showing the Go1 robot in the environment.
     # The image is available at: https://github.com/Kallinteris-Andreas/Gymnasium-kalli/assets/30759571/bf1797a3-264d-47de-b14c-e3c16072f695
 
-    env = gym.make(
-        "Ant-v5",
+    env = GibbonbotEnv(
         xml_file=xml_path,
         forward_reward_weight=1.0,
         ctrl_cost_weight=0.05,
@@ -51,17 +33,18 @@ def main():
         include_cfrc_ext_in_observation=True,
         exclude_current_positions_from_observation=False,
         reset_noise_scale=0.1,
-        frame_skip=10,  # 25, assuming default timestep of 0.002, dt=0.05
-        max_episode_steps=1000,
+        frame_skip=5,  # 25, assuming default timestep of 0.002, dt=0.05
         render_mode="rgb_array",  # Change to "human" to visualize, otherwise rgb_array
     )
+    # Add TimeLimit wrapper to prevent infinitely long episodes
+    env = TimeLimit(env, max_episode_steps=1000)
 
     run_name = datetime.now().strftime("%Y%m%d_%H%M%S")
     print(f"Run: gb1_{run_name}")
 
     checkpoint_callback = CheckpointCallback(
         save_freq=100_000,
-        save_path="./checkpoints/",
+        save_path="./checkpoints/latest/",
         name_prefix=f"gb1_{run_name}",
     )
 

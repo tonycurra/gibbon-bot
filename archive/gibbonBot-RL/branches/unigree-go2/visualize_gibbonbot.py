@@ -4,7 +4,7 @@ from pathlib import Path
 import gymnasium as gym
 from stable_baselines3 import PPO
 
-checkpoint_dir = Path("checkpoints")  # checkpoints
+checkpoint_dir = Path("checkpoints/latest")  # checkpoints
 # xml_path = str(Path("unitree_go1/scene.xml").resolve())
 xml_path = str(Path("scene.xml").resolve())
 
@@ -35,7 +35,7 @@ env = gym.make(
     include_cfrc_ext_in_observation=True,
     exclude_current_positions_from_observation=False,
     reset_noise_scale=0.1,
-    frame_skip=10,  # 25
+    frame_skip=5,  # 25
     max_episode_steps=1000,
     render_mode="human",  # Change to "human" to visualize
 )

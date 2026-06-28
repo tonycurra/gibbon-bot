@@ -7,5 +7,5 @@ data = mujoco.MjData(model)
 
 with mujoco.viewer.launch_passive(model, data) as viewer:
     while viewer.is_running():
-        mujoco.pmj_step(model, data)
+        mujoco.mj_step(model, data)
         viewer.sync()
