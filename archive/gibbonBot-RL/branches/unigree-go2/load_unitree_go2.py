@@ -7,14 +7,15 @@ from gymnasium.wrappers import TimeLimit
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import CheckpointCallback
 
-from gibbonbot_env import GibbonbotEnv
+from unitree_go2_config import MAX_EPISODE_STEPS, TRAINING_PARAMS, UNITREE_GO2_PARAMS
+from unitree_go2_env import UnitreeGo2Env
 
 # Create output directories
 Path("models").mkdir(exist_ok=True)
 Path("tensorboard").mkdir(exist_ok=True)
 Path("checkpoints").mkdir(exist_ok=True)
 
-xml_path = str(Path("scene.xml").resolve())
+xml_path = str(Path(UNITREE_GO2_PARAMS["xml_file"]).resolve())
 
 
 def main():
@@ -22,22 +23,12 @@ def main():
     # Note: The original tutorial includes an image showing the Go1 robot in the environment.
     # The image is available at: https://github.com/Kallinteris-Andreas/Gymnasium-kalli/assets/30759571/bf1797a3-264d-47de-b14c-e3c16072f695
 
-    env = GibbonbotEnv(
-        xml_file=xml_path,
-        forward_reward_weight=1.0,
-        ctrl_cost_weight=0.05,
-        contact_cost_weight=5e-4,
-        healthy_reward=1.0,
-        main_body=0,  # Index of the torso body
-        healthy_z_range=(0.3, 1.0),  # Adjusted for the robot's height
-        include_cfrc_ext_in_observation=True,
-        exclude_current_positions_from_observation=False,
-        reset_noise_scale=0.1,
-        frame_skip=5,  # 25, assuming default timestep of 0.002, dt=0.05
-        render_mode="rgb_array",  # Change to "human" to visualize, otherwise rgb_array
-    )
+    # Combine common and training-specific parameters
+    env_params = {**UNITREE_GO2_PARAMS, **TRAINING_PARAMS, "xml_file": xml_path}
+
+    env = UnitreeGo2Env(**env_params)
     # Add TimeLimit wrapper to prevent infinitely long episodes
-    env = TimeLimit(env, max_episode_steps=1000)
+    env = TimeLimit(env, max_episode_steps=MAX_EPISODE_STEPS)
 
     run_name = datetime.now().strftime("%Y%m%d_%H%M%S")
     print(f"Run: gb1_{run_name}")

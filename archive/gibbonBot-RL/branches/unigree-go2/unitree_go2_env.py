@@ -1,5 +1,7 @@
 __credits__ = ["Kallinteris-Andreas"]
 
+import xml.etree.ElementTree as ET
+
 import numpy as np
 from gymnasium import utils
 from gymnasium.envs.mujoco import MujocoEnv
@@ -10,7 +12,54 @@ DEFAULT_CAMERA_CONFIG = {
 }
 
 
-class GibbonbotEnv(MujocoEnv, utils.EzPickle):
+def load_default_pose_from_xml(
+    xml_file_path: str, default_pose_xml_file: str | None = None
+) -> np.ndarray:
+    """
+    Extract the default pose (qpos) from the 'home' keyframe in the MuJoCo XML file.
+    If `default_pose_xml_file` is provided, use it to load the default pose. Otherwise, use the provided `xml_file_path`.
+
+    Args:
+        xml_file_path: Path to the MuJoCo XML file (e.g., "scene_mjx.xml").
+        default_pose_xml_file: Optional path to the XML file containing the 'home' keyframe (e.g., "go2_mjx.xml").
+
+    Returns:
+        np.ndarray: The default joint positions (qpos) from the 'home' keyframe.
+
+    Raises:
+        ValueError: If the 'home' keyframe or qpos is not found in the XML file.
+    """
+    # Use the default_pose_xml_file if provided, otherwise use xml_file_path
+    pose_xml_file = (
+        default_pose_xml_file if default_pose_xml_file is not None else xml_file_path
+    )
+
+    try:
+        tree = ET.parse(pose_xml_file)
+        root = tree.getroot()
+    except ET.ParseError as e:
+        raise ValueError(f"Failed to parse XML file '{pose_xml_file}': {e}")
+    except FileNotFoundError as e:
+        raise ValueError(f"XML file not found: {e}")
+
+    # Find the 'home' keyframe
+    for keyframe in root.findall(".//keyframe"):
+        key_element = keyframe.find("key")
+        if (
+            key_element is not None
+            and "name" in key_element.attrib
+            and key_element.get("name") == "home"
+        ):
+            if "qpos" in key_element.attrib:
+                qpos_str = key_element.get("qpos")
+                return np.fromstring(qpos_str, sep=" ")
+
+    raise ValueError(
+        f"Keyframe 'home' or qpos not found in the XML file '{pose_xml_file}'."
+    )
+
+
+class UnitreeGo2Env(MujocoEnv, utils.EzPickle):
     metadata = {
         "render_modes": [
             "human",
@@ -23,12 +72,14 @@ class GibbonbotEnv(MujocoEnv, utils.EzPickle):
     def __init__(
         self,
         xml_file: str = "ant.xml",
+        default_pose_xml_file: str | None = None,
         frame_skip: int = 5,
         default_camera_config: dict[str, float | int] = DEFAULT_CAMERA_CONFIG,
         forward_reward_weight: float = 1,
         ctrl_cost_weight: float = 0.5,
         contact_cost_weight: float = 5e-4,
         healthy_reward: float = 1.0,
+        pose_penalty_weight: float = 0.01,
         main_body: int | str = 1,
         terminate_when_unhealthy: bool = True,
         healthy_z_range: tuple[float, float] = (0.2, 1.0),
@@ -47,6 +98,7 @@ class GibbonbotEnv(MujocoEnv, utils.EzPickle):
             ctrl_cost_weight,
             contact_cost_weight,
             healthy_reward,
+            pose_penalty_weight,
             main_body,
             terminate_when_unhealthy,
             healthy_z_range,
@@ -62,6 +114,7 @@ class GibbonbotEnv(MujocoEnv, utils.EzPickle):
         self._contact_cost_weight = contact_cost_weight
 
         self._healthy_reward = healthy_reward
+        self._pose_penalty_weight = pose_penalty_weight
         self._terminate_when_unhealthy = terminate_when_unhealthy
         self._healthy_z_range = healthy_z_range
 
@@ -75,6 +128,9 @@ class GibbonbotEnv(MujocoEnv, utils.EzPickle):
             exclude_current_positions_from_observation
         )
         self._include_cfrc_ext_in_observation = include_cfrc_ext_in_observation
+
+        # Load default pose from XML
+        self._default_pose = load_default_pose_from_xml(xml_file, default_pose_xml_file)
 
         MujocoEnv.__init__(
             self,
@@ -134,6 +190,22 @@ class GibbonbotEnv(MujocoEnv, utils.EzPickle):
         return contact_cost
 
     @property
+    def pose_penalty(self):
+        """
+        Calculate the penalty for deviating from the default pose.
+        Excludes the base position/orientation (first 7 elements of qpos).
+        """
+        # Exclude base pose (adjust the slice if needed)
+        current_joint_positions = self.data.qpos[7:]
+        default_joint_positions = self._default_pose[7:]
+
+        # Quadratic penalty
+        penalty = self._pose_penalty_weight * np.sum(
+            np.square(current_joint_positions - default_joint_positions)
+        )
+        return penalty
+
+    @property
     def is_healthy(self):
         state = self.state_vector()
         min_z, max_z = self._healthy_z_range
@@ -172,7 +244,8 @@ class GibbonbotEnv(MujocoEnv, utils.EzPickle):
 
         ctrl_cost = self.control_cost(action)
         contact_cost = self.contact_cost
-        costs = ctrl_cost + contact_cost
+        pose_cost = self.pose_penalty
+        costs = ctrl_cost + contact_cost + pose_cost
 
         reward = rewards - costs
 
@@ -180,6 +253,7 @@ class GibbonbotEnv(MujocoEnv, utils.EzPickle):
             "reward_forward": forward_reward,
             "reward_ctrl": -ctrl_cost,
             "reward_contact": -contact_cost,
+            "reward_pose": -pose_cost,
             "reward_survive": healthy_reward,
         }
 
