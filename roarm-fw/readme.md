@@ -11,6 +11,8 @@ Firmware: native **ESP-IDF**. On the chip now: USB `info` / `ping` / `bench`. US
 | Install / flash / serial | `docs/espidf.md` |
 | Pins, IDs, telemetry | `docs/hardware.md` |
 | USB no-battery gold | `docs/baselines/usb-no-battery.md` |
+| Next: listen, then plug battery | `docs/plans/characterize-hat.md` |
+| Then: BLE HTML dashboard | `docs/plans/ble-html.md` |
 | HAT swap / wiki | `docs/hardware/hardware.md`, `docs/hardware/SBSD-HAT.md` |
 | Bring-up tries (this day) | `development-logs/2026-09-03.md` |
 | USB then BLE | `docs/usb-then-ble.md` |

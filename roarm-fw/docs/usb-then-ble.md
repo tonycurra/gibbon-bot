@@ -2,7 +2,7 @@
 
 ## Order
 
-1. USB only. Hello on serial (done), then ping IDs 11–17 (code on chip; battery-off = all miss), then `get` telemetry, then nudge one joint. If this fails, BLE will not help.
+1. USB only. Hello on serial (done), then ping IDs 11–17 (code on chip; battery-off = all miss). Next: listen-only then plug XT60 (`docs/plans/characterize-hat.md`), then `get` telemetry, then nudge one joint. If this fails, BLE will not help.
 2. One text protocol on USB. Reuse it on BLE (wireless serial pipe). Same lines, two transports.
 3. FK after joint numbers match reality.
 4. IK last. Do it on the laptop first. Dual-drive shoulder (IDs 12+13) is easy to get wrong on the chip.
@@ -25,13 +25,13 @@ torque 1
 
 `get` dumps every servo: id, pos, speed, load, V, temp, current, moving. That is all the ST3215 reports.
 
-## BLE (when USB is boring)
+## BLE (when USB `get` is trusted)
 
 Each board is a **peripheral**. The four-limb host is a **central** later (laptop/Pi, not this firmware).
 
-Simplest: Nordic-UART-style characteristic, same text as USB. Phone: nRF Connect. Laptop: Python `bleak`. Custom GATT only after that is stable.
+Simple HTML + JS page, Web Bluetooth, same text as USB. Power-state matrix (USB-only / USB+battery / battery unplug USB): `docs/plans/ble-html.md`.
 
-**NimBLE** = IDF’s small BLE radio stack (not Bluedroid). Turn it on in `menuconfig` after USB `get`/`move` works.
+**NimBLE**, not Bluedroid. Advertise after USB `get` works once. Phone: that page or nRF Connect. Custom GATT only after the text pipe is boring.
 
 ## FK / IK
 

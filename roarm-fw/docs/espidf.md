@@ -53,6 +53,8 @@ Battery **off**: `bench` should print `found=0/7` `guess=usb-no-battery`. Gold c
 
 Battery **on** + switch ESP32: expect `found=7/7`. Then we add `get` (pos/load/V).
 
+How we get there (listen-only, then plug XT60, then ping): `docs/plans/characterize-hat.md`.
+
 UART switch must be **ESP32**. USB-C next to the bus headers is a different path (direct to servos); this firmware uses the ESP32 port.
 
 ## Bring-up on this board (keep)
