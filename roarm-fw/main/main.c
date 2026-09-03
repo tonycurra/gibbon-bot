@@ -28,6 +28,7 @@ static void print_help(void)
     printf("  info     ESP32 / USB (works with battery unplugged)\n");
     printf("  ping     Feetech ping IDs 11-17 (needs servo power + UART switch ESP32)\n");
     printf("  pingall  ping IDs 1-253 (slow)\n");
+    printf("  bench    one-shot baseline: chip + ping 11-17 (compare docs/baselines)\n");
     printf("  help\n");
 }
 
@@ -132,6 +133,46 @@ static void cmd_ping(int lo, int hi, int verbose)
     }
 }
 
+/* Stable lines for later compare. Heap/uptime/reset change; these should not. */
+static void cmd_bench(void)
+{
+    esp_chip_info_t chip;
+    esp_chip_info(&chip);
+    uint32_t flash_size = 0;
+    esp_flash_get_size(NULL, &flash_size);
+    uint8_t mac[6];
+    esp_read_mac(mac, ESP_MAC_WIFI_STA);
+
+    int bits[8];
+    int found = 0;
+    int nids = ID_LAST - ID_FIRST + 1;
+    for (int id = ID_FIRST; id <= ID_LAST; id++) {
+        int ok = bus_ping(id);
+        bits[id - ID_FIRST] = ok;
+        found += ok;
+    }
+
+    printf("bench v1\n");
+    printf("chip=ESP32 cores=%d rev=%d flash=%luKB\n",
+           chip.cores, chip.revision, (unsigned long)(flash_size / 1024));
+    printf("mac=%02x:%02x:%02x:%02x:%02x:%02x\n",
+           mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    printf("bus=gpio18/19@1Mbps ids=%d-%d\n", ID_FIRST, ID_LAST);
+    printf("ping");
+    for (int id = ID_FIRST; id <= ID_LAST; id++) {
+        printf(" %d=%s", id, bits[id - ID_FIRST] ? "found" : "miss");
+    }
+    printf("\n");
+    printf("found=%d/%d\n", found, nids);
+    if (found == 0) {
+        printf("guess=usb-no-battery\n");
+    } else if (found == nids) {
+        printf("guess=usb-battery-on\n");
+    } else {
+        printf("guess=partial\n");
+    }
+}
+
 static void handle_line(char *line)
 {
     while (*line && isspace((unsigned char)*line)) {
@@ -161,6 +202,10 @@ static void handle_line(char *line)
         cmd_ping(1, 253, 0);
         return;
     }
+    if (strcmp(line, "bench") == 0) {
+        cmd_bench();
+        return;
+    }
 
     printf("err unknown '%s' — type help\n", line);
 }
@@ -183,7 +228,7 @@ void app_main(void)
     printf("\nroarm-fw usb+bus\n");
     print_help();
     cmd_info();
-    printf("type ping  (expect silence until battery is on)\n");
+    printf("type bench  (usb-no-battery: found=0/7)\n");
 
     char line[64];
     int line_len = 0;

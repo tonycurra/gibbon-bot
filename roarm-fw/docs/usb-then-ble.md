@@ -13,12 +13,15 @@ Boot: bus up → USB log → (later) BLE advertise. **Do not auto-move.** Hold p
 
 ```
 ping
+bench
 get
 move 11 2048
 speed 400
 torque 0
 torque 1
 ```
+
+`bench` is the connect-the-board check. Battery off: `docs/baselines/usb-no-battery.md` (`found=0/7`). Battery on later: `found=7/7`, then `get`.
 
 `get` dumps every servo: id, pos, speed, load, V, temp, current, moving. That is all the ST3215 reports.
 

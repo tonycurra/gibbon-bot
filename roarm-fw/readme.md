@@ -3,13 +3,14 @@ This is a modified Waveshare RoArm-M3 Pro (Tony: XT60 battery for portable use) 
 **Every flash / serial:** `docs/espidf.md`  
 Stop monitor: second terminal `pkill -f esp_idf_monitor`
 
-Firmware: native **ESP-IDF**. On the chip now: USB `info` + servo `ping` (IDs 11–17). USB first, BLE later. No auto-move on boot.
+Firmware: native **ESP-IDF**. On the chip now: USB `info` / `ping` / `bench`. USB first, BLE later. No auto-move on boot.
 
 | | |
 | --- | --- |
 | Why IDF | `docs/framework.md` |
 | Install / flash / serial | `docs/espidf.md` |
 | Pins, IDs, telemetry | `docs/hardware.md` |
+| USB no-battery gold | `docs/baselines/usb-no-battery.md` |
 | HAT swap / wiki | `docs/hardware/hardware.md`, `docs/hardware/SBSD-HAT.md` |
 | Bring-up tries (this day) | `development-logs/2026-09-03.md` |
 | USB then BLE | `docs/usb-then-ble.md` |

@@ -46,11 +46,12 @@ Type in the monitor, Enter:
 | `info` | chip, MAC, heap, reset, IDF — works on USB alone |
 | `ping` | Feetech ping IDs 11–17 (UART switch = **ESP32**) |
 | `pingall` | IDs 1–253, only prints hits |
+| `bench` | one-shot baseline (chip + ping 11–17) — compare `docs/baselines/usb-no-battery.md` |
 | `help` | list |
 
-Battery **off**: expect `ping miss id=11` … `ping none 11-17`. That is the test, not a failure of the firmware.
+Battery **off**: `bench` should print `found=0/7` `guess=usb-no-battery`. Gold copy: `docs/baselines/usb-no-battery.md`.
 
-Battery **on** + switch ESP32: expect `ping FOUND id=11` … `17`. Then we add `get` (pos/load/V).
+Battery **on** + switch ESP32: expect `found=7/7`. Then we add `get` (pos/load/V).
 
 UART switch must be **ESP32**. USB-C next to the bus headers is a different path (direct to servos); this firmware uses the ESP32 port.
 
