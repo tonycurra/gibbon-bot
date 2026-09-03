@@ -10,7 +10,20 @@ Waveshare RoArm-M3 Pro, modified with XT60 battery for portable use, Bus Servo D
 
 Power: 9–25 V on the HAT (match the servos). ST3215s: 7–12.6 V typical (12 V 5 A or 3S LiPo). Battery / board switch ON for servos to answer.
 
-USB debug: **115200**. This machine saw the board as `/dev/ttyACM0`.
+USB debug: **115200**. This machine saw the board as `/dev/ttyACM0`. USB powers the **ESP32 only**. Servos need XT60.
+
+## This HAT vs the old General Driver Board
+
+Tony swapped the kit’s General Driver Board for the Bus Servo Driver HAT (A) so a 3S LiPo can plug in on XT60 (`hardware/hardware.md`).
+
+| On the old board | On this HAT |
+| --- | --- |
+| User LED (PH2.0) | **None.** Do not blink GPIO 2 expecting a lamp |
+| INA219 voltage/current | **None.** Pack voltage will come from servo `ReadVoltage`, not a chip on the HAT |
+| 9-axis IMU | **None** |
+| OLED I2C | **None** on the HAT silkscreen |
+
+HAT “What’s On Board”: ESP32-WROOM-32, 5 V buck, UART switch (must be **ESP32**), Reset, BOOT, Pi header, two USB-C (ESP32 debug vs direct-to-bus), XT60 / DC / screw terminal, RS485 + TTL servo headers. Wiki dump: `hardware/SBSD-HAT.md`.
 
 ## Bus
 

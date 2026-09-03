@@ -1,58 +1,80 @@
-# ESP-IDF (how we build)
+# ESP-IDF — every time
 
-Native Espressif framework. Why: `docs/framework.md`. Chip: ESP32-WROOM-32. This repo is an IDF project (`CMakeLists.txt` + `main/`).
+Chip: ESP32-WROOM-32 on the HAT. Port: **`/dev/ttyACM0`**. UART switch: **ESP32**.
 
-Machine notes (Python 3.11, cmake via idf_tools, dialout): `development-logs/espidf-start.md`.
+## Stop the monitor
 
-## Install (once)
-
-IDF is **not** inside git. Clone to `$HOME/esp/esp-idf`. `install.sh` is bash (not `python3.11 ./install.sh`). Put Python 3.11 first if `python3` is 3.14:
+Ctrl+] does **not** work (Italian keyboard / Cursor). Open a **second** terminal and run:
 
 ```bash
-mkdir -p "$HOME/esp"
-cd "$HOME/esp"
-git clone --branch v5.4.2 --depth 1 --recurse-submodules --shallow-submodules \
-  https://github.com/espressif/esp-idf.git
-cd esp-idf
-mkdir -p /tmp/py311bin
-ln -sfn "$HOME/.local/bin/python3.11" /tmp/py311bin/python3
-PATH="/tmp/py311bin:$PATH" ./install.sh esp32
+pkill -f esp_idf_monitor
 ```
 
-Then cmake/ninja if missing:
+No IDF env needed. The monitor tab should drop back to a prompt. Then you can flash again.
+
+Do not start a second `flash monitor` until that process is dead.
+
+## Start
+
+New terminal = source the env again (`idf.py: command not found` means you skipped this).
 
 ```bash
-. /path/to/roarm-fw/scripts/idf-env.sh
-python3 "$IDF_PATH/tools/idf_tools.py" install cmake ninja
-```
-
-Serial: `sudo usermod -aG dialout "$USER"` then a new login.
-
-## Every shell
-
-```bash
-cd /path/to/roarm-fw
+cd ~/code/gibbon-bot/roarm-fw
 . scripts/idf-env.sh
-idf.py -p /dev/ttyACM0 build flash monitor
+sudo chmod 666 /dev/ttyACM0          # until a full desktop logout
+idf.py -p /dev/ttyACM0 flash monitor
 ```
-
-First `build` is long. Later edits are incremental. Exit monitor: **Ctrl+]**.
-
-This HAT enumerated as **`/dev/ttyACM0`**. UART switch = **ESP32**. Hold **BOOT** if download fails.
-
-## First test
-
-Prints `roarm-fw usb hello` then `alive` on USB. Servo bus is not started.
-
-Build on 2026-09-03: **ok**. Flash: blocked until you are in `dialout`.
-
-## Commands
 
 | | |
 | --- | --- |
-| Env | `. scripts/idf-env.sh` |
-| Target | `idf.py set-target esp32` |
-| Build | `idf.py build` |
-| Flash + serial | `idf.py -p /dev/ttyACM0 flash monitor` |
-| Config | `idf.py menuconfig` |
-| Size | `idf.py size` |
+| Stop monitor | Second tab: `pkill -f esp_idf_monitor` |
+| `idf.py: command not found` | `. scripts/idf-env.sh` in **this** shell |
+| Path not readable | `sudo chmod 666 /dev/ttyACM0` |
+
+Edit → `pkill -f esp_idf_monitor` → same start commands.
+
+## Now on the chip: `info` + `ping`
+
+**This HAT has no user LED.** USB still powers the ESP32 with the battery unplugged. Servos do **not** — position / load / voltage come from the motors, so those reads are silence until XT60 is on.
+
+The RoArm kit’s INA219 / IMU / LED were on the **old** General Driver Board. This HAT has none of that.
+
+Type in the monitor, Enter:
+
+| | |
+| --- | --- |
+| `info` | chip, MAC, heap, reset, IDF — works on USB alone |
+| `ping` | Feetech ping IDs 11–17 (UART switch = **ESP32**) |
+| `pingall` | IDs 1–253, only prints hits |
+| `help` | list |
+
+Battery **off**: expect `ping miss id=11` … `ping none 11-17`. That is the test, not a failure of the firmware.
+
+Battery **on** + switch ESP32: expect `ping FOUND id=11` … `17`. Then we add `get` (pos/load/V).
+
+UART switch must be **ESP32**. USB-C next to the bus headers is a different path (direct to servos); this firmware uses the ESP32 port.
+
+## Bring-up on this board (keep)
+
+Tried in order. Dead ends stay here so we do not repeat them.
+
+| Step | What we did | Result |
+| --- | --- | --- |
+| 1. USB hello | Print `roarm-fw usb hello` / `alive` on UART0 | **Worked.** Chip ESP32-D0WD-V3 rev 3.1, MAC `44:1d:64:86:3f:54`, 4 MB flash |
+| 2. Blink LED | GPIO 2 (DevKit habit) + serial `hz` / `tick` | **No lamp.** HAT has no user LED. Schematic LED3 is 3.3 V power. RoArm PH2.0 LED was on the old General Driver Board |
+| 3. Blink task | `printf` from a 2 KB FreeRTOS task | **Reboot loop** (`stack overflow in task blink`). Console I/O stays on the main task |
+| 4. Serial ticks | `hz` / `off` / `on` / `tick 1` `tick 0` | Worked as a USB test; dropped once we knew there is no LED |
+| 5. `info` | Chip, MAC, heap, reset, IDF, uptime | **Works on USB alone** (battery unplugged) |
+| 6. `ping` 11–17 | Feetech ping UART1 GPIO 18/19 @ 1 Mbps | Battery **off**: all miss. That is expected — servos are unpowered. Next: battery on, same command |
+
+Host traps (Italian keyboard + this Ubuntu):
+
+- Ctrl+] does not quit the monitor. Process name is `esp_idf_monitor`, not `idf_monitor.py`. Second terminal: `pkill -f esp_idf_monitor` or `scripts/stop-monitor.sh`.
+- `t` is in `dialout` but this session still needs `sudo chmod 666 /dev/ttyACM0` until a full desktop logout (`newgrp` is not installed).
+- Two monitors on ACM0 fight. Stop the first before flash.
+
+## Once (already done on this machine)
+
+IDF **v5.4.2** at `$HOME/esp/esp-idf` (not in git). Python **3.11** via `scripts/idf-env.sh`. `usermod -aG dialout t` done; group applies after logout.
+
+If you ever reinstall: `development-logs/espidf-start.md`. Why IDF: `docs/framework.md`.

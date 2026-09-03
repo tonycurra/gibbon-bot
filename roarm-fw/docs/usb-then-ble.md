@@ -2,7 +2,7 @@
 
 ## Order
 
-1. USB only. Hello on serial, then ping IDs 11–17, print telemetry, nudge one joint. If this fails, BLE will not help.
+1. USB only. Hello on serial (done), then ping IDs 11–17 (code on chip; battery-off = all miss), then `get` telemetry, then nudge one joint. If this fails, BLE will not help.
 2. One text protocol on USB. Reuse it on BLE (wireless serial pipe). Same lines, two transports.
 3. FK after joint numbers match reality.
 4. IK last. Do it on the laptop first. Dual-drive shoulder (IDs 12+13) is easy to get wrong on the chip.

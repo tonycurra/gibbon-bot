@@ -6,7 +6,7 @@ Wanted: USB iterate, low-level control, room to grow, BLE, performance, later se
 **Pick: native ESP-IDF (`idf.py`), NimBLE when BLE starts.**  
 Not PlatformIO+Arduino. Not PlatformIO wrapping IDF unless `idf.py` becomes painful.
 
-Bring-up order is unchanged: USB `ping` / `get` / `move` first, BLE as the same commands later. No auto-move. See `development-logs/usb-then-ble.md`.
+Bring-up order is unchanged: USB `ping` / `get` / `move` first, BLE as the same commands later. No auto-move. See `docs/usb-then-ble.md`.
 
 ## Three things people mix up
 
