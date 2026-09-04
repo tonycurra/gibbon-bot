@@ -1,6 +1,6 @@
 # Characterize HAT: USB listen, then attach battery
 
-Next experiment. Not implemented yet. Gold USB-only ping: `docs/baselines/usb-no-battery.md`.
+USB-only listen is **done** (2026-09-04). Gold: `docs/baselines/usb-start.md`. Ping gold still: `docs/baselines/usb-no-battery.md`. Next: plug XT60 while the same session is printing, still no move.
 
 Goal: sit on serial with **minimal, no-move** firmware, dump **raw** what the chip and the bus are doing, first with XT60 unplugged, then plug the pack **while still listening**. See what actually wakes. Save whatever we get as the next baseline.
 
@@ -27,9 +27,9 @@ So “listen to all ports” here means: **USB console + raw UART1 RX + ESP32 pr
 - UART switch stays **ESP32** the whole time.
 - One monitor on `/dev/ttyACM0`. Stop extras: `pkill -f esp_idf_monitor`.
 
-## Firmware to write (`listen`, not `bench`)
+## Firmware (`listen v1`, on the chip)
 
-Blank on purpose: no ping on boot, no WiFi, no BLE, no motion. USB prints something immediately so we know the chip is running.
+No ping on boot, no WiFi, no BLE, no motion. USB prints immediately so we know the chip is running. `get` is READ-only (present + torque-enable); do not type it until the XT60 listen window is done.
 
 Boot banner (once):
 
@@ -64,7 +64,8 @@ USB commands (type in monitor):
 | `gpio` | digital snapshot of safe pins only (18/19 as UART, not a fishing trip on USB/strapping pins) |
 | `ping` | IDs 11–17 (only when we decide the listen window is done) |
 | `raw 11` | ping + dump the status packet hex |
-| `bench` | same comparable block as today |
+| `get` | READ pos/speed/load/V/temp/current/moving/torque-en. **After** the listen window |
+| `bench` | same comparable block as `usb-no-battery.md` |
 | `help` | list |
 
 Do **not** I2C-scan or ADC-scan floating pins as “sensors”. If we ever do it, label it `noise=` so we do not confuse it with HAT data.
@@ -82,13 +83,13 @@ dmesg -w
 
 Note which USB serial exists. Battery should **not** create a new COM port (ESP32 is already on USB). If a second ACM appears, that is the other Type-C or a reconnect — write it down.
 
-### 1. USB only, pack off
+### 1. USB only, pack off — **done 2026-09-04**
 
 Flash listen firmware. UART switch ESP32. Confirm heartbeats. Run `state`. Confirm `bus_rx` stays 0 for ~30 s.
 
-Paste into `docs/baselines/listen-usb-no-battery.md` (create when we have it). Compare chip/MAC to `usb-no-battery.md`.
+Gold: `docs/baselines/usb-start.md`. Short paste: `docs/baselines/listen-usb-no-battery.md`. MAC matches `usb-no-battery.md`.
 
-Expected: chip alive, one or two FreeRTOS tasks, bus hex **none**. Same as `bench found=0/7` if we ping, but **do not ping yet**.
+Got: chip alive, 5 FreeRTOS tasks (`main` + IDLEs + IPC), bus hex **none**. Did not ping.
 
 ### 2. Keep listening, plug XT60
 
@@ -115,7 +116,7 @@ Wait ~20 s of listen-only.
 | `found=1..6` | partial chain. Save IDs. Do not move. |
 | hex on RX only after ping | confirms “silent until addressed” — expected ST protocol |
 
-Then `raw 11` … `raw 17` if ping hits: dump status packets. Next firmware step is `get` (pos/load/V/temp/current) — that data lives **in the servos**, not on the HAT.
+Then `raw 11` … `raw 17` if ping hits, then `get`. That data lives **in the servos**, not on the HAT. Save `docs/baselines/usb-battery-on.md`.
 
 ### 4. What “sensors came alive”
 
@@ -130,13 +131,13 @@ Not coming alive: INA219, IMU, OLED, user LED, WiFi AP.
 
 ## Already known (do not redo)
 
-USB hello works. GPIO 2 is not an LED. `printf` in a 2 KB task stack-overflows. Battery off: `bench found=0/7`, MAC `44:1d:64:86:3f:54`. Day log: `development-logs/2026-09-03.md`.
+USB hello works. GPIO 2 is not an LED. `printf` in a 2 KB task stack-overflows. Battery off: `bench found=0/7`, listen `bus_rx=0`, MAC `44:1d:64:86:3f:54`. Day logs: `development-logs/2026-09-03.md`, `2026-09-04.md`.
 
 ## After this experiment
 
-1. Save listen logs as baselines (no-battery + battery-on).
-2. Add `get` (read-only telemetry). Still no auto-move.
-3. Then BLE + a simple HTML page for the same lines in USB / USB+battery / battery-only: `docs/plans/ble-html.md`.
+1. USB-only listen baseline — **saved** (`usb-start.md`).
+2. Plug XT60, listen, then `ping` / `get`. Save `usb-battery-on.md`. Still no auto-move.
+3. Then BLE + a simple HTML page for the same lines: `docs/plans/ble-html.md`.
 4. Only then a tiny nudge on one joint.
 
-Order is unchanged: `docs/usb-then-ble.md`.
+Order is unchanged: `docs/plans/usb-then-ble.md`.

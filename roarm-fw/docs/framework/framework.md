@@ -6,7 +6,7 @@ Wanted: USB iterate, low-level control, room to grow, BLE, performance, later se
 **Pick: native ESP-IDF (`idf.py`), NimBLE when BLE starts.**  
 Not PlatformIO+Arduino. Not PlatformIO wrapping IDF unless `idf.py` becomes painful.
 
-Bring-up order is unchanged: USB `ping` / `get` / `move` first, BLE as the same commands later. No auto-move. See `docs/usb-then-ble.md`.
+Bring-up order is unchanged: USB `ping` / `get` / `move` first, BLE as the same commands later. No auto-move. See `docs/plans/usb-then-ble.md`.
 
 ## Three things people mix up
 
@@ -34,7 +34,7 @@ It loses on everything else on the list:
 - Four identical limbs, safety, later Secure Boot — IDF `components/` + `menuconfig`, not a flat sketch.
 - Rewriting Arduino → IDF later is the cost this pick avoids.
 
-USB iteration still works: `idf.py -p /dev/ttyACM0 build flash monitor` (or `ttyUSB0`). First build is long. After that Ninja only rebuilds what changed — same *kind* of loop as PIO, not Arduino IDE. How-to: `docs/espidf.md`.
+USB iteration still works: `idf.py -p /dev/ttyACM0 build flash monitor` (or `ttyUSB0`). First build is long. After that Ninja only rebuilds what changed — same *kind* of loop as PIO, not Arduino IDE. How-to: `docs/framework/espidf.md`.
 
 ## Why not PIO wrapping IDF
 

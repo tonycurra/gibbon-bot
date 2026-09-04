@@ -2,7 +2,7 @@
 
 ## Order
 
-1. USB only. Hello on serial (done), then ping IDs 11–17 (code on chip; battery-off = all miss). Next: listen-only then plug XT60 (`docs/plans/characterize-hat.md`), then `get` telemetry, then nudge one joint. If this fails, BLE will not help.
+1. USB only. Hello on serial (done). Ping IDs 11–17 with pack off = all miss (done). Listen firmware on chip; USB-only gold `docs/baselines/usb-start.md` (done 2026-09-04). Next: plug XT60 while listening (`docs/plans/characterize-hat.md`), then `get`, then nudge one joint. If this fails, BLE will not help.
 2. One text protocol on USB. Reuse it on BLE (wireless serial pipe). Same lines, two transports.
 3. FK after joint numbers match reality.
 4. IK last. Do it on the laptop first. Dual-drive shoulder (IDs 12+13) is easy to get wrong on the chip.
@@ -12,18 +12,18 @@ Boot: bus up → USB log → (later) BLE advertise. **Do not auto-move.** Hold p
 ## USB lines (enough)
 
 ```
+state
+gpio
+info
 ping
 bench
 get
-move 11 2048
-speed 400
-torque 0
-torque 1
+raw 11
 ```
 
-`bench` is the connect-the-board check. Battery off: `docs/baselines/usb-no-battery.md` (`found=0/7`). Battery on later: `found=7/7`, then `get`.
+`state` / heartbeats are the every-start check (`docs/baselines/usb-start.md`). `bench` is the connect-the-board ping: pack off `found=0/7` (`usb-no-battery.md`). Pack on later: `found=7/7`, then `get`. `get` is on the chip (READ only) but not proven on metal until XT60.
 
-`get` dumps every servo: id, pos, speed, load, V, temp, current, moving. That is all the ST3215 reports.
+Do not type `move` / `torque 1` until `get` is trusted.
 
 ## BLE (when USB `get` is trusted)
 

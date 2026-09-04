@@ -67,4 +67,4 @@ ping miss id=11 … 17
 ping none 11-17 — expected if battery is off
 ```
 
-Day narrative: `development-logs/2026-09-03.md`. Flash loop: `docs/espidf.md`.
+Day narrative: `development-logs/2026-09-03.md`. Every-start listen: `usb-start.md`. Flash loop: `docs/framework/espidf.md`.
