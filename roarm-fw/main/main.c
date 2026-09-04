@@ -27,6 +27,7 @@
 #define REG_TORQUE_EN 40
 #define REG_PRESENT 56
 #define PRESENT_LEN 15 /* pos..current at 69 */
+#define REG_VOLTAGE 62
 
 static int listen_dump = 1;
 static uint32_t bus_rx_total;
@@ -66,6 +67,7 @@ static void print_help(void)
     printf("  pingall  IDs 1-253, hits only\n");
     printf("  raw ID   ping + READ present, dump hex\n");
     printf("  get      pos/speed/load/V/temp/current/moving/torque-en (READ only)\n");
+    printf("  batt     pack V from servo VIN + 3S rest-%% guess (not a fuel gauge)\n");
     printf("  bench    chip + ping 11-17\n");
     printf("  help\n");
 }
@@ -376,6 +378,67 @@ static void cmd_get(void)
     }
 }
 
+/* 3S LiPo rest SoC from pack millivolts. Coarse. Not charging current. */
+static int lipo3s_pct(int mv)
+{
+    static const int t[][2] = {
+        {12600, 100}, {12480, 95}, {12360, 90}, {12210, 80}, {12060, 70},
+        {11910, 60}, {11790, 50}, {11670, 40}, {11550, 30}, {11400, 25},
+        {11310, 20}, {11100, 15}, {10830, 10}, {10500, 5}, {9900, 0},
+    };
+    const int n = (int)(sizeof(t) / sizeof(t[0]));
+    if (mv >= t[0][0]) {
+        return 100;
+    }
+    if (mv <= t[n - 1][0]) {
+        return 0;
+    }
+    for (int i = 1; i < n; i++) {
+        if (mv >= t[i][0]) {
+            int mv0 = t[i][0], p0 = t[i][1];
+            int mv1 = t[i - 1][0], p1 = t[i - 1][1];
+            return p0 + (p1 - p0) * (mv - mv0) / (mv1 - mv0);
+        }
+    }
+    return 0;
+}
+
+static void cmd_batt(void)
+{
+    uint8_t vs[8];
+    int n = 0;
+    printf("batt READ servo VIN (same rail as XT60). 0.1V LSB. no INA219\n");
+    for (int id = ID_FIRST; id <= ID_LAST; id++) {
+        uint8_t v = 0;
+        if (!bus_read(id, REG_VOLTAGE, 1, &v)) {
+            printf("batt id=%d miss\n", id);
+            continue;
+        }
+        vs[n++] = v;
+        printf("batt id=%d v=%.1f\n", id, v / 10.0);
+    }
+    if (n == 0) {
+        printf("batt pack=miss est=? note=servos need XT60\n");
+        return;
+    }
+    for (int i = 0; i < n; i++) {
+        for (int j = i + 1; j < n; j++) {
+            if (vs[j] < vs[i]) {
+                uint8_t tmp = vs[i];
+                vs[i] = vs[j];
+                vs[j] = tmp;
+            }
+        }
+    }
+    int v_raw = vs[n / 2];
+    int mv = v_raw * 100;
+    int pct = lipo3s_pct(mv);
+    const char *lvl = (mv < 10500) ? "cutoff" : (mv < 10800) ? "low" : "ok";
+    printf("batt pack=%.1fV est=%d%% cells=3 n=%d %s\n",
+           v_raw / 10.0, pct, n, lvl);
+    printf("batt note=rest-voltage guess, not a BMS. HAT does not charge XT60; USB is not a charger.\n");
+}
+
 static void print_banner(void)
 {
     uint8_t mac[6];
@@ -450,6 +513,10 @@ static void handle_line(char *line)
     }
     if (strcmp(line, "get") == 0) {
         cmd_get();
+        return;
+    }
+    if (strcmp(line, "batt") == 0) {
+        cmd_batt();
         return;
     }
     if (strncmp(line, "raw ", 4) == 0) {

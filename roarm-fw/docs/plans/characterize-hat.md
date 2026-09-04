@@ -27,6 +27,14 @@ So “listen to all ports” here means: **USB console + raw UART1 RX + ESP32 pr
 - UART switch stays **ESP32** the whole time.
 - One monitor on `/dev/ttyACM0`. Stop extras: `pkill -f esp_idf_monitor`.
 
+USB does **not** hold the motors. Twitch risk is XT60 VIN, with or without USB.
+
+Two supplies at once (USB VBUS + XT60): this HAT is meant to do that (5 V buck can feed the ESP32 with no USB). Hot-plug of the pack **while USB is enumerated** is a different question (ground bounce / VBUS). 2026-09-04: two USB-connected pack clicks and two unplugs — ESP32 did not reset, ACM0 stayed, `tq=0`, no twitch. That is one machine, not a guarantee.
+
+Conservative ops if you do not need to listen: **USB out → pack in/out → USB in**. You go blind during the click. Bring-up listen needs USB in.
+
+Not done yet: pack **on**, then unplug USB (does the chip stay up on VIN?).
+
 ## Firmware (`listen v1`, on the chip)
 
 No ping on boot, no WiFi, no BLE, no motion. USB prints immediately so we know the chip is running. `get` is READ-only (present + torque-enable); do not type it until the XT60 listen window is done.
@@ -136,8 +144,9 @@ USB hello works. GPIO 2 is not an LED. `printf` in a 2 KB task stack-overflows. 
 ## After this experiment
 
 1. USB-only listen baseline — **saved** (`usb-start.md`).
-2. Plug XT60, listen, then `ping` / `get`. Save `usb-battery-on.md`. Still no auto-move.
-3. Then BLE + a simple HTML page for the same lines: `docs/plans/ble-html.md`.
-4. Only then a tiny nudge on one joint.
+2. Plug XT60, listen, `ping` / `get` / `batt` — **saved** (`usb-battery-on.md`). Power cycle too. Still no auto-move.
+3. Next: hand-move, `tq=0`: `docs/plans/hand-move.md`.
+4. Then BLE HTML: `docs/plans/ble-html.md`. VIN-only ESP32 still open.
+5. Only then a tiny commanded nudge on one joint.
 
-Order is unchanged: `docs/plans/usb-then-ble.md`.
+Order: `docs/plans/usb-then-ble.md`.

@@ -54,7 +54,7 @@ Same chain is a gibbon **arm** or **leg**; only names change (`old docs to revie
 | Position | `ReadPos` | 0–4095 (360°) | Command vs actual |
 | Speed | `ReadSpeed` | steps/s | Motion |
 | Load | `ReadLoad` | −1000–1000 | Stall / collision |
-| Voltage | `ReadVoltage` | ÷10 = volts | LiPo cutoff |
+| Voltage | `ReadVoltage` | ÷10 = volts | Pack at that servo (XT60 rail). Type `batt` for median + 3S rest-% guess. **No INA219 / charger on this HAT** |
 | Temp | `ReadTemper` | °C | Overheat |
 | Current | `ReadCurrent` | mA | Draw |
 | Moving | `ReadMove` | 0/1 | Busy |

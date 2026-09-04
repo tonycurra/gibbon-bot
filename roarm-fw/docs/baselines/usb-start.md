@@ -114,12 +114,22 @@ Plug XT60 **after** this page matches. Keep USB. Do not move.
 
 Then, still listen-only at first: heartbeats should continue, `bus_rx` still likely **0** (servos stay quiet until addressed). Then `ping` / `bench` / `get` (READ only).
 
-| After pack is on | Expect (not captured yet) |
-| --- | --- |
-| `bench` | `found=7/7` `guess=usb-battery-on` |
-| `get` | pos, speed, load, V, temp, current, moving, torque-enable for IDs 11–17 |
+Pack-on gold: `usb-battery-on.md` (`found=7/7`, `batt pack=11.4V`).
 
-IDs: 11 base, 12+13 shoulder dual-drive, 14 elbow, 15 wrist pitch, 16 wrist roll, 17 gripper.
+## Unplug XT60, USB stays (2026-09-04)
+
+Chip did **not** reset. Same ACM0. Heartbeats kept going (`bus_rx=0`). Then:
+
+```
+ping none 11-17 — expected if battery is off
+found=0/7
+guess=usb-no-battery
+batt pack=miss est=? note=servos need XT60
+```
+
+Back to this page. USB powers the ESP32; pack only powers the servos.
+
+Repeat 2026-09-04 (USB dead → USB in → pack in → pack out): same. USB replug is `reset=poweron` and `t=` restarts. Pack click with USB up: chip stays, `found=7/7` then `0/7`. Safety note: `docs/plans/characterize-hat.md` (USB does not hold motors; USB-out then pack click is more isolated but you cannot listen).
 
 ## How to re-run
 

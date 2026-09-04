@@ -54,6 +54,7 @@ Type in the monitor, Enter:
 | `pingall` | IDs 1–253, only prints hits |
 | `raw ID` | ping + READ present, dump hex |
 | `get` | READ pos/speed/load/V/temp/current/moving/torque-en. **After** XT60 listen |
+| `batt` | pack V from servo VIN + 3S rest-% guess. Not a BMS. USB does not charge XT60 |
 | `bench` | one-shot baseline: chip + ping 11–17 — compare `docs/baselines/usb-no-battery.md` |
 | `help` | list |
 

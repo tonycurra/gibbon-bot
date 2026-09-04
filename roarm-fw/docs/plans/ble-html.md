@@ -1,6 +1,6 @@
 # BLE HTML: same data, phone/laptop, all power states
 
-After USB listen + `get` (`docs/plans/characterize-hat.md`). Not implemented yet.
+After USB `get` is trusted (`docs/baselines/usb-battery-on.md`). Hand-move next (`docs/plans/hand-move.md`). Not implemented yet.
 
 One **static HTML + JS** page. Chrome **Web Bluetooth**. The chip speaks the **same text lines** as USB (`info`, `bench`, `ping`, `get`, later `raw`). BLE is only a wireless serial pipe (Nordic-UART-style, NimBLE). No WiFi on this WROOM-32 while BLE is on.
 

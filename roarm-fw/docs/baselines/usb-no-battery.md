@@ -48,7 +48,7 @@ guess=usb-no-battery
 
 ## Later: battery on
 
-Same command. Expect `found=7/7` and `guess=usb-battery-on`. That baseline goes in `usb-battery-on.md` when we have it. Then `get` for joint telemetry. No auto-move.
+Same command. Gold 2026-09-04: `found=7/7` `guess=usb-battery-on` plus `get` in `usb-battery-on.md`.
 
 ## Why this, not another USB-only test
 
