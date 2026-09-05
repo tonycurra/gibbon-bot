@@ -1,0 +1,100 @@
+=== open /dev/ttyACM0 ===
+state t=409510 heap=297720 reset=poweron tasks=5 bus_rx=0 dump=1
+state mac=44:1d:64:86:3f:54
+state bus=uart1 gpio18/19 1Mbps rx-only until ping
+tasks:
+main           	X	1	1880	3
+IDLE1          	R	0	1024	5
+IDLE0          	R	0	1028	4
+ipc0           	S	24	504	1
+ipc1           	S	24	496	2
+t=409550 heap=297720 bus_rx=0
+gpio 18(rx)=1 19(tx)=1 (uart1, not remuxed)
+t=411550 heap=297720 bus_rx=0
+=== ping ===
+ping uart1 gpio18/19 1Mbps (UART switch = ESP32)
+ping FOUND id=11
+ping FOUND id=12
+ping FOUND id=13
+ping FOUND id=14
+ping FOUND id=15
+ping FOUND id=16
+ping FOUND id=17
+ping done found=7
+=== batt ===
+batt READ servo VIN (same rail as XT60). 0.1V LSB. no INA219
+batt id=11 v=11.4
+batt id=12 v=11.4
+batt id=13 v=11.4
+batt id=14 v=11.4
+batt id=15 v=11.3
+batt id=16 v=11.3
+batt id=17 v=11.4
+batt pack=11.4V est=25% cells=3 n=7 ok
+batt note=rest-voltage guess, not a BMS. HAT does not charge XT60; USB is not a charger.
+t=413560 heap=297720 bus_rx=0
+=== get rest ===
+id=11 turn         pos=1122 speed=0 load=0 v=11.5 temp=28 cur=0 moving=0 tq=0
+id=12 raise-A      pos=3109 speed=0 load=0 v=11.4 temp=31 cur=0 moving=0 tq=0
+id=13 raise-B      pos= 983 speed=0 load=0 v=11.4 temp=32 cur=0 moving=0 tq=0
+id=14 bend         pos=1335 speed=0 load=0 v=11.4 temp=30 cur=0 moving=0 tq=0
+id=15 wrist        pos=1221 speed=0 load=0 v=11.3 temp=31 cur=0 moving=0 tq=0
+id=16 twist        pos=3001 speed=-450 load=0 v=11.3 temp=31 cur=0 moving=0 tq=0
+id=17 hand         pos=2088 speed=0 load=0 v=11.4 temp=34 cur=0 moving=0 tq=0
+=== watching get every ~1.2s — move joints by hand ===
+t=   0.9s id=16 twist        pos=2534 Δ-467 speed=-300
+t=   2.2s id=16 twist        pos=2259 Δ-275 speed=-250
+t=   3.4s id=15 wrist        pos=1218 Δ-3 | id=16 twist        pos=2051 Δ-208 speed=-200
+t=   4.6s id=11 turn         pos=1122 Δ+0 cur=1 | id=16 twist        pos=1703 Δ-348 speed=-300
+t=   5.9s id=11 turn         pos=1120 Δ-2 | id=16 twist        pos=1399 Δ-304 speed=-100
+t=   7.1s id=16 twist        pos=1041 Δ-358 speed=-350
+t=   8.4s id=15 wrist        pos=1221 Δ+4 | id=16 twist        pos= 539 Δ-502 speed=-300
+t=   9.6s id=16 twist        pos= 426 Δ-113
+t=  10.8s id=16 twist        pos= 258 Δ-168 speed=-700
+t=  12.1s id=16 twist        pos=3803 Δ+3545 speed=-200
+t=  13.3s id=16 twist        pos=3796 Δ-7 speed=50
+t=  14.5s id=16 twist        pos=3798 Δ+2
+t=  19.5s still 11:1119 12:3109 13:983 14:1334 15:1221 16:3798 17:2088
+t=  24.4s id=16 twist        pos=3798 Δ+0 cur=1
+t=  26.9s id=11 turn         pos=1119 Δ+0 cur=1
+t=  29.4s still 11:1119 12:3109 13:983 14:1334 15:1221 16:3797 17:2088
+t=  30.6s id=11 turn         pos=1122 Δ+3 | id=13 raise-B      pos= 981 Δ-2 | id=15 wrist        pos=1217 Δ-4 | id=16 twist        pos=3951 Δ+154 speed=800
+t=  31.8s id=15 wrist        pos=1221 Δ+4 | id=16 twist        pos= 799 Δ-3152 speed=750
+t=  33.1s id=16 twist        pos=1716 Δ+917 speed=850
+t=  34.3s id=16 twist        pos=2509 Δ+793 speed=550 | id=17 hand         pos=2082 Δ-5
+t=  35.5s id=16 twist        pos=3242 Δ+733 speed=650 | id=17 hand         pos=2087 Δ+5 speed=-50
+t=  36.8s id=16 twist        pos=4007 Δ+765 speed=650
+t=  38.0s id=16 twist        pos= 645 Δ-3362 speed=600
+t=  39.3s id=16 twist        pos=1487 Δ+842 speed=900
+t=  40.5s id=16 twist        pos=2292 Δ+805 speed=650
+t=  41.7s id=15 wrist        pos=1219 Δ-3 | id=16 twist        pos=3015 Δ+723 speed=750
+t=  43.0s id=15 wrist        pos=1222 Δ+3 | id=16 twist        pos=3616 Δ+601 speed=850
+t=  44.2s id=16 twist        pos= 361 Δ-3255 speed=600
+t=  45.4s id=16 twist        pos= 463 Δ+102
+t=  46.8s id=16 twist        pos=1112 Δ+649 speed=150
+t=  48.0s id=16 twist        pos=1127 Δ+15 | id=17 hand         pos=2081 Δ-5
+t=  49.3s still 11:1123 12:3109 13:982 14:1334 15:1222 16:1127 17:2081
+t=  58.1s id=17 hand         pos=2081 Δ+0 cur=1
+t=  59.3s still 11:1123 12:3109 13:982 14:1334 15:1222 16:1127 17:2081
+t=  69.4s id=11 turn         pos=1123 Δ+0 cur=1
+t=  76.8s id=16 twist        pos=1123 Δ-4 | id=17 hand         pos=2089 Δ+8
+t=  79.2s still 11:1123 12:3109 13:982 14:1334 15:1222 16:1125 17:2088
+t=  83.0s id=17 hand         pos=2083 Δ-5
+t=  84.2s id=17 hand         pos=2088 Δ+5
+t=  86.7s id=16 twist        pos= 916 Δ-207 speed=-900
+t=  87.9s id=15 wrist        pos=1218 Δ-3 | id=16 twist        pos= 255 Δ-661 speed=-650
+t=  89.2s id=15 wrist        pos=1221 Δ+3 | id=16 twist        pos=3579 Δ+3324 speed=-600
+t=  90.4s id=16 twist        pos=2984 Δ-595 speed=-400
+t=  91.6s id=11 turn         pos=1119 Δ-4 | id=16 twist        pos=2196 Δ-788 speed=-550
+t=  92.8s id=16 twist        pos=1935 Δ-261 | id=17 hand         pos=2088 Δ-2
+t=  94.1s id=16 twist        pos=1937 Δ+2
+t=  95.3s id=16 twist        pos=1945 Δ+8 | id=17 hand         pos=2086 Δ-2
+t=  96.5s id=11 turn         pos=1121 Δ+2 | id=16 twist        pos=2993 Δ+1048 speed=800 | id=17 hand         pos=2083 Δ-3 speed=-50
+t=  97.8s id=16 twist        pos=3106 Δ+113 | id=17 hand         pos=2001 Δ-82 speed=-550
+t=  99.0s id=15 wrist        pos=1217 Δ-5 | id=17 hand         pos=1856 Δ-145
+t= 100.3s id=15 wrist        pos=1222 Δ+5 | id=16 twist        pos=3290 Δ+184 speed=850 | id=17 hand         pos=1864 Δ+8
+t= 101.5s id=15 wrist        pos=1221 Δ-1 speed=50 | id=16 twist        pos=4019 Δ+729 cur=1 | id=17 hand         pos=1859 Δ-5
+t= 102.7s id=11 turn         pos=1120 Δ-2 | id=16 twist        pos=3276 Δ-743 speed=-600
+t= 104.0s id=16 twist        pos=3022 Δ-254 | id=17 hand         pos=1864 Δ+5
+t= 105.2s id=16 twist        pos=1987 Δ-1035 speed=-2600
+t= 106.4s id=16 twist        pos=1007 Δ-980 speed=50 | id=17 hand         pos=1856 Δ-9

@@ -25,8 +25,11 @@
 #define INST_PING 1
 #define INST_READ 2
 #define INST_WRITE 3
+#define REG_MODE 33
 #define REG_TORQUE_EN 40
 #define REG_ACC 41
+#define REG_GOAL_SPEED 46
+#define REG_LOCK 55
 #define REG_PRESENT 56
 #define PRESENT_LEN 15 /* pos..current at 69 */
 #define REG_VOLTAGE 62
@@ -36,7 +39,26 @@
 #define HAND_TO_MAX 2075 /* inside wall 2088 — contact probe, not the wall */
 #define HAND_SPEED 300
 #define HAND_ACC 20
+#define TWIST_ID 16
+#define TWIST_MIN 0
+#define TWIST_MAX 4095
+#define TWIST_CENTER 4050 /* wrap-seam home; 4050 and ~50 are the same neighborhood */
+#define TWIST_STEP_MAX 900 /* host walks a full turn in small hops; refuse a long hop */
 #define V_CUTOFF 105 /* 10.5 V, 0.1 V LSB */
+#define GUARD_DLOAD 100 /* |load| above moving cruise — cable tighten */
+#define GUARD_LOAD 1350 /* hard |load|; plus-bias cruise is ~1100–1200 */
+#define GUARD_CUR 80 /* |mA|; free move was 0–9, stall is amps */
+#define GUARD_MISS 3 /* bus miss while pushing → cut */
+
+typedef struct {
+    int pos;
+    int speed;
+    int load;
+    int v_raw;
+    int temp;
+    int moving;
+    int cur;
+} present_t;
 
 static int listen_dump = 1;
 static uint32_t bus_rx_total;
@@ -44,6 +66,14 @@ static uint8_t acc[64];
 static int acc_n;
 static TickType_t acc_last;
 static TickType_t last_beat;
+static int last_pos[ID_LAST + 1];
+static int wrap_turns[ID_LAST + 1];
+static uint8_t pos_seen[ID_LAST + 1];
+static int twist_guard_on;
+static int twist_cruise_n;
+static int twist_cruise_load;
+static int twist_miss;
+static TickType_t twist_guard_last;
 
 static unsigned long now_ms(void)
 {
@@ -75,13 +105,23 @@ static void print_help(void)
     printf("  ping     IDs 11-17 (read-only ping, still no move)\n");
     printf("  pingall  IDs 1-253, hits only\n");
     printf("  raw ID   ping + READ present, dump hex\n");
-    printf("  get      pos/speed/load/V/temp/current/moving/torque-en (READ only)\n");
+    printf("  get      pos/speed/load/V/temp/current/moving/torque-en + un/turns (READ)\n");
+    printf("  get N    same, one ID (16 = twist). faster than full get while moving\n");
+    printf("  estop    cut twist speed + torque (bus miss / bind)\n");
     printf("  batt     pack V from servo VIN + 3S rest-%% guess (not a fuel gauge)\n");
     printf("  bench    chip + ping 11-17\n");
     printf("  hand open   ID 17 to %d (soft open). slow. no other ID\n", HAND_OPEN);
     printf("  hand close  ID 17 to %d (soft close). slow. no other ID\n", HAND_CLOSE);
     printf("  hand to N   ID 17 to N, clamped %d-%d (wall 2088)\n", HAND_OPEN, HAND_TO_MAX);
     printf("  hand free   ID 17 torque off\n");
+    printf("  twist to N  ID 16 to N, 0-4095, max hop %d (walk wraps)\n",
+           TWIST_STEP_MAX);
+    printf("  twist mid   ID 16 to %d (wrap-seam home, not unique)\n", TWIST_CENTER);
+    printf("  twist free  ID 16 torque off\n");
+    printf("  twist here  declare current pos as cable-home (host still saves un)\n");
+    printf("  twist servo / wheel  mode 0 or 1 (EEPROM — always put back to servo)\n");
+    printf("  twist speed N  wheel jog, signed. 0=stop. then twist servo\n");
+    printf("  twist estop    same as estop\n");
     printf("  help\n");
 }
 
@@ -251,52 +291,170 @@ static int bus_write(int id, uint8_t addr, const uint8_t *data, int n)
     return rn >= 6 && rx[0] == 0xFF && rx[1] == 0xFF;
 }
 
-static void cmd_hand(const char *what)
+static void joint_free(int id, const char *name)
 {
-    if (strcmp(what, "free") == 0) {
-        uint8_t tq = 0;
-        if (!bus_write(HAND_ID, REG_TORQUE_EN, &tq, 1)) {
-            printf("hand free miss\n");
+    uint8_t tq = 0;
+    if (!bus_write(id, REG_TORQUE_EN, &tq, 1)) {
+        printf("%s free miss\n", name);
+        return;
+    }
+    printf("%s free tq=0 id=%d\n", name, id);
+}
+
+static int read_pos(int id)
+{
+    uint8_t d[2];
+    if (!bus_read(id, REG_PRESENT, 2, d)) {
+        return -1;
+    }
+    return sts_s15((uint16_t)(d[0] | (d[1] << 8)));
+}
+
+static int twist_set_mode(uint8_t mode);
+
+static int read_present(int id, present_t *p)
+{
+    uint8_t d[PRESENT_LEN];
+    if (!bus_read(id, REG_PRESENT, PRESENT_LEN, d)) {
+        return 0;
+    }
+    p->pos = sts_s15((uint16_t)(d[0] | (d[1] << 8)));
+    p->speed = sts_s15((uint16_t)(d[2] | (d[3] << 8)));
+    p->load = sts_s15((uint16_t)(d[4] | (d[5] << 8)));
+    p->v_raw = d[6];
+    p->temp = d[7];
+    p->moving = d[10];
+    p->cur = sts_s15((uint16_t)(d[13] | (d[14] << 8)));
+    return 1;
+}
+
+static void twist_guard_stop(void)
+{
+    twist_guard_on = 0;
+    twist_cruise_n = 0;
+    twist_cruise_load = 0;
+    twist_miss = 0;
+}
+
+static void twist_cut(const char *why, int load, int cur, int pos)
+{
+    uint8_t z[2] = { 0, 0 };
+    uint8_t tq0 = 0;
+    bus_write(TWIST_ID, REG_GOAL_SPEED, z, 2);
+    bus_write(TWIST_ID, REG_TORQUE_EN, &tq0, 1);
+    twist_set_mode(0);
+    bus_write(TWIST_ID, REG_TORQUE_EN, &tq0, 1);
+    twist_guard_stop();
+    printf("ESTOP twist %s load=%d cur=%d pos=%d tq=0 servo\n",
+           why, load, cur, pos);
+}
+
+static void twist_guard_start(void)
+{
+    twist_cruise_n = 0;
+    twist_cruise_load = 0;
+    twist_miss = 0;
+    twist_guard_last = 0;
+    twist_guard_on = 1;
+}
+
+static void twist_guard_tick(void)
+{
+    present_t p;
+    TickType_t t;
+
+    if (!twist_guard_on) {
+        return;
+    }
+    t = xTaskGetTickCount();
+    if (twist_guard_last != 0 &&
+        (t - twist_guard_last) < pdMS_TO_TICKS(25)) {
+        return;
+    }
+    twist_guard_last = t;
+    if (!read_present(TWIST_ID, &p)) {
+        twist_miss++;
+        if (twist_miss >= GUARD_MISS) {
+            twist_cut("bus-miss", 0, 0, -1);
+        }
+        return;
+    }
+    twist_miss = 0;
+    if (p.speed > 40 || p.speed < -40) {
+        if (twist_cruise_n < 4) {
+            int al = p.load < 0 ? -p.load : p.load;
+            twist_cruise_load = (twist_cruise_load * twist_cruise_n + al) /
+                                (twist_cruise_n + 1);
+            twist_cruise_n++;
             return;
         }
-        printf("hand free tq=0 id=%d\n", HAND_ID);
-        return;
     }
+    {
+        int al = p.load < 0 ? -p.load : p.load;
+        int ac = p.cur < 0 ? -p.cur : p.cur;
+        if (twist_cruise_n >= 4 && al - twist_cruise_load >= GUARD_DLOAD) {
+            twist_cut("dload", p.load, p.cur, p.pos);
+            return;
+        }
+        if (al >= GUARD_LOAD) {
+            twist_cut("load", p.load, p.cur, p.pos);
+            return;
+        }
+        if (ac >= GUARD_CUR) {
+            twist_cut("cur", p.load, p.cur, p.pos);
+            return;
+        }
+    }
+}
 
-    int goal;
-    const char *tag = what;
-    int hi = HAND_CLOSE;
-    if (strcmp(what, "open") == 0) {
-        goal = HAND_OPEN;
-    } else if (strcmp(what, "close") == 0) {
-        goal = HAND_CLOSE;
-    } else if (strncmp(what, "to ", 3) == 0) {
-        goal = atoi(what + 3);
-        tag = "to";
-        hi = HAND_TO_MAX;
-    } else {
-        printf("err hand open|close|to N|free\n");
-        return;
+static int unwrap_pos(int id, int pos)
+{
+    if (pos_seen[id]) {
+        int d = pos - last_pos[id];
+        if (d > 2048) {
+            wrap_turns[id]--;
+        } else if (d < -2048) {
+            wrap_turns[id]++;
+        }
     }
-    if (goal < HAND_OPEN) {
-        goal = HAND_OPEN;
+    pos_seen[id] = 1;
+    last_pos[id] = pos;
+    return pos + wrap_turns[id] * 4096;
+}
+
+static void joint_to(int id, int goal, int lo, int hi, const char *name)
+{
+    if (goal < lo) {
+        goal = lo;
     }
     if (goal > hi) {
         goal = hi;
     }
-
+    int cur = read_pos(id);
+    if (cur < 0) {
+        printf("%s abort no pos id=%d\n", name, id);
+        return;
+    }
+    unwrap_pos(id, cur);
+    if (id == TWIST_ID) {
+        /* WritePos is linear 0-4095, not shortest-arc. Use raw delta. */
+        int d = goal - cur;
+        if (d > TWIST_STEP_MAX || d < -TWIST_STEP_MAX) {
+            printf("%s abort hop %d cur=%d goal=%d max=%d\n",
+                   name, d, cur, goal, TWIST_STEP_MAX);
+            return;
+        }
+    }
     uint8_t v = 0;
-    if (!bus_read(HAND_ID, REG_VOLTAGE, 1, &v) || v < V_CUTOFF) {
-        printf("hand abort pack v_raw=%d need>=%d\n", v, V_CUTOFF);
+    if (!bus_read(id, REG_VOLTAGE, 1, &v) || v < V_CUTOFF) {
+        printf("%s abort pack v_raw=%d need>=%d\n", name, v, V_CUTOFF);
         return;
     }
-
     uint8_t tq = 1;
-    if (!bus_write(HAND_ID, REG_TORQUE_EN, &tq, 1)) {
-        printf("hand torque miss\n");
+    if (!bus_write(id, REG_TORQUE_EN, &tq, 1)) {
+        printf("%s torque miss\n", name);
         return;
     }
-
     uint8_t buf[7];
     buf[0] = HAND_ACC;
     buf[1] = (uint8_t)(goal & 0xFF);
@@ -305,12 +463,149 @@ static void cmd_hand(const char *what)
     buf[4] = 0;
     buf[5] = (uint8_t)(HAND_SPEED & 0xFF);
     buf[6] = (uint8_t)((HAND_SPEED >> 8) & 0xFF);
-    if (!bus_write(HAND_ID, REG_ACC, buf, 7)) {
-        printf("hand write miss goal=%d\n", goal);
+    if (!bus_write(id, REG_ACC, buf, 7)) {
+        printf("%s write miss goal=%d\n", name, goal);
         return;
     }
-    printf("hand %s id=%d goal=%d speed=%d acc=%d tq=1 walls=609/2088\n",
-           tag, HAND_ID, goal, HAND_SPEED, HAND_ACC);
+    printf("%s to id=%d goal=%d speed=%d clamp=%d-%d tq=1\n",
+           name, id, goal, HAND_SPEED, lo, hi);
+}
+
+static void cmd_hand(const char *what)
+{
+    if (strcmp(what, "free") == 0) {
+        joint_free(HAND_ID, "hand");
+        return;
+    }
+    int goal;
+    int hi = HAND_CLOSE;
+    if (strcmp(what, "open") == 0) {
+        goal = HAND_OPEN;
+    } else if (strcmp(what, "close") == 0) {
+        goal = HAND_CLOSE;
+    } else if (strncmp(what, "to ", 3) == 0) {
+        goal = atoi(what + 3);
+        hi = HAND_TO_MAX;
+    } else {
+        printf("err hand open|close|to N|free\n");
+        return;
+    }
+    joint_to(HAND_ID, goal, HAND_OPEN, hi, "hand");
+}
+
+static int twist_read_mode(void)
+{
+    uint8_t m = 0;
+    if (!bus_read(TWIST_ID, REG_MODE, 1, &m)) {
+        return -1;
+    }
+    return (int)m;
+}
+
+static int twist_set_mode(uint8_t mode)
+{
+    uint8_t tq = 0, unlock = 0, lock = 1;
+    if (!bus_write(TWIST_ID, REG_TORQUE_EN, &tq, 1)) {
+        return 0;
+    }
+    if (!bus_write(TWIST_ID, REG_LOCK, &unlock, 1)) {
+        return 0;
+    }
+    if (!bus_write(TWIST_ID, REG_MODE, &mode, 1)) {
+        bus_write(TWIST_ID, REG_LOCK, &lock, 1);
+        return 0;
+    }
+    bus_write(TWIST_ID, REG_LOCK, &lock, 1);
+    return 1;
+}
+
+static void twist_write_speed(int speed)
+{
+    uint16_t u = (uint16_t)(speed < 0 ? -speed : speed);
+    if (u > 1500) {
+        u = 1500;
+    }
+    if (speed < 0) {
+        u |= 0x8000;
+    }
+    uint8_t buf[2] = { (uint8_t)(u & 0xFF), (uint8_t)(u >> 8) };
+    uint8_t tq = 1;
+    bus_write(TWIST_ID, REG_TORQUE_EN, &tq, 1);
+    if (!bus_write(TWIST_ID, REG_GOAL_SPEED, buf, 2)) {
+        printf("twist speed miss\n");
+        return;
+    }
+    printf("twist speed=%d tq=1\n", speed);
+    if (speed == 0) {
+        twist_guard_stop();
+    } else {
+        twist_guard_start();
+    }
+}
+
+static void cmd_twist(const char *what)
+{
+    if (strcmp(what, "estop") == 0) {
+        twist_cut("cmd", 0, 0, read_pos(TWIST_ID));
+        return;
+    }
+    if (strcmp(what, "free") == 0) {
+        twist_guard_stop();
+        int mode = twist_read_mode();
+        if (mode == 1) {
+            twist_write_speed(0);
+            twist_set_mode(0);
+            printf("twist free restored servo mode\n");
+        }
+        joint_free(TWIST_ID, "twist");
+        return;
+    }
+    if (strcmp(what, "here") == 0) {
+        int pos = read_pos(TWIST_ID);
+        printf("twist here pos=%d — host: this is cable-home turns=0. pack-off is stale\n", pos);
+        return;
+    }
+    if (strcmp(what, "servo") == 0) {
+        twist_guard_stop();
+        twist_write_speed(0);
+        if (!twist_set_mode(0)) {
+            printf("twist servo miss\n");
+            return;
+        }
+        printf("twist mode=0 servo\n");
+        return;
+    }
+    if (strcmp(what, "wheel") == 0) {
+        if (!twist_set_mode(1)) {
+            printf("twist wheel miss\n");
+            return;
+        }
+        printf("twist mode=1 wheel — jog with twist speed N, then twist servo\n");
+        return;
+    }
+    if (strncmp(what, "speed ", 6) == 0) {
+        int mode = twist_read_mode();
+        if (mode != 1) {
+            printf("twist speed abort mode=%d need wheel\n", mode);
+            return;
+        }
+        twist_write_speed(atoi(what + 6));
+        return;
+    }
+    int goal;
+    if (strcmp(what, "mid") == 0) {
+        goal = TWIST_CENTER;
+    } else if (strncmp(what, "to ", 3) == 0) {
+        goal = atoi(what + 3);
+    } else {
+        printf("err twist to N|mid|free|here|servo|wheel|speed N|estop\n");
+        return;
+    }
+    if (twist_read_mode() != 0) {
+        printf("twist abort not servo — twist servo first\n");
+        return;
+    }
+    joint_to(TWIST_ID, goal, TWIST_MIN, TWIST_MAX, "twist");
 }
 
 static void cmd_info(void)
@@ -444,28 +739,49 @@ static void cmd_raw(int id)
     printf("\n");
 }
 
+static void print_get_id(int id)
+{
+    uint8_t d[PRESENT_LEN];
+    uint8_t tq = 0;
+    if (!bus_read(id, REG_PRESENT, PRESENT_LEN, d)) {
+        printf("get id=%d miss\n", id);
+        return;
+    }
+    int pos = sts_s15((uint16_t)(d[0] | (d[1] << 8)));
+    int speed = sts_s15((uint16_t)(d[2] | (d[3] << 8)));
+    int load = sts_s15((uint16_t)(d[4] | (d[5] << 8)));
+    int v_raw = d[6];
+    int temp = d[7];
+    int moving = d[10];
+    int current = sts_s15((uint16_t)(d[13] | (d[14] << 8)));
+    int tq_ok = bus_read(id, REG_TORQUE_EN, 1, &tq);
+    int un = unwrap_pos(id, pos);
+    if (load > 400 || load < -400) {
+        printf("get LOAD id=%d load=%d pos=%d un=%d\n", id, load, pos, un);
+    }
+    printf("get id=%d pos=%d speed=%d load=%d v_raw=%d v=%.1f temp=%d cur=%d moving=%d tq=%s un=%d turns=%d\n",
+           id, pos, speed, load, v_raw, v_raw / 10.0, temp, current, moving,
+           tq_ok ? (tq ? "1" : "0") : "?", un, wrap_turns[id]);
+}
+
 static void cmd_get(void)
 {
-    printf("get present+torque-en. hand open/close is the only write\n");
+    printf("get present+torque-en. writes: hand, twist (clamped)\n");
+    twist_guard_tick();
     for (int id = ID_FIRST; id <= ID_LAST; id++) {
-        uint8_t d[PRESENT_LEN];
-        uint8_t tq = 0;
-        if (!bus_read(id, REG_PRESENT, PRESENT_LEN, d)) {
-            printf("get id=%d miss\n", id);
-            continue;
-        }
-        int pos = sts_s15((uint16_t)(d[0] | (d[1] << 8)));
-        int speed = sts_s15((uint16_t)(d[2] | (d[3] << 8)));
-        int load = sts_s15((uint16_t)(d[4] | (d[5] << 8)));
-        int v_raw = d[6];
-        int temp = d[7];
-        int moving = d[10];
-        int current = sts_s15((uint16_t)(d[13] | (d[14] << 8)));
-        int tq_ok = bus_read(id, REG_TORQUE_EN, 1, &tq);
-        printf("get id=%d pos=%d speed=%d load=%d v_raw=%d v=%.1f temp=%d cur=%d moving=%d tq=%s\n",
-               id, pos, speed, load, v_raw, v_raw / 10.0, temp, current, moving,
-               tq_ok ? (tq ? "1" : "0") : "?");
+        print_get_id(id);
+        twist_guard_tick();
     }
+}
+
+static void cmd_get_one(int id)
+{
+    if (id < 1 || id > 253) {
+        printf("err get id 1-253\n");
+        return;
+    }
+    twist_guard_tick();
+    print_get_id(id);
 }
 
 /* 3S LiPo rest SoC from pack millivolts. Coarse. Not charging current. */
@@ -539,7 +855,7 @@ static void print_banner(void)
     printf("reset=%s\n", reset_str(esp_reset_reason()));
     printf("tasks=%u\n", (unsigned)uxTaskGetNumberOfTasks());
     printf("bus=uart1 gpio18/19 1Mbps rx-only until ping\n");
-    printf("note=no auto-move. hand open/close only, soft 689-2008.\n");
+    printf("note=no auto-move. hand 689-2075. twist 0-4095 hop<=900.\n");
 }
 
 static void heartbeat(void)
@@ -605,6 +921,14 @@ static void handle_line(char *line)
         cmd_get();
         return;
     }
+    if (strncmp(line, "get ", 4) == 0) {
+        cmd_get_one(atoi(line + 4));
+        return;
+    }
+    if (strcmp(line, "estop") == 0) {
+        twist_cut("cmd", 0, 0, read_pos(TWIST_ID));
+        return;
+    }
     if (strcmp(line, "batt") == 0) {
         cmd_batt();
         return;
@@ -615,6 +939,10 @@ static void handle_line(char *line)
     }
     if (strncmp(line, "hand ", 5) == 0) {
         cmd_hand(line + 5);
+        return;
+    }
+    if (strncmp(line, "twist ", 6) == 0) {
+        cmd_twist(line + 6);
         return;
     }
 
@@ -646,6 +974,7 @@ void app_main(void)
     for (;;) {
         bus_eat(1);
         heartbeat();
+        twist_guard_tick();
 
         uint8_t ch;
         int n = uart_read_bytes(USB_UART, &ch, 1, pdMS_TO_TICKS(20));

@@ -68,5 +68,5 @@ No IMU on the servos.
 
 - Slow default speed.
 - Voltage &lt; 10.5 V → torque off IDs 11–17.
-- High \|load\| → stop that move.
+- High \|load\| / `Δload` / `cur` / bus miss → cut that move. Twist wheel guard is **in source, not flashed yet** (`ESTOP`). `docs/hardware/motors/sensors.md`.
 - Stock INIT homes are not all-zero (elbow ~π/2, gripper display ~π). Do not slam to sim zero.

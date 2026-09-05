@@ -1,50 +1,49 @@
 # Motor data (raw)
 
-Each joint is one Feetech ST32xx bus servo. The **only** joint sensor is the **magnetic encoder inside that motor**. The HAT has no extra encoder, IMU, or current chip.
+There is **no environment sensor**. No IMU, no force/torque cell, no hall on the loom, no HAT current chip. The only sensors are **inside each Feetech ST32xx**. If we do not READ them while `tq=1`, we are blind and the motor keeps pushing.
 
-Type `get` (USB, XT60 on). Same fields on IDs **11–17**. Servos stay silent until we READ them.
+Type `get` or `get 16` (USB, XT60 on). Same present block on IDs **11–17**. Servos stay silent until we READ them.
 
 ```
-get id=11 pos=1131 speed=0 load=0 v_raw=115 v=11.5 temp=25 cur=0 moving=0 tq=0
+get id=16 pos=4068 speed=0 load=0 v_raw=113 v=11.3 temp=32 cur=0 moving=0 tq=0
 ```
 
-## Sensors (live inside the servo)
+## What is actually in the motor (ST3215 / ST3235)
 
-| Field | What it is | Raw | Scale |
+Wiki “feedback”: **Position, Load, Speed, Input Voltage**. Firmware also reads **temperature** and **current** from the same present block (addr 56, 15 bytes).
+
+| Field | Hardware | What it means | When it is useful |
 | --- | --- | --- | --- |
-| `pos` | Magnetic encoder, output horn | 0–4095 | 12-bit, 360°. Mid ≈ 2048. ~0.088°/count |
-| `speed` | Encoder rate, computed in the servo | signed | steps/s. 0 when sitting |
-| `v_raw` / `v` | VIN at **this** servo (XT60 rail) | 0.1 V LSB | `v = v_raw / 10`. Pack voltage, not USB |
-| `temp` | Internal temperature | °C | Overheat watch |
-| `cur` | Motor current | signed mA | 0 at rest with torque off is normal |
-| `load` | Control effort / strain, **not** a torque cell | signed, often ±1000 | **0** with `tq=0`. With `tq=1` this is the contact / squeeze signal |
-| `cur` | Motor current | signed mA | Also rises on stall. Use with `load` |
+| `pos` | 12-bit **magnetic encoder** on the output horn | 0–4095 = one turn of the magnet. **Wraps.** Not cable turns | Hand-move walls. Host `un` for twist |
+| `speed` | Derived from that encoder | signed steps/s | Moving vs stall (pos not advancing) |
+| `load` | **Controller effort**, not a torque transducer | signed, often ±1000. PWM / strain the inner PID is applying | **Bind / taut cable / contact** while `tq=1` |
+| `cur` | Servo **winding current** estimate | signed mA. Wiki stall **2.5–2.7 A**. Our free moves were **0–9** | Stall / hard fight. Use with `load` |
+| `v` / `v_raw` | VIN at **this** servo | 0.1 V LSB. Pack rail, not USB | Brownout / cutoff 10.5 V |
+| `temp` | Case / driver temperature | °C | Slow fuse. Not a cable sensor |
 
-`pos` is the one you watch when you turn a joint by hand. Hand-move gold (USB + pack): `docs/baselines/hand-move-usb-battery-on.md`. Host loop: `scripts/watch-hand.py`.
+`load` **is the torque proxy we have**. It is **always 0 with `tq=0`**. Turning by hand does not show a tight cable. A **rise while moving** (`Δload`) is the stop — not a fixed 1600.
 
-## Flags (not sensors)
+Flags (not sensors): `moving` 0/1, `tq` 0/1.
 
-| Field | What it is |
+## What is not on this arm
+
+No IMU. No joint torque cell. No gripper force. No loom hall. No HAT INA219. No ambient / “environment” pack. USB-only (pack off): `get` is all `miss` — the magnet is unpowered.
+
+`batt` is the same VIN bytes as `v`, then a 3S rest-% guess. Not a BMS.
+
+## Listen rules (safety)
+
+Chip must poll ID 16 **while it is pushing** (`twist speed N ≠ 0`), not only when the laptop types `get`. Cut on:
+
+| Signal | Cut |
 | --- | --- |
-| `moving` | 0/1 — servo thinks it is executing a move |
-| `tq` | Torque enable register. **Must stay 0** on this listen firmware. `1` = holding. Unplug XT60 |
+| `Δload` | `\|load\|` ≥ cruise + **100** (this sitting: cruise ~1137, hit started ~1220–1300) |
+| `load` hard | `\|load\|` ≥ **1350** |
+| `cur` | `\|cur\|` ≥ **80** mA (free was ~0–9) |
+| bus miss | **3** failed present reads → `ESTOP` (speed 0, `tq=0`, servo). This is what failed 2026-09-05: host `get` miss, wheel kept spinning |
 
-## Same data, seven motors
+Commands: `estop` / `twist estop`. `get 16` while moving (full `get` of 7 IDs is slow and can starve the bus).
 
-| ID | Joint | Motor |
-| --- | --- | --- |
-| 11 | Base | ST3235 |
-| 12 | Shoulder A | ST3235 |
-| 13 | Shoulder B (dual-drive with 12) | ST3235 |
-| 14 | Elbow | ST3235 |
-| 15 | Wrist pitch | ST3235 |
-| 16 | Wrist roll | ST3215 |
-| 17 | Gripper | ST3215HS |
+Host `live.py` is backup only. **Chip owns the cut.** Do not command twist until this firmware is flashed.
 
-All seven share the same present-register block. Dual-drive shoulder: move one horn, **12 and 13** both change, often opposite sign.
-
-## Not on this arm
-
-No IMU. No joint torque/force cell. No gripper force. No HAT INA219 (pack V is the servo VIN reads). No motor serial number. USB-only (pack off): `get` is all `miss` — encoders are unpowered.
-
-`batt` is the same VIN bytes as `v`, then a median + 3S rest-% guess. Not a BMS.
+Write-up of the failed check: `docs/baselines/twist.md`. Control plan: `docs/plans/control.md`.

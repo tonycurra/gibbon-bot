@@ -10,7 +10,7 @@ Bus IDs stay 11–17 in firmware. We talk in these words. Direction vs `pos` (+/
 | **raise** / **lower** | shoulder | **12+13** | ST3235 ×2 | shoulder-A/B, S U / S D |
 | **bend** / **straighten** | elbow | 14 | ST3235 | E U / E D |
 | **wrist up** / **wrist down** | wrist pitch (nod) | 15 | ST3235 | wrist 1, W+ / W− |
-| **twist** clockwise / counterclockwise | wrist roll | 16 | ST3215 | wrist 2, rotate hand, R+ / R− |
+| **twist** clockwise / counterclockwise | wrist roll | 16 | ST3215 | Slack mid **4068**. Your CW − to **978**. CCW + to `un` **7126**. `docs/baselines/twist.md` |
 | **open hand** / **close hand** | gripper | 17 | ST3215HS | gripper. Open − to **609** (cable wall). Close + to **2088**. Gold: `docs/baselines/hand-open-close.md` |
 
 **Raise is one joint.** Two motors, one horn pair. Move the upper arm, not one servo by itself.
@@ -41,4 +41,4 @@ hand     17
 
 ## Next
 
-Twist. Table: `docs/plans/joint-limits.md`. Pile: `docs/plans/now.md`.
+Flash chip `ESTOP` before any more twist command. Then wrist up / down. Sitting: `docs/baselines/twist-sitting-2026-09-05.md`. Table: `docs/plans/joint-limits.md`.

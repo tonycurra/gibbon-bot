@@ -15,8 +15,8 @@ Software max/min = that pose **minus a margin** (start at ~80 counts / ~7°). Ne
 ## Order (distal first — less mass, easier to hold)
 
 1. **open hand** / **close hand** (17) — **done**
-2. **twist** clockwise / counterclockwise (16) — watch for 0/4095 wrap.
-3. **wrist up** / **wrist down** (15)
+2. **twist** (16) — walls known (you). Slack mid **4068**. Soft `un` ~1058–7046. `docs/baselines/twist.md`. Sitting trials/errors: `docs/baselines/twist-sitting-2026-09-05.md`. **No command until chip ESTOP is flashed.**
+3. **wrist up** / **wrist down** (15) — first link-vs-link joint. Config hits: `docs/plans/collision.md`.
 4. **bend** / **straighten** (14)
 5. **raise** / **lower** (12+13) — one motion, both IDs. Do not force.
 6. **turn** left / right (11) — wrap possible.
@@ -33,8 +33,8 @@ Table (empty until we run it):
 | --- | --- | --- | --- | --- | --- |
 | open hand | 17 | **609** | − | **cable/collide wall.** Do not go below (569 was past it) | ≥ 689 |
 | close hand | 17 | **2088** (×4) | + | jaws meet; never above | ≤ 2008 |
-| twist CW | 16 | | | | |
-| twist CCW | 16 | | | | |
+| twist clockwise (you) | 16 | **978** | − | from slack mid **4068**, no wrap, ≈269° | ≥ 1058 |
+| twist counterclockwise (you) | 16 | **3030** (`un` **7126**, +1 wrap) | + | from slack mid **4068**, ≈271° | `un` ≤ 7046 |
 | wrist up | 15 | | | | |
 | wrist down | 15 | | | | |
 | bend | 14 | | | | |
@@ -46,6 +46,6 @@ Table (empty until we run it):
 
 ## How
 
-Same as hand-move: pack on, `tq=0`, `python3 scripts/watch-hand.py`.
+Pack on. **One process:** `python3 scripts/live.py` (listen + type). Walls: `tq=0`, you move, say the word. After a wall exists: `python3 scripts/live.py --check twist` (or later `--check` for that joint). Catalog: `docs/software.md`.
 
-If `tq=1`, unplug XT60.
+If `tq=1` and we did not ask, or the bus goes `get` miss while moving: unplug XT60.

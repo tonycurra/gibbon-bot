@@ -4,7 +4,7 @@ This is a modified Waveshare RoArm-M3 Pro (Tony: XT60 battery for portable use) 
 **Every USB start (pack off):** `docs/baselines/usb-start.md`  
 Stop monitor: second terminal `pkill -f esp_idf_monitor`
 
-Firmware: native **ESP-IDF**. No move on boot. READ `get` / `ping` / `batt`. The only write is **hand** (ID 17), clamped. USB first, BLE later.
+Firmware: native **ESP-IDF**. No move on boot. READ `get` / `ping` / `batt`. Writes: **hand** (17) and **twist** (16), clamped. Sitting: `scripts/live.py`. Tests: `docs/software.md`. USB first, BLE later.
 
 | | |
 | --- | --- |
@@ -19,10 +19,15 @@ Firmware: native **ESP-IDF**. No move on boot. READ `get` / `ping` / `batt`. The
 | USB no-battery ping gold | `docs/baselines/usb-no-battery.md` |
 | Hand-move (USB + pack, `tq=0`) | `docs/baselines/hand-move-usb-battery-on.md` |
 | Host watch (hand-move) | `scripts/watch-hand.py` |
-| Software (chip + host) | `docs/software.md` |
+| Listen + control (one ACM0) | `scripts/live.py` |
+| Software + test catalog | `docs/software.md` |
+| Twist walls / check | `docs/baselines/twist.md` |
+| Twist sitting 2026-09-05 (trials + errors) | `docs/baselines/twist-sitting-2026-09-05.md` |
 | Where we are (safety / limits / cal) | `docs/plans/now.md` |
+| Motor / arm control (PID, smooth, load-stop) | `docs/plans/control.md` |
 | Hand open/close limits | `docs/baselines/hand-open-close.md` |
 | Next: twist, then other walls | `docs/plans/joint-limits.md` |
+| Collision vs FK / IK (after walls) | `docs/plans/collision.md` |
 | Then: BLE HTML dashboard | `docs/plans/ble-html.md` |
 | HAT swap / wiki | `docs/hardware/hardware.md`, `docs/hardware/SBSD-HAT.md` |
 | USB then BLE | `docs/plans/usb-then-ble.md` |

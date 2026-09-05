@@ -35,7 +35,7 @@ Edit → `pkill -f esp_idf_monitor` → same start commands.
 
 ## Now on the chip
 
-No auto-move. `hand open` / `close` / `to N` / `free` is the only write (ID 17). Everything else is READ. Details: `docs/software.md`.
+No auto-move. Writes: **hand** (17) and **twist** (16). Twist wheel guard (`ESTOP`) is in source — flash before commanding twist. Details: `docs/software.md`.
 
 **This HAT has no user LED.** USB still powers the ESP32 with the battery unplugged. Servos do **not** — position / load / voltage come from the motors, so those reads are silence until XT60 is on.
 
