@@ -33,7 +33,9 @@ idf.py -p /dev/ttyACM0 flash monitor
 
 Edit → `pkill -f esp_idf_monitor` → same start commands.
 
-## Now on the chip: `listen v1`
+## Now on the chip
+
+No auto-move. `hand open` / `close` / `to N` / `free` is the only write (ID 17). Everything else is READ. Details: `docs/software.md`.
 
 **This HAT has no user LED.** USB still powers the ESP32 with the battery unplugged. Servos do **not** — position / load / voltage come from the motors, so those reads are silence until XT60 is on.
 
@@ -54,6 +56,8 @@ Type in the monitor, Enter:
 | `pingall` | IDs 1–253, only prints hits |
 | `raw ID` | ping + READ present, dump hex |
 | `get` | READ pos/speed/load/V/temp/current/moving/torque-en. **After** XT60 listen |
+| Host `watch-hand.py` | Laptop loops `get` while you backdrive. `scripts/watch-hand.py`. Do not run monitor at the same time |
+| `hand open` / `hand close` / `hand to N` / `hand free` | ID 17 only. Soft 689–2008, `to` max 2075. Walls 609 / 2088 |
 | `batt` | pack V from servo VIN + 3S rest-% guess. Not a BMS. USB does not charge XT60 |
 | `bench` | one-shot baseline: chip + ping 11–17 — compare `docs/baselines/usb-no-battery.md` |
 | `help` | list |

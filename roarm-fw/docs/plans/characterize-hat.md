@@ -139,7 +139,7 @@ Not coming alive: INA219, IMU, OLED, user LED, WiFi AP.
 
 ## Already known (do not redo)
 
-USB hello works. GPIO 2 is not an LED. `printf` in a 2 KB task stack-overflows. Battery off: `bench found=0/7`, listen `bus_rx=0`, MAC `44:1d:64:86:3f:54`. Day logs: `development-logs/2026-09-03.md`, `2026-09-04.md`.
+USB hello works. GPIO 2 is not an LED. `printf` in a 2 KB task stack-overflows. Battery off: `bench found=0/7`, listen `bus_rx=0`, MAC `44:1d:64:86:3f:54`. Notes: `development-logs/usb-hello.md`, `listen-xt60.md`.
 
 ## After this experiment
 

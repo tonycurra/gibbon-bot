@@ -24,10 +24,19 @@
 
 #define INST_PING 1
 #define INST_READ 2
+#define INST_WRITE 3
 #define REG_TORQUE_EN 40
+#define REG_ACC 41
 #define REG_PRESENT 56
 #define PRESENT_LEN 15 /* pos..current at 69 */
 #define REG_VOLTAGE 62
+#define HAND_ID 17
+#define HAND_OPEN 689
+#define HAND_CLOSE 2008
+#define HAND_TO_MAX 2075 /* inside wall 2088 — contact probe, not the wall */
+#define HAND_SPEED 300
+#define HAND_ACC 20
+#define V_CUTOFF 105 /* 10.5 V, 0.1 V LSB */
 
 static int listen_dump = 1;
 static uint32_t bus_rx_total;
@@ -69,6 +78,10 @@ static void print_help(void)
     printf("  get      pos/speed/load/V/temp/current/moving/torque-en (READ only)\n");
     printf("  batt     pack V from servo VIN + 3S rest-%% guess (not a fuel gauge)\n");
     printf("  bench    chip + ping 11-17\n");
+    printf("  hand open   ID 17 to %d (soft open). slow. no other ID\n", HAND_OPEN);
+    printf("  hand close  ID 17 to %d (soft close). slow. no other ID\n", HAND_CLOSE);
+    printf("  hand to N   ID 17 to N, clamped %d-%d (wall 2088)\n", HAND_OPEN, HAND_TO_MAX);
+    printf("  hand free   ID 17 torque off\n");
     printf("  help\n");
 }
 
@@ -223,6 +236,83 @@ static int bus_read(int id, uint8_t addr, uint8_t nwant, uint8_t *data)
     return 1;
 }
 
+static int bus_write(int id, uint8_t addr, const uint8_t *data, int n)
+{
+    uint8_t params[16];
+    if (n < 1 || n > 14) {
+        return 0;
+    }
+    params[0] = addr;
+    memcpy(params + 1, data, (size_t)n);
+    uint8_t tx[24], rx[24];
+    int txn = 0;
+    mk_pkt(tx, &txn, (uint8_t)id, INST_WRITE, params, n + 1);
+    int rn = bus_tx_rx(tx, txn, rx, sizeof(rx), 12);
+    return rn >= 6 && rx[0] == 0xFF && rx[1] == 0xFF;
+}
+
+static void cmd_hand(const char *what)
+{
+    if (strcmp(what, "free") == 0) {
+        uint8_t tq = 0;
+        if (!bus_write(HAND_ID, REG_TORQUE_EN, &tq, 1)) {
+            printf("hand free miss\n");
+            return;
+        }
+        printf("hand free tq=0 id=%d\n", HAND_ID);
+        return;
+    }
+
+    int goal;
+    const char *tag = what;
+    int hi = HAND_CLOSE;
+    if (strcmp(what, "open") == 0) {
+        goal = HAND_OPEN;
+    } else if (strcmp(what, "close") == 0) {
+        goal = HAND_CLOSE;
+    } else if (strncmp(what, "to ", 3) == 0) {
+        goal = atoi(what + 3);
+        tag = "to";
+        hi = HAND_TO_MAX;
+    } else {
+        printf("err hand open|close|to N|free\n");
+        return;
+    }
+    if (goal < HAND_OPEN) {
+        goal = HAND_OPEN;
+    }
+    if (goal > hi) {
+        goal = hi;
+    }
+
+    uint8_t v = 0;
+    if (!bus_read(HAND_ID, REG_VOLTAGE, 1, &v) || v < V_CUTOFF) {
+        printf("hand abort pack v_raw=%d need>=%d\n", v, V_CUTOFF);
+        return;
+    }
+
+    uint8_t tq = 1;
+    if (!bus_write(HAND_ID, REG_TORQUE_EN, &tq, 1)) {
+        printf("hand torque miss\n");
+        return;
+    }
+
+    uint8_t buf[7];
+    buf[0] = HAND_ACC;
+    buf[1] = (uint8_t)(goal & 0xFF);
+    buf[2] = (uint8_t)((goal >> 8) & 0xFF);
+    buf[3] = 0;
+    buf[4] = 0;
+    buf[5] = (uint8_t)(HAND_SPEED & 0xFF);
+    buf[6] = (uint8_t)((HAND_SPEED >> 8) & 0xFF);
+    if (!bus_write(HAND_ID, REG_ACC, buf, 7)) {
+        printf("hand write miss goal=%d\n", goal);
+        return;
+    }
+    printf("hand %s id=%d goal=%d speed=%d acc=%d tq=1 walls=609/2088\n",
+           tag, HAND_ID, goal, HAND_SPEED, HAND_ACC);
+}
+
 static void cmd_info(void)
 {
     esp_chip_info_t chip;
@@ -356,7 +446,7 @@ static void cmd_raw(int id)
 
 static void cmd_get(void)
 {
-    printf("get READ-only present+torque-en. no WritePos, no torque write\n");
+    printf("get present+torque-en. hand open/close is the only write\n");
     for (int id = ID_FIRST; id <= ID_LAST; id++) {
         uint8_t d[PRESENT_LEN];
         uint8_t tq = 0;
@@ -449,7 +539,7 @@ static void print_banner(void)
     printf("reset=%s\n", reset_str(esp_reset_reason()));
     printf("tasks=%u\n", (unsigned)uxTaskGetNumberOfTasks());
     printf("bus=uart1 gpio18/19 1Mbps rx-only until ping\n");
-    printf("note=no move. plug XT60 while this is printing.\n");
+    printf("note=no auto-move. hand open/close only, soft 689-2008.\n");
 }
 
 static void heartbeat(void)
@@ -521,6 +611,10 @@ static void handle_line(char *line)
     }
     if (strncmp(line, "raw ", 4) == 0) {
         cmd_raw(atoi(line + 4));
+        return;
+    }
+    if (strncmp(line, "hand ", 5) == 0) {
+        cmd_hand(line + 5);
         return;
     }
 

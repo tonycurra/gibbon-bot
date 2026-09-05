@@ -1,4 +1,4 @@
-# 2026-09-04
+# Listen + XT60
 
 USB listen, then XT60, then a full power cycle. No auto-move. Chip MAC `44:1d:64:86:3f:54`.
 

@@ -1,4 +1,4 @@
-# 2026-09-03
+# USB hello
 
 Firmware folder created. Chip is ESP32-WROOM-32 on Bus Servo Driver HAT (A), battery-mod RoArm-M3 Pro.
 

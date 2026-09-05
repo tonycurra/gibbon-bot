@@ -24,7 +24,7 @@ Expect **position to change** on `get`. Voltage stays ~pack. `tq` must stay `0`.
 1. Match `usb-battery-on.md` (`found=7/7`, `batt`, `get` once at rest).
 2. Support the arm. Dual-drive shoulder (12+13) is two motors on one joint — move slowly, do not force.
 3. Repeat `get` (or a later `watch`) while moving **one** joint at a time. Name the joint.
-4. Save rest vs moved lines in `docs/baselines/hand-move-usb-battery-on.md`.
+4. Save rest vs moved lines in `docs/baselines/hand-move-usb-battery-on.md`. **Done 2026-09-05** (`scripts/watch-hand.py`). `pos` + `speed` live; `load` / `moving` / `cur` stay 0.
 
 Look at: `pos` (must move), `speed`, `load`, `cur`, `moving`, `tq`, `v`. Pack % is still a rest-voltage guess.
 
@@ -38,4 +38,4 @@ If `pos` does not change: UART switch not ESP32, or we are reading a different I
 
 ## After this
 
-BLE HTML of the same `get` lines. VIN-only ESP32 (USB out, pack on) still open. Commanded nudge last. `docs/plans/usb-then-ble.md`.
+One-joint soft stops, human words: `docs/plans/joint-limits.md`, `docs/hardware/motors/names.md`. Then BLE. VIN-only ESP32 still open. Commanded nudge only after limits. `docs/plans/usb-then-ble.md`.

@@ -35,19 +35,22 @@ HAT “What’s On Board”: ESP32-WROOM-32, 5 V buck, UART switch (must be **ES
 
 ## Servo IDs
 
-| ID | Joint |
-| --- | --- |
-| 11 | Base rotation |
-| 12 | Shoulder A (primary) |
-| 13 | Shoulder B (dual-drive mirror) |
-| 14 | Elbow |
-| 15 | Wrist 1 (pitch) |
-| 16 | Wrist 2 (roll) |
-| 17 | Gripper |
+| ID | Joint | Say |
+| --- | --- | --- |
+| 11 | Base rotation | turn left / right |
+| 12+13 | Shoulder (dual-drive) | raise / lower |
+| 14 | Elbow | bend / straighten |
+| 15 | Wrist 1 (pitch) | wrist up / down |
+| 16 | Wrist 2 (roll) | twist CW / CCW |
+| 17 | Gripper | open hand / close hand |
+
+Words: `hardware/motors/names.md`.
 
 Same chain is a gibbon **arm** or **leg**; only names change (`old docs to review/controls.md`).
 
 ## Telemetry (ST3215)
+
+Raw fields from `get`: `hardware/motors/sensors.md`.
 
 | Metric | API | Range / scale | Use |
 | --- | --- | --- | --- |

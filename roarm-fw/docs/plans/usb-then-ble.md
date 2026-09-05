@@ -2,7 +2,7 @@
 
 ## Order
 
-1. USB only. Hello on serial (done). Pack-off ping miss (done). Listen + XT60 + `get` + power cycle (done 2026-09-04). Gold: `usb-start.md`, `usb-battery-on.md`. Next: **hand-move** (`docs/plans/hand-move.md`) — USB no pack, then USB + pack, `tq=0`, watch `pos`. Then BLE, then a commanded nudge. If USB `get` is dead, BLE will not help.
+1. USB only. Hello, pack-off ping, listen + XT60 + `get` (done). Hand-move + hand walls + clamped `hand open/close` (done). Gold: `usb-start.md`, `usb-battery-on.md`, `hand-move-usb-battery-on.md`, `hand-open-close.md`. Next: **other joint walls** (`docs/plans/joint-limits.md`, `docs/plans/now.md`). Then BLE. If USB `get` is dead, BLE will not help.
 2. One text protocol on USB. Reuse it on BLE (wireless serial pipe). Same lines, two transports.
 3. FK after joint numbers match reality.
 4. IK last. Do it on the laptop first. Dual-drive shoulder (IDs 12+13) is easy to get wrong on the chip.
