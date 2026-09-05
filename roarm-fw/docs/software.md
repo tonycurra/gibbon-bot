@@ -23,6 +23,7 @@ Stand behind the base. Words: `docs/hardware/motors/names.md`. Walls by hand, `t
 
 ```bash
 cd /home/t/code/gibbon-bot/roarm-fw
+python3 scripts/listen.py
 python3 scripts/live.py
 python3 scripts/live.py --check twist --out docs/baselines/data/twist-commanded.csv
 python3 scripts/watch-hand.py
@@ -60,6 +61,7 @@ Chip `turns` starts at 0 each boot. Host `docs/baselines/data/twist-absolute.jso
 
 | Script | Why |
 | --- | --- |
+| `scripts/listen.py` | Live 7-row sensor table (overwrites in place). READ only |
 | `scripts/live.py` | Listen + control. `--check twist` for the commanded roll. `q` = servo, no free |
 | `scripts/watch-hand.py` | Backdrive only. You turn, it prints Δ |
 | `scripts/watch-csv.py` | 7-row table + CSV. `--steps` is the old hand contact probe |

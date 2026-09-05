@@ -41,4 +41,4 @@ hand     17
 
 ## Next
 
-Flash chip `ESTOP` before any more twist command. Then wrist up / down. Sitting: `docs/baselines/twist-sitting-2026-09-05.md`. Table: `docs/plans/joint-limits.md`.
+Flash chip `ESTOP` before any more twist command. Then wrist up / down. Numbers: `joint-limits.md`. Sitting: `docs/baselines/twist-sitting-2026-09-05.md`.

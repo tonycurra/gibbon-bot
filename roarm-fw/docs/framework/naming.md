@@ -13,4 +13,4 @@ Rejected or deferred:
 
 Same image on all four boards. Role (`arm_l`, `arm_r`, `leg_l`, `leg_r`) is config later, not four repos.
 
-Later (not this folder): something that talks to all four — e.g. `gibbon-body`. Wire protocol can stay a simple USB/BLE text pipe until that exists.
+Later (not this folder): laptop UI is `gibbon-panel` (USB/BLE text pipe, all four limbs later). Coordinator for four chips can still be `gibbon-body`.

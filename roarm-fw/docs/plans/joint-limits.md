@@ -1,6 +1,6 @@
 # Joint limits — one move at a time
 
-Encoders work (`docs/baselines/hand-move-usb-battery-on.md`). **Soft stops** so later commands cannot wrap a cable or hit plastic.
+**Numbers:** `docs/hardware/motors/joint-limits.md`. Encoders work (`docs/baselines/hand-move-usb-battery-on.md`). **Soft stops** so later commands cannot wrap a cable or hit plastic.
 
 Hand (17) is done: `docs/baselines/hand-open-close.md`. Chip may `hand open` / `close` / `to` / `free` — **ID 17 only**. Other joints: you still move, I record. No writer until that wall exists.
 
