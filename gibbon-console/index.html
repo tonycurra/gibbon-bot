@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>gibbon-console</title>
+<link rel="stylesheet" href="console.css">
+</head>
+<body>
+<header>
+  <h1>gibbon-console</h1>
+  <button id="btnConnect">Connect USB</button>
+  <button id="btnDisc" disabled>Disconnect</button>
+  <span id="link" class="mut">disconnected</span>
+  <span id="pack" class="mut"></span>
+  <span style="flex:1"></span>
+  <button class="stop" id="btnStop" disabled>STOP</button>
+</header>
+<main>
+  <div>
+    <section>
+      <h2>sensors 11–17</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>id</th><th>joint</th><th>pos</th><th>un</th><th>tn</th><th>spd</th>
+            <th>load</th><th>cur</th><th>mv</th><th>tq</th><th>V</th><th>°C</th>
+          </tr>
+        </thead>
+        <tbody id="tb"></tbody>
+      </table>
+      <p class="mut" style="margin:8px 0 0">pos = magnet 0–4095 (wraps). un = pos + turns×4096. Writers: 16 twist, 17 hand only.</p>
+    </section>
+    <section>
+      <h2>hand 17</h2>
+      <div class="row">
+        <button data-cmd="hand open">open 689</button>
+        <button data-cmd="hand close">close 2008</button>
+        <button data-cmd="hand free">free</button>
+        <input id="handN" type="number" value="2008" min="689" max="2075">
+        <button id="handTo">to</button>
+      </div>
+    </section>
+    <section>
+      <h2>twist 16 — wheel ± is signed speed. servo then to N (hop ≤900)</h2>
+      <div class="row">
+        <button data-cmd="twist servo">servo</button>
+        <button data-cmd="twist wheel">wheel</button>
+        <button data-cmd="twist speed 0">speed 0</button>
+        <button data-cmd="twist free">free</button>
+        <button data-cmd="twist here">here</button>
+      </div>
+      <div class="row">
+        <button data-cmd="twist speed -220">CW −220</button>
+        <button data-cmd="twist speed 220">CCW +220</button>
+        <input id="spdN" type="number" value="-220">
+        <button id="spdGo">speed</button>
+        <input id="twistN" type="number" value="4068" min="0" max="4095">
+        <button id="twistTo">to</button>
+      </div>
+    </section>
+  </div>
+  <aside>
+    <section>
+      <h2>chip</h2>
+      <div class="row">
+        <button data-cmd="get">get</button>
+        <button data-cmd="batt">batt</button>
+        <button data-cmd="ping">ping</button>
+        <button data-cmd="state">state</button>
+        <button data-cmd="help">help</button>
+      </div>
+      <div class="row">
+        <input id="raw" placeholder="raw command" style="flex:1">
+        <button id="rawGo">send</button>
+      </div>
+      <label class="mut"><input type="checkbox" id="live" checked> live get</label>
+    </section>
+    <section>
+      <h2>log</h2>
+      <pre id="log"></pre>
+    </section>
+  </aside>
+</main>
+<script src="console.js"></script>
+</body>
+</html>
