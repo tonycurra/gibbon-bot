@@ -28,10 +28,7 @@ JOINT = {
     17: "hand",
 }
 
-GET_RE = re.compile(
-    r"get id=(\d+) pos=(-?\d+) speed=(-?\d+) load=(-?\d+) "
-    r"v_raw=(\d+) v=([\d.]+) temp=(\d+) cur=(-?\d+) moving=(\d+) tq=(\S+)"
-)
+GET_KV = re.compile(r"(\w+)=(\S+)")
 PING_FOUND = re.compile(r"ping FOUND id=(\d+)")
 
 
@@ -61,23 +58,28 @@ def drain(ser, seconds):
 def parse_get(lines):
     rows = {}
     for line in lines:
-        m = GET_RE.search(line)
-        if m:
-            rows[int(m.group(1))] = {
-                "pos": int(m.group(2)),
-                "speed": int(m.group(3)),
-                "load": int(m.group(4)),
-                "v": m.group(6),
-                "temp": int(m.group(7)),
-                "cur": int(m.group(8)),
-                "moving": int(m.group(9)),
-                "tq": m.group(10),
-                "raw": line,
-            }
-        elif line.startswith("get id=") and " miss" in line:
+        if line.startswith("get id=") and " miss" in line:
             mid = re.search(r"id=(\d+)", line)
             if mid:
                 rows[int(mid.group(1))] = {"miss": True, "raw": line}
+            continue
+        if not line.startswith("get id="):
+            continue
+        kv = dict(GET_KV.findall(line))
+        if "pos" not in kv:
+            continue
+        pos = int(kv["pos"])
+        rows[int(kv["id"])] = {
+            "pos": pos,
+            "speed": int(kv.get("speed", 0)),
+            "load": int(kv.get("load", 0)),
+            "v": kv.get("v", ""),
+            "temp": int(kv["temp"]) if "temp" in kv else 0,
+            "cur": int(kv.get("cur", 0)),
+            "moving": int(kv.get("moving", 0)),
+            "tq": kv.get("tq", "0"),
+            "raw": line,
+        }
     return rows
 
 

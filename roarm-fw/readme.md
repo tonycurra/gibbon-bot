@@ -16,7 +16,8 @@ Firmware: native **ESP-IDF**. No move on boot. READ `get` / `ping` / `batt` / `s
 | What to say (human names) | `docs/hardware/motors/names.md` |
 | Joint limits (`pos` walls) | `docs/hardware/motors/joint-limits.md` |
 | BLE NimBLE / energy / ghost | `docs/ble.md` |
-| Laptop UI (Django, trials, graphs) | `../gibbon-console/docs/README.md` |
+| Laptop UI (Django) | `../gibbon-console/docs/README.md` |
+| 2026-09-09 console + compact get | `development-logs/2026-09-09-console.md` |
 | USB start (healthy, pack off) | `docs/baselines/usb-start.md` |
 | USB + battery gold | `docs/baselines/usb-battery-on.md` |
 | USB no-battery ping gold | `docs/baselines/usb-no-battery.md` |

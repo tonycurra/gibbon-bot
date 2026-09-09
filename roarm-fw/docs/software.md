@@ -2,7 +2,7 @@
 
 Two sides. Chip talks Feetech on UART1. Laptop talks the same text on USB (`/dev/ttyACM0` 115200) or BLE (`gibbon-XXXX`, Nordic UART). **One process owns ACM0** — do not run `idf.py monitor` and a Python script together.
 
-**Sitting UI:** `../gibbon-console` (Django: live / graphs / act / trials). Docs: `../gibbon-console/docs/README.md`. Chip BLE: `docs/ble.md`. CLI: `scripts/live.py`.
+**Sitting UI:** `../gibbon-console` (Django: overview / joint / calibrate / info / trials). Docs: `../gibbon-console/docs/README.md`. Chip BLE: `docs/ble.md`. CLI: `scripts/live.py`.
 
 Flash / stop monitor: `docs/framework/espidf.md`.
 
@@ -44,8 +44,8 @@ Next test (no writer yet): wrist up / down (15) by hand in `live.py`.
 
 | You type | What it does |
 | --- | --- |
-| `get` / `get N` | READ present. `get 16` while twist is moving (full get is slow) |
-| `stream` / `stream N` / `stream 0` | live `get` all IDs every N ms (default 180) |
+| `get` / `get N` | READ present. Omitted keys = default (speed/load/cur/moving/tq/turns/st/mode 0, `un=pos`). `get 16` while twist is moving |
+| `stream` / `stream N` / `stream 0` | live `get` when an ID **changes** (pos Δ≥2, speed Δ≥80, load, cur, tq, v, temp). Default 180 ms poll. **Flash owed** for compact lines |
 | `who` / `who N` | EEPROM fw/mode/PID/angle limits/goal |
 | `id N free\|hold\|to G\|nudge D` | any 11–17. 11–15 hop ≤80 |
 | `move speed N` / `move acc N` | next WritePos (default 300 / 20) |
@@ -60,6 +60,8 @@ Next test (no writer yet): wrist up / down (15) by hand in `live.py`.
 | `batt` `ping` `bench` `state` | read-only |
 
 Pack cutoff 10.5 V in `joint_to`. Hand walls: open **609**, close **2088**. Twist walls: CW **978**, CCW `un` **7126**. Generous cable-only: **1127** / **3798**. Never command the walls.
+
+Host parsers (`listen.py`, `live.py`, `watch-*.py`, gibbon-console) use `key=value` so compact and old fat `get` lines both work.
 
 Chip `turns` starts at 0 each boot. Host `docs/baselines/data/twist-absolute.json` is the memory. Same raw `pos` is three cable states — only slack is home. `load` is 0 with `tq=0`. Host aborts a check on stall or `|load|` past the usual bias (plus ~1200 / minus ~170), not only 2000. IDs 11–15: hop ≤80 only.
 

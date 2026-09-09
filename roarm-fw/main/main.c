@@ -88,6 +88,15 @@ static int stream_ms;
 static TickType_t stream_last;
 static int cached_mode[ID_LAST + 1];
 static uint8_t mode_ok[ID_LAST + 1];
+static int pub_pos[ID_LAST + 1];
+static int pub_spd[ID_LAST + 1];
+static int pub_load[ID_LAST + 1];
+static int pub_cur[ID_LAST + 1];
+static int pub_v[ID_LAST + 1];
+static int pub_temp[ID_LAST + 1];
+static uint8_t pub_mv[ID_LAST + 1];
+static uint8_t pub_tq[ID_LAST + 1];
+static uint8_t pub_ok[ID_LAST + 1];
 static char ble_line[256];
 static int ble_line_n;
 
@@ -907,6 +916,9 @@ static void cmd_stream(const char *what)
     }
     if (stream_ms) {
         listen_dump = 0;
+        for (int id = ID_FIRST; id <= ID_LAST; id++) {
+            pub_ok[id] = 0;
+        }
     }
     stream_last = 0;
     printf("stream ms=%d dump=%d\n", stream_ms, listen_dump);
@@ -1043,14 +1055,46 @@ static void cmd_raw(int id)
     printf("\n");
 }
 
-static void print_get_id(int id)
+static int iabs(int x)
+{
+    return x < 0 ? -x : x;
+}
+
+static int stream_worth(int id, int pos, int speed, int load, int cur, int moving, int tq, int v_raw, int temp)
+{
+    if (!pub_ok[id]) {
+        return 1;
+    }
+    if (iabs(pos - pub_pos[id]) >= 2) {
+        return 1;
+    }
+    if ((iabs(speed) >= 80 || iabs(pub_spd[id]) >= 80) && iabs(speed - pub_spd[id]) >= 80) {
+        return 1;
+    }
+    if (load != pub_load[id] && (iabs(load) >= 30 || iabs(pub_load[id]) >= 30)) {
+        return 1;
+    }
+    if (iabs(cur - pub_cur[id]) >= 5) {
+        return 1;
+    }
+    if (moving != pub_mv[id] || tq != pub_tq[id]) {
+        return 1;
+    }
+    if (v_raw != pub_v[id] || temp != pub_temp[id]) {
+        return 1;
+    }
+    return 0;
+}
+
+static void print_get_id(int id, int stream)
 {
     uint8_t d[PRESENT_LEN];
     uint8_t tq = 0;
-    char mode_s[8];
+    int tq_bit;
 
     if (!bus_read(id, REG_PRESENT, PRESENT_LEN, d)) {
         printf("get id=%d miss\n", id);
+        pub_ok[id] = 0;
         return;
     }
     int pos = sts_s15((uint16_t)(d[0] | (d[1] << 8)));
@@ -1063,17 +1107,56 @@ static void print_get_id(int id)
     int current = sts_s15((uint16_t)(d[13] | (d[14] << 8)));
     int tq_ok = bus_read(id, REG_TORQUE_EN, 1, &tq);
     int un = unwrap_pos(id, pos);
-    if (mode_ok[id]) {
-        snprintf(mode_s, sizeof(mode_s), "%d", cached_mode[id]);
-    } else {
-        snprintf(mode_s, sizeof(mode_s), "?");
+    tq_bit = tq_ok && tq ? 1 : 0;
+
+    if (stream && !stream_worth(id, pos, speed, load, current, moving, tq_bit, v_raw, temp)) {
+        return;
     }
     if (load > 400 || load < -400) {
         printf("get LOAD id=%d load=%d pos=%d un=%d\n", id, load, pos, un);
     }
-    printf("get id=%d pos=%d speed=%d load=%d v_raw=%d v=%.1f temp=%d cur=%d moving=%d tq=%s un=%d turns=%d st=%d mode=%s\n",
-           id, pos, speed, load, v_raw, v_raw / 10.0, temp, current, moving,
-           tq_ok ? (tq ? "1" : "0") : "?", un, wrap_turns[id], st, mode_s);
+    /* omit zeros / defaults: cur, moving, turns, un==pos, st, mode 0, tq 0, speed 0, load 0 */
+    printf("get id=%d pos=%d", id, pos);
+    if (speed) {
+        printf(" speed=%d", speed);
+    }
+    if (load) {
+        printf(" load=%d", load);
+    }
+    if (current) {
+        printf(" cur=%d", current);
+    }
+    if (moving) {
+        printf(" moving=1");
+    }
+    if (!tq_ok) {
+        printf(" tq=?");
+    } else if (tq_bit) {
+        printf(" tq=1");
+    }
+    if (un != pos || wrap_turns[id]) {
+        printf(" un=%d turns=%d", un, wrap_turns[id]);
+    }
+    if (st) {
+        printf(" st=%d", st);
+    }
+    if (mode_ok[id] && cached_mode[id]) {
+        printf(" mode=%d", cached_mode[id]);
+    }
+    if (!stream || !pub_ok[id] || v_raw != pub_v[id] || temp != pub_temp[id]) {
+        printf(" v=%.1f temp=%d", v_raw / 10.0, temp);
+    }
+    printf("\n");
+
+    pub_ok[id] = 1;
+    pub_pos[id] = pos;
+    pub_spd[id] = speed;
+    pub_load[id] = load;
+    pub_cur[id] = current;
+    pub_v[id] = v_raw;
+    pub_temp[id] = temp;
+    pub_mv[id] = (uint8_t)moving;
+    pub_tq[id] = (uint8_t)tq_bit;
 }
 
 static void cmd_get(void)
@@ -1081,7 +1164,7 @@ static void cmd_get(void)
     printf("get present+torque-en. writes: id N / hand / twist\n");
     twist_guard_tick();
     for (int id = ID_FIRST; id <= ID_LAST; id++) {
-        print_get_id(id);
+        print_get_id(id, 0);
         twist_guard_tick();
     }
 }
@@ -1093,7 +1176,7 @@ static void cmd_get_one(int id)
         return;
     }
     twist_guard_tick();
-    print_get_id(id);
+    print_get_id(id, 0);
 }
 
 static void stream_tick(void)
@@ -1110,7 +1193,7 @@ static void stream_tick(void)
     stream_last = t;
     twist_guard_tick();
     for (int id = ID_FIRST; id <= ID_LAST; id++) {
-        print_get_id(id);
+        print_get_id(id, 1);
         twist_guard_tick();
     }
 }

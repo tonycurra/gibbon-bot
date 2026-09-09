@@ -15,13 +15,7 @@ import serial
 PORT = "/dev/ttyACM0"
 BAUD = 115200
 HOME = {16: 4068}  # slack twist; others blank
-GET_RE = re.compile(
-    r"get id=(\d+) pos=(-?\d+) speed=(-?\d+) load=(-?\d+) "
-    r"v_raw=(\d+) v=([\d.]+) temp=(\d+) cur=(-?\d+) moving=(\d+) tq=(\S+)"
-    r"(?: un=(-?\d+) turns=(-?\d+))?"
-    r"(?: st=(-?\d+))?"
-    r"(?: mode=(\S+))?"
-)
+GET_KV = re.compile(r"(\w+)=(\S+)")
 JOINT = {
     11: "turn",
     12: "raise-A",
@@ -70,26 +64,26 @@ def parse(lines):
     for ln in lines:
         if ln.startswith("listen dump="):
             dump = ln.endswith("=1")
-        m = GET_RE.search(ln)
-        if not m:
+        if not ln.startswith("get id=") or " miss" in ln:
             continue
-        id_ = int(m.group(1))
-        pos = int(m.group(2))
-        un = int(m.group(11)) if m.group(11) else pos
-        tn = int(m.group(12)) if m.group(12) else 0
+        kv = dict(GET_KV.findall(ln))
+        if "pos" not in kv:
+            continue
+        id_ = int(kv["id"])
+        pos = int(kv["pos"])
         rows[id_] = {
             "pos": pos,
-            "speed": int(m.group(3)),
-            "load": int(m.group(4)),
-            "v": m.group(6),
-            "temp": int(m.group(7)),
-            "cur": int(m.group(8)),
-            "moving": int(m.group(9)),
-            "tq": m.group(10),
-            "un": un,
-            "turns": tn,
-            "st": m.group(13) if m.group(13) else "?",
-            "mode": m.group(14) if m.group(14) else "?",
+            "speed": int(kv.get("speed", 0)),
+            "load": int(kv.get("load", 0)),
+            "v": kv.get("v", ""),
+            "temp": int(kv["temp"]) if "temp" in kv else 0,
+            "cur": int(kv.get("cur", 0)),
+            "moving": int(kv.get("moving", 0)),
+            "tq": kv.get("tq", "0"),
+            "un": int(kv.get("un", pos)),
+            "turns": int(kv.get("turns", 0)),
+            "st": kv.get("st", "0"),
+            "mode": kv.get("mode", "0"),
         }
     return rows, dump
 

@@ -50,10 +50,7 @@ CHIP_PREFIX = (
     "twist ", "hand ", "get", "batt", "ping", "pingall", "state",
     "help", "bench", "gpio", "listen", "raw ",
 )
-GET_RE = re.compile(
-    r"get id=(\d+) pos=(-?\d+) speed=(-?\d+) load=(-?\d+) "
-    r"v_raw=(\d+) v=([\d.]+) temp=(\d+) cur=(-?\d+) moving=(\d+) tq=(\S+)"
-)
+GET_KV = re.compile(r"(\w+)=(\S+)")
 FIELDS = [
     "t_s", "note", "id", "name", "pos", "un", "turns", "speed", "load", "cur",
     "moving", "tq", "v", "temp",
@@ -83,22 +80,33 @@ def read_lines(ser, seconds):
     return lines
 
 
+def parse_get_line(line):
+    if not line.startswith("get id=") or " miss" in line or " pos=" not in line:
+        return None
+    kv = dict(GET_KV.findall(line))
+    if "id" not in kv or "pos" not in kv:
+        return None
+    pos = int(kv["pos"])
+    return {
+        "pos": pos,
+        "speed": int(kv.get("speed", 0)),
+        "load": int(kv.get("load", 0)),
+        "v": kv.get("v", ""),
+        "temp": int(kv["temp"]) if "temp" in kv else 0,
+        "cur": int(kv.get("cur", 0)),
+        "moving": int(kv.get("moving", 0)),
+        "tq": kv.get("tq", "0"),
+        "id": int(kv["id"]),
+    }
+
+
 def parse_get(lines):
     rows = {}
     extra = []
     for line in lines:
-        m = GET_RE.search(line)
-        if m:
-            rows[int(m.group(1))] = {
-                "pos": int(m.group(2)),
-                "speed": int(m.group(3)),
-                "load": int(m.group(4)),
-                "v": m.group(6),
-                "temp": int(m.group(7)),
-                "cur": int(m.group(8)),
-                "moving": int(m.group(9)),
-                "tq": m.group(10),
-            }
+        rec = parse_get_line(line)
+        if rec:
+            rows[rec["id"]] = rec
             continue
         if line.startswith(("twist", "hand", "err", "get LOAD")):
             extra.append(line)
@@ -281,7 +289,7 @@ def chip_lines(ser, cmd, wait=0.3):
     send(ser, cmd)
     out = []
     for ln in read_lines(ser, wait):
-        if GET_RE.search(ln):
+        if parse_get_line(ln):
             continue
         print(ln, flush=True)
         out.append(ln)
@@ -560,7 +568,7 @@ def main():
                     continue
                 send(ser, cmd)
                 for ln in read_lines(ser, 0.35):
-                    if GET_RE.search(ln):
+                    if parse_get_line(ln):
                         continue
                     print(ln, flush=True)
                 t, rows, extra = sample(ser, t0)

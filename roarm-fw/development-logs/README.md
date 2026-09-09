@@ -5,6 +5,7 @@ Notes of what we tried, named by the test. Durable how-tos live in `docs/`.
 | Log | What |
 | --- | --- |
 | [usb-hello.md](usb-hello.md) | Naming, IDF pick, USB hello, LED dead end, info+ping |
+| [2026-09-09-console.md](2026-09-09-console.md) | Six-joint console, compact `get`/`stream` (unflashed) |
 | [listen-xt60.md](listen-xt60.md) | Listen, XT60, `get`/`batt`, power cycle |
 | [hand-move.md](hand-move.md) | Backdrive, hand walls, commanded hand, contact CSV |
 | [espidf-start.md](espidf-start.md) | Once-on-this-machine. **Every time:** `docs/framework/espidf.md` |

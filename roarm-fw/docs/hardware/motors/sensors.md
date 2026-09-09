@@ -4,6 +4,15 @@ There is **no environment sensor**. No IMU, no force/torque cell, no hall on the
 
 Type `get` or `get 16` (USB, XT60 on). Same present block on IDs **11–17**. Servos stay silent until we READ them.
 
+Full snapshot still has every field that is not a default zero. **`stream` omits zeros and skips IDs that did not move** (unflashed until the 2026-09-09 compact `get`). Parsers treat missing keys as 0 / `un=pos` / servo.
+
+```
+get id=16 pos=4068 v=11.3 temp=32
+get id=14 pos=2811 speed=150
+```
+
+Old gold dumps still look like:
+
 ```
 get id=16 pos=4068 speed=0 load=0 v_raw=113 v=11.3 temp=32 cur=0 moving=0 tq=0
 ```
