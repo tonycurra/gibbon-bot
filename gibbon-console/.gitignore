@@ -1,0 +1,7 @@
+.venv/
+sittings/
+__pycache__/
+*.pyc
+.ble-addr
+db.sqlite3
+console/migrations/__pycache__/

@@ -1,10 +1,11 @@
-Laptop UI for Gibbon. Talks the USB/BLE **text pipe** to a limb chip. Not firmware — that is `roarm-fw` on the ESP32.
+Laptop UI + USB/BLE bridge + trial log. Chip: `../roarm-fw`.
 
-Same page later for arm_l / arm_r / leg_l / leg_r. Right now one RoArm on ACM0.
+**Docs:** [`docs/README.md`](docs/README.md) (run, architecture, link, data, UI, next).
 
 ```bash
 cd /home/t/code/gibbon-bot/gibbon-console
-python3 -m http.server 8080
+.venv/bin/python manage.py migrate
+.venv/bin/python manage.py runserver 0.0.0.0:8080
 ```
 
-Chrome → http://127.0.0.1:8080 → Connect USB. Close any other ACM0 process first.
+Firefox `http://127.0.0.1:8080` — **live · graphs · act · trials**. **STOP** / Escape = estop. Phone: same WiFi. One process owns ACM0.

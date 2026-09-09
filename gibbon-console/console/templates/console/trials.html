@@ -1,0 +1,35 @@
+{% extends "console/base.html" %}
+{% load static %}
+{% block main %}
+<form id="startForm" class="act">
+  <label>title <input id="title" placeholder="sitting name" maxlength="200"></label>
+  <label class="grow">note <input id="note" placeholder="what you are testing"></label>
+  <button type="submit">start</button>
+  <button type="button" id="btnStopTrial">stop</button>
+</form>
+<form id="noteForm" class="act">
+  <label class="grow">mark <input id="mark" placeholder="wall, slack, contact…"></label>
+  <button type="submit">add</button>
+</form>
+<p class="hint">samples and commands land here while a trial is open.</p>
+<table class="list">
+  <thead><tr><th>id</th><th>title</th><th>started</th><th>via</th><th>pack</th><th>open</th></tr></thead>
+  <tbody>
+  {% for t in trials %}
+    <tr>
+      <td><a href="{% url 'trial' t.pk %}">{{ t.pk }}</a></td>
+      <td><a href="{% url 'trial' t.pk %}">{{ t.title|default:"—" }}</a></td>
+      <td>{{ t.started|date:"Y-m-d H:i" }}</td>
+      <td>{{ t.via|default:"—" }}</td>
+      <td>{% if t.pack_v %}{{ t.pack_v }}V{% else %}—{% endif %}</td>
+      <td>{% if t.open %}<span class="ok">live</span>{% else %}done{% endif %}</td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="6">no trials yet</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
+{% block js %}
+<script src="{% static 'console/js/trials.js' %}"></script>
+{% endblock %}

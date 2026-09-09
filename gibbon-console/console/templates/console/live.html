@@ -1,0 +1,26 @@
+{% extends "console/base.html" %}
+{% load static %}
+{% block main %}
+<p id="hint">waiting for chip.</p>
+<section id="meta"></section>
+<div id="armWrap">
+<table>
+  <thead>
+    <tr>
+      <th>joint</th><th>id</th>
+      <th>pos<b>56</b></th><th>un</th><th>turns</th>
+      <th>spd<b>58</b></th><th>load<b>60</b></th>
+      <th>V<b>62</b></th><th>°C<b>63</b></th><th>mA<b>69</b></th>
+      <th>mv<b>66</b></th><th>tq<b>40</b></th>
+      <th>mode<b>33</b></th><th>st<b>65</b></th><th>fw</th><th>motor</th>
+    </tr>
+  </thead>
+  <tbody id="armBody"></tbody>
+</table>
+</div>
+<div id="acts"></div>
+<pre id="log"></pre>
+{% endblock %}
+{% block js %}
+<script src="{% static 'console/js/live.js' %}"></script>
+{% endblock %}

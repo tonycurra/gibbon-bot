@@ -1,0 +1,15 @@
+{% extends "console/base.html" %}
+{% load static %}
+{% block main %}
+<p class="hint">present @56 over time. pick a joint and traces. idle stays quiet; move to see the line.</p>
+<div class="row">
+  <label>joint
+    <select id="gJoint"></select>
+  </label>
+</div>
+<div id="gVars" class="row"></div>
+<div id="charts"></div>
+{% endblock %}
+{% block js %}
+<script src="{% static 'console/js/graphs.js' %}"></script>
+{% endblock %}
