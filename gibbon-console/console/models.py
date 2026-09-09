@@ -52,3 +52,13 @@ class Note(models.Model):
     trial = models.ForeignKey(Trial, on_delete=models.CASCADE, related_name="notes")
     t_ms = models.BigIntegerField()
     text = models.TextField()
+
+
+class Limit(models.Model):
+    """Host-side walls / home. Chip still clamps; this is the sitting notebook."""
+    servo = models.PositiveSmallIntegerField(unique=True)
+    home = models.IntegerField(null=True, blank=True)
+    amin = models.IntegerField(null=True, blank=True)
+    amax = models.IntegerField(null=True, blank=True)
+    note = models.CharField(max_length=240, blank=True)
+    updated = models.DateTimeField(auto_now=True)

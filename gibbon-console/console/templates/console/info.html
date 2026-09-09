@@ -1,0 +1,107 @@
+{% extends "console/base.html" %}
+{% block main %}
+<article class="docs">
+<nav class="index">
+  <strong>index</strong>
+  <a href="#axes">1. yaw pitch roll</a>
+  <a href="#joints">2. six joints, seven motors</a>
+  <a href="#read">3. what we can read</a>
+  <a href="#modes">4. servo / wheel / step</a>
+  <a href="#control">5. how we command</a>
+  <a href="#pid">6. PID — whose loop?</a>
+  <a href="#pair">7. shoulder pitch 12+13</a>
+  <a href="#limits">8. walls and calibrate</a>
+  <a href="#safety">9. stop</a>
+</nav>
+
+<h1>arm</h1>
+<p>One RoArm-M3 Pro. ESP32 on the HAT talks Feetech at 1 Mbps. USB and BLE are the same text pipe. The console is the brain; the chip clamps and talks to the bus. No IMU, no HAT current chip, no fake sensors.</p>
+
+<h2 id="axes">1. yaw, pitch, roll</h2>
+<p>Stand <em>behind</em> the base, arm reaching away — like your right arm on a desk. Thumb along the forearm toward the fingers.</p>
+<table class="ov">
+  <thead><tr><th>axis</th><th>picture</th><th>this arm</th></tr></thead>
+  <tbody>
+    <tr><td>yaw</td><td>around vertical — turn left / right</td><td>shoulder yaw, id 11 (the base)</td></tr>
+    <tr><td>pitch</td><td>nod — lift / drop, fold / open</td><td>shoulder pitch 12+13, elbow 14, wrist pitch 15</td></tr>
+    <tr><td>roll</td><td>twist along the forearm</td><td>wrist roll, id 16</td></tr>
+    <tr><td>grip</td><td>not a rotation</td><td>hand, id 17</td></tr>
+  </tbody>
+</table>
+<p>Shoulder is <strong>two joints</strong>: yaw (one motor) and pitch (two motors locked on one horn).</p>
+
+<h2 id="joints">2. six joints, seven motors</h2>
+<table class="ov">
+  <thead><tr><th>joint</th><th>axis</th><th>id</th><th>say</th></tr></thead>
+  <tbody>
+    <tr><td><a href="/j/yaw/">shoulder yaw</a></td><td>yaw</td><td>11</td><td>turn left / right</td></tr>
+    <tr><td><a href="/j/shoulder-pitch/">shoulder pitch</a></td><td>pitch</td><td>12+13</td><td>raise / lower</td></tr>
+    <tr><td><a href="/j/elbow/">elbow</a></td><td>pitch</td><td>14</td><td>bend / straighten</td></tr>
+    <tr><td><a href="/j/wrist-pitch/">wrist pitch</a></td><td>pitch</td><td>15</td><td>wrist up / down</td></tr>
+    <tr><td><a href="/j/wrist-roll/">wrist roll</a></td><td>roll</td><td>16</td><td>twist CW / CCW</td></tr>
+    <tr><td><a href="/j/hand/">hand</a></td><td>grip</td><td>17</td><td>open / close</td></tr>
+  </tbody>
+</table>
+
+<h2 id="read">3. what we can read</h2>
+<p>Only sensors are inside each Feetech ST32xx. Present block at register 56 (15 bytes). USB does not power the motors — pack off → all miss.</p>
+<table class="ov">
+  <thead><tr><th>field</th><th>what</th><th>when tq=0 (you turn by hand)</th></tr></thead>
+  <tbody>
+    <tr><td>pos</td><td>magnetic encoder 0–4095, wraps</td><td><strong>this is what moves</strong></td></tr>
+    <tr><td>speed</td><td>from that encoder</td><td>usually 0 unless you spin fast</td></tr>
+    <tr><td>load</td><td>inner PID effort, not a torque cell</td><td><strong>always 0</strong></td></tr>
+    <tr><td>cur</td><td>winding current estimate, mA</td><td>0</td></tr>
+    <tr><td>moving</td><td>flag: motor thinks it is tracking a goal</td><td><strong>0</strong> — not a “I touched it” bit</td></tr>
+    <tr><td>tq</td><td>torque enable</td><td>0 = free / backdrive</td></tr>
+    <tr><td>v, temp</td><td>pack at this servo, case °C</td><td>live if pack on</td></tr>
+  </tbody>
+</table>
+<p>So: backdrive → watch pos. Commanded hold/fight → watch load (and cur if it ever leaves 0).</p>
+
+<h2 id="modes">4. servo / wheel / step</h2>
+<p>Each motor has a <strong>mode register (33)</strong> in EEPROM. We almost always stay in servo.</p>
+<table class="ov">
+  <thead><tr><th>mode</th><th>you command</th><th>inner loop</th><th>use here</th></tr></thead>
+  <tbody>
+    <tr><td><strong>servo (0)</strong></td><td>goal position + speed + acc</td><td>position PID in the servo</td><td>default. yaw, pitch, elbow, wrist, hand</td></tr>
+    <tr><td><strong>wheel (1)</strong></td><td>signed speed</td><td>speed closed-loop</td><td>twist unwrap / jog only. EEPROM. always restore servo</td></tr>
+    <tr><td>step / multi-loop</td><td>relative steps</td><td>position, lost on power-off</td><td>avoid</td></tr>
+  </tbody>
+</table>
+<p>There is <strong>no torque-control mode</strong>. <code>tq=1</code> means “hold / follow the goal.” It is not a newton-metre setpoint. We do not PWM the HAT ourselves — the servo MCU does the phase drive.</p>
+
+<h2 id="control">5. how we command</h2>
+<ol>
+  <li>Laptop/console sends a text line (USB or BLE).</li>
+  <li>ESP32 clamps (walls, hop, pack ≥ 10.5 V) then <strong>WritePos</strong> on the bus: goal pos, speed (default 300 steps/s), acc (default 20).</li>
+  <li>The servo tracks that goal with its own loop. We poll <code>get</code> (present @56).</li>
+</ol>
+<p>Not a host PWM. Not a host PID writing position from error — that would fight the servo PID. Smoothness today = slow speed + acc, later maybe many small goals (trapezoid) still in servo mode.</p>
+
+<h2 id="pid">6. PID — whose loop?</h2>
+<p>Classic: error = goal − measured. Effort from P (∝ error), I (sum of error), D (rate of error).</p>
+<ul>
+  <li><strong>Inside the servo</strong> — already running in servo mode. Kp/Kd/Ki in EEPROM (<code>who</code>). We do not retune first.</li>
+  <li><strong>Chip</strong> — supervisor: clamp, voltage, ESTOP on load/cur/miss while twist is in wheel.</li>
+  <li><strong>Host</strong> — unwrap, pair 12+13, later FK. Cadence ~ USB, not kHz.</li>
+</ul>
+<p>What we set without touching inner gains: goal, max speed, acc, tq on/off. Load is the effort the inner loop is applying — useful as a contact proxy while tq=1.</p>
+<p>A laptop PID on top of the servo PID is worse than either alone. Wheel + outer P (command speed from pos error) is only a maybe for twist unwrap.</p>
+
+<h2 id="pair">7. shoulder pitch 12+13</h2>
+<p>One joint, two motors, physically stuck together. Move the upper arm by hand and watch <strong>both</strong> positions. Console actuate on that page sends the same op to both IDs. If they fight, STOP. Firmware does not SyncWrite yet — two packets, same sitting.</p>
+
+<h2 id="limits">8. walls and calibrate</h2>
+<p>Find the wall by hand, tq off. Mark min / max / home on <a href="/calibrate/">calibrate</a> from live pos. Commanded moves are a check inside that band, not a way to find it. Hand is already walled (open 609, close 2088). Twist walls known; do not command twist until chip ESTOP is flashed.</p>
+<p>EEPROM amin/amax on the chip are often 0–4095 (no wall). Our walls live on the host + firmware clamps for hand/twist.</p>
+
+<h2 id="safety">9. stop</h2>
+<ul>
+  <li>Header <strong>STOP</strong> / Escape = <code>estop</code> (all tq=0, twist back to servo).</li>
+  <li>No move on boot.</li>
+  <li>Do not command a joint with no wall.</li>
+  <li>Never jog 12 or 13 alone.</li>
+</ul>
+</article>
+{% endblock %}

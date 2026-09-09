@@ -1,0 +1,18 @@
+{% extends "console/base.html" %}
+{% load static %}
+{% block main %}
+<p class="hint">six joints. click a row. <span class="mut">yaw · pitch · roll</span> — <a href="/info/#axes">what that means</a>. backdrive: watch <b>pos</b>, not moving/load (those stay 0 with tq off).</p>
+<div id="armWrap">
+<table class="ov">
+  <thead>
+    <tr>
+      <th>joint</th><th>axis</th><th>id</th><th>bus</th><th>tq</th><th>pos</th><th>spd</th><th>load</th>
+    </tr>
+  </thead>
+  <tbody id="homeBody"></tbody>
+</table>
+</div>
+{% endblock %}
+{% block js %}
+<script src="{% static 'console/js/home.js' %}"></script>
+{% endblock %}

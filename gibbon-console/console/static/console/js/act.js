@@ -19,7 +19,7 @@ const HINT = {
 const NEED = new Set(["nudge", "to", "speed"]);
 
 const joint = $("joint");
-JOINTS.forEach(j => {
+MOTORS.forEach(j => {
   const o = document.createElement("option");
   o.value = j.id; o.textContent = j.name + "  id " + j.id;
   joint.appendChild(o);

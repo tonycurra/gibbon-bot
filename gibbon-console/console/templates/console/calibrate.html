@@ -1,0 +1,26 @@
+{% extends "console/base.html" %}
+{% load static %}
+{% block main %}
+<p class="hint">find the wall by hand, tq off. mark home / min / max from live pos. chip still owns the clamp. <a href="/info/#limits">why</a></p>
+<div class="row">
+  <label>joint
+    <select id="calJoint">
+      {% for j in joints %}
+      <option value="{{ j.slug }}"{% if j.slug == joint.slug %} selected{% endif %}>{{ j.name }} ({{ j.axis }})</option>
+      {% endfor %}
+    </select>
+  </label>
+</div>
+<p id="calNote" class="hint"></p>
+<table class="ov">
+  <thead>
+    <tr><th>id</th><th>live pos</th><th>home</th><th>min</th><th>max</th><th></th></tr>
+  </thead>
+  <tbody id="calBody"></tbody>
+</table>
+<p class="hint next">test is a slow move inside the marked band — only after both min and max exist. STOP if it fights.</p>
+{% endblock %}
+{% block js %}
+<script>window.JOINT_SLUG = "{{ joint.slug }}";</script>
+<script src="{% static 'console/js/calibrate.js' %}"></script>
+{% endblock %}

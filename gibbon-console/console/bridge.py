@@ -18,13 +18,32 @@ NUS_TX = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"
 NUS_SVC = "6e400001-b5a3-f393-e0a9-e50e24dcca9e"
 ADDR_PATH = os.path.join(ROOT, ".ble-addr")
 DEFAULT_ADDR = os.environ.get("GIBBON_BLE", "44:1D:64:86:3F:56")
-GET_RE = re.compile(
-    r"get id=(\d+) pos=(-?\d+) speed=(-?\d+) load=(-?\d+) v_raw=(\d+) v=([\d.]+)"
-    r" temp=(\d+) cur=(-?\d+) moving=(\d+) tq=(\S+) un=(-?\d+) turns=(-?\d+)"
-    r" st=(-?\d+) mode=(\S+)"
-)
+GET_KV = re.compile(r"(\w+)=(\S+)")
 MISS_RE = re.compile(r"get id=(\d+) miss")
 BATT_RE = re.compile(r"batt pack=([\d.]+)V")
+
+
+def parse_get(line):
+    if not line.startswith("get id=") or " miss" in line:
+        return None
+    kv = dict(GET_KV.findall(line))
+    if "pos" not in kv or "id" not in kv:
+        return None
+    pos = int(kv["pos"])
+    return {
+        "id": int(kv["id"]),
+        "pos": pos,
+        "speed": int(kv.get("speed", 0)),
+        "load": int(kv.get("load", 0)),
+        "v": float(kv["v"]) if "v" in kv else None,
+        "temp": int(kv["temp"]) if "temp" in kv else None,
+        "cur": int(kv.get("cur", 0)),
+        "moving": int(kv.get("moving", 0)),
+        "tq": (kv.get("tq") or "0")[:4],
+        "un": int(kv.get("un", pos)),
+        "turns": int(kv.get("turns", 0)),
+        "mode": (kv.get("mode") or "0")[:8],
+    }
 
 clients = []
 clients_lock = threading.Lock()
@@ -355,14 +374,14 @@ def db_loop():
             miss = MISS_RE.match(line)
             if miss:
                 continue
-            g = GET_RE.match(line)
+            g = parse_get(line)
             if g:
                 Sample.objects.create(
-                    trial=trial, t_ms=t_ms, servo=int(g.group(1)),
-                    pos=int(g.group(2)), speed=int(g.group(3)), load=int(g.group(4)),
-                    v=float(g.group(6)), temp=int(g.group(7)), cur=int(g.group(8)),
-                    moving=int(g.group(9)), tq=g.group(10)[:4],
-                    un=int(g.group(11)), turns=int(g.group(12)), mode=g.group(14)[:8],
+                    trial=trial, t_ms=t_ms, servo=g["id"],
+                    pos=g["pos"], speed=g["speed"], load=g["load"],
+                    v=g["v"], temp=g["temp"], cur=g["cur"],
+                    moving=g["moving"], tq=g["tq"],
+                    un=g["un"], turns=g["turns"], mode=g["mode"],
                 )
                 continue
             bp = BATT_RE.search(line)

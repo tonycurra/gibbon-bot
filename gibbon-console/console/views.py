@@ -5,37 +5,70 @@ import time
 from django.http import HttpResponse, JsonResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
+from django.utils.safestring import mark_safe
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from . import bridge
-from .models import Note, Sample, Trial
+from .catalog import CATALOG, JOINTS, SLUGS
+from .models import Limit, Note, Sample, Trial
 
 PAGES = [
-    ("live", "live"),
-    ("graphs", "graphs"),
-    ("act", "act"),
+    ("home", "overview"),
+    ("calibrate", "calibrate"),
     ("trials", "trials"),
+    ("info", "info"),
+    ("advanced", "advanced"),
 ]
 
 
 def ctx(page, crumb, extra=None):
-    d = {"page": page, "pages": PAGES, "crumb": crumb}
+    d = {
+        "page": page,
+        "pages": PAGES,
+        "crumb": crumb,
+        "catalog_json": mark_safe(json.dumps(CATALOG)),
+    }
     if extra:
         d.update(extra)
     return d
 
 
-def live(request):
-    return render(request, "console/live.html", ctx("live", "live"))
+def home(request):
+    return render(request, "console/home.html", ctx("home", "overview"))
+
+
+def joint_page(request, slug):
+    j = SLUGS.get(slug)
+    if not j:
+        return HttpResponse("unknown joint", status=404)
+    return render(request, "console/joint.html", ctx("home", j["name"], {"joint": j}))
+
+
+def calibrate(request):
+    slug = request.GET.get("j") or "yaw"
+    j = SLUGS.get(slug) or SLUGS["yaw"]
+    return render(
+        request,
+        "console/calibrate.html",
+        ctx("calibrate", "calibrate / " + j["name"], {"joint": j, "joints": JOINTS}),
+    )
+
+
+def info(request):
+    return render(request, "console/info.html", ctx("info", "info"))
+
+
+def advanced(request):
+    return render(request, "console/advanced.html", ctx("advanced", "advanced"))
 
 
 def graphs(request):
-    return render(request, "console/graphs.html", ctx("graphs", "graphs"))
+    return render(request, "console/graphs.html", ctx("home", "graphs"))
 
 
 def act(request):
-    return render(request, "console/act.html", ctx("act", "act"))
+    return render(request, "console/act.html", ctx("home", "act"))
 
 
 def trials(request):
@@ -153,3 +186,30 @@ def api_samples(request, pk):
         "moving": s.moving, "tq": s.tq, "mode": s.mode,
     } for s in qs]
     return JsonResponse({"samples": out})
+
+
+def _limit_row(row):
+    return {
+        "servo": row.servo, "home": row.home, "amin": row.amin, "amax": row.amax,
+        "note": row.note, "updated": row.updated.isoformat() if row.updated else None,
+    }
+
+
+@csrf_exempt
+def api_limits(request):
+    if request.method == "GET":
+        return JsonResponse({"limits": [_limit_row(x) for x in Limit.objects.order_by("servo")]})
+    if request.method != "POST":
+        return JsonResponse({"err": "method"}, status=405)
+    data = json.loads(request.body or b"{}")
+    servo = int(data.get("servo") or 0)
+    if servo < 11 or servo > 17:
+        return JsonResponse({"err": "servo 11-17"}, status=400)
+    row, _ = Limit.objects.get_or_create(servo=servo)
+    for k in ("home", "amin", "amax"):
+        if k in data and data[k] is not None and data[k] != "":
+            setattr(row, k, int(data[k]))
+    if "note" in data:
+        row.note = str(data.get("note") or "")[:240]
+    row.save()
+    return JsonResponse({"limit": _limit_row(row)})

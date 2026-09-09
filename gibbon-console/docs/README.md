@@ -10,7 +10,7 @@ Firefox (no Web Bluetooth). The **laptop** is the BLE central and USB owner. Pho
 | Layout / protocol / pages | `architecture.md` |
 | USB vs BLE, reconnect, energy | `link.md` |
 | Trials, Sample rows, MySQL | `data.md` |
-| Joints, registers, act commands | `ui.md` |
+| Joints, axes, act, calibrate | `ui.md` |
 | What to build next | `next.md` |
 
 Chip: `docs` in `roarm-fw` (sensors, names, walls, flash). Do not invent HAT IMU / INA219 / LED.

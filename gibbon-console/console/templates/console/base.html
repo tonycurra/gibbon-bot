@@ -14,22 +14,28 @@
   <span id="dot" class="dot off"></span>
   <a class="brand" href="/">gibbon</a>
   <span id="link" class="bad">offline</span>
-  <span id="packEl"></span>
+  <span id="packEl">pack —</span>
+  <span id="foundEl" class="mut">motors —</span>
+  <span id="tqEl" class="mut">tq off</span>
   <a id="trialChip" href="/trials/"></a>
   <span class="sp"></span>
   <button type="button" id="btnHost">connect</button>
   <button type="button" id="btnDisc" hidden>drop</button>
-  <button type="button" class="stop" id="btnStop" hidden>STOP</button>
+  <button type="button" class="stop" id="btnStop">STOP</button>
 </header>
 <nav>
   {% for key, label in pages %}
   <a href="{% url key %}"{% if page == key %} class="on"{% endif %}>{{ label }}</a>
   {% endfor %}
 </nav>
-<p class="crumb">gibbon / {{ crumb }}</p>
 <main>
 {% block main %}{% endblock %}
 </main>
+<footer class="foot">
+  <button type="button" id="footToggle">log</button>
+  <pre id="footLog">—</pre>
+</footer>
+<script>window.CATALOG = {{ catalog_json }};</script>
 <script src="{% static 'console/js/core.js' %}"></script>
 {% block js %}{% endblock %}
 </body>

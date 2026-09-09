@@ -9,10 +9,10 @@ const VARS = [
 ];
 const MAXN = 500;
 const hist = {};
-JOINTS.forEach(j => { hist[j.id] = { t: [] }; VARS.forEach(v => { hist[j.id][v.key] = []; }); });
+MOTORS.forEach(j => { hist[j.id] = { t: [] }; VARS.forEach(v => { hist[j.id][v.key] = []; }); });
 
 const sel = $("gJoint");
-JOINTS.forEach(j => {
+MOTORS.forEach(j => {
   const o = document.createElement("option");
   o.value = j.id; o.textContent = j.name + "  " + j.id;
   sel.appendChild(o);
@@ -87,7 +87,7 @@ if (window.TRIAL_ID) {
       draw();
     });
   sel.onchange = () => {
-    JOINTS.forEach(j => { hist[j.id] = { t: [] }; VARS.forEach(v => { hist[j.id][v.key] = []; }); });
+    MOTORS.forEach(j => { hist[j.id] = { t: [] }; VARS.forEach(v => { hist[j.id][v.key] = []; }); });
     fetch("/api/trials/" + TRIAL_ID + "/samples?servo=" + sel.value)
       .then(r => r.json())
       .then(d => {

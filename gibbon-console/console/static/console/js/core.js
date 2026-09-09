@@ -1,13 +1,7 @@
-const JOINTS = [
-  { name: "base", id: 11 },
-  { name: "shoulder a", id: 12 },
-  { name: "shoulder b", id: 13 },
-  { name: "elbow", id: 14 },
-  { name: "wrist", id: 15 },
-  { name: "twist", id: 16 },
-  { name: "hand", id: 17 },
-];
-const GET_RE = /get id=(\d+) pos=(-?\d+) speed=(-?\d+) load=(-?\d+) v_raw=(\d+) v=([\d.]+) temp=(\d+) cur=(-?\d+) moving=(\d+) tq=(\S+) un=(-?\d+) turns=(-?\d+) st=(-?\d+) mode=(\S+)/;
+const CATALOG = window.CATALOG || { motors: [], joints: [] };
+const MOTORS = CATALOG.motors;
+const JOINTS = CATALOG.joints;
+const GET_KV = /(\w+)=(\S+)/g;
 const MISS_RE = /get id=(\d+) miss/;
 const WHO_RE = /who id=(\d+) name=\S+ fw=(\S+) mode=(-?\d+) kp=(-?\d+) kd=(-?\d+) ki=(-?\d+) amin=(-?\d+) amax=(-?\d+) goal=(-?\d+) tqlim=(-?\d+) motor=(\S+)/;
 const HB_RE = /^(?:t=)?(\d+)\s+heap=(\d+)\s+bus_rx=(\d+)\s+ble=(\d+)\s+stream=(\d+)/;
@@ -17,10 +11,20 @@ const G = {
   alive: false, wantHost: true, hostEs: null, transport: null,
   motorOpen: 0, paintQ: 0, rows: {}, chip: {},
   batt: { pack: null, miss: true, est: null, cells: null, n: null, lvl: null },
-  hooks: [],
+  hooks: [], recent: [],
 };
 
+function paintFoot() {
+  const el = $("footLog");
+  if (!el) return;
+  const n = el.classList.contains("wide") ? 16 : 5;
+  el.textContent = G.recent.slice(-n).join("\n") || "—";
+}
+
 function log(s) {
+  G.recent.push(s);
+  if (G.recent.length > 80) G.recent.shift();
+  paintFoot();
   const el = $("log");
   if (!el) return;
   el.textContent += s + "\n";
@@ -38,8 +42,50 @@ function fail(e) {
   log(m);
 }
 
+function parseGet(line) {
+  if (!line.startsWith("get id=")) return null;
+  const kv = {};
+  line.replace(GET_KV, (_, k, v) => { kv[k] = v; return ""; });
+  if (kv.pos == null) return null;
+  const pos = +kv.pos;
+  return {
+    id: +kv.id, pos,
+    speed: kv.speed != null ? +kv.speed : 0,
+    load: kv.load != null ? +kv.load : 0,
+    cur: kv.cur != null ? +kv.cur : 0,
+    moving: kv.moving != null ? +kv.moving : 0,
+    tq: kv.tq != null ? kv.tq : "0",
+    un: kv.un != null ? +kv.un : pos,
+    turns: kv.turns != null ? +kv.turns : 0,
+    st: kv.st != null ? +kv.st : 0,
+    mode: kv.mode != null ? kv.mode : "0",
+    v: kv.v != null ? kv.v : null,
+    temp: kv.temp != null ? +kv.temp : null,
+  };
+}
+
+function fmtDelta(prev, next) {
+  const bits = [];
+  if (!prev || prev.miss) {
+    bits.push("pos " + next.pos);
+  } else {
+    if (Math.abs(next.pos - prev.pos) >= 2) bits.push("pos " + prev.pos + "→" + next.pos);
+    if ((Math.abs(next.speed) >= 80 || Math.abs(prev.speed || 0) >= 80) && next.speed !== prev.speed) {
+      bits.push("spd " + next.speed);
+    }
+    if (next.load !== prev.load && (Math.abs(next.load) >= 30 || Math.abs(prev.load) >= 30)) {
+      bits.push("load " + next.load);
+    }
+    if (Math.abs((next.cur || 0) - (prev.cur || 0)) >= 5) bits.push("cur " + next.cur);
+    if (next.tq !== prev.tq) bits.push("tq " + next.tq);
+    if (next.moving !== prev.moving) bits.push("mv " + next.moving);
+  }
+  if (!bits.length) return null;
+  return next.id + "  " + bits.join("  ");
+}
+
 function foundN() {
-  return JOINTS.filter(j => G.rows[j.id] && !G.rows[j.id].miss).length;
+  return MOTORS.filter(m => G.rows[m.id] && !G.rows[m.id].miss).length;
 }
 
 function modeOf(r) {
@@ -55,14 +101,64 @@ async function send(cmd, quiet) {
   await G.transport.write(cmd + "\n");
 }
 
+function viaLabel() {
+  if (!G.alive) return "offline";
+  if (G.chip.via === "usb") return "usb";
+  if (G.chip.via === "ble") return "ble";
+  return G.chip.via || "online";
+}
+
+function tqOn() {
+  return MOTORS.filter(m => G.rows[m.id] && !G.rows[m.id].miss && G.rows[m.id].tq === "1").map(m => m.id);
+}
+
+function paintStatus() {
+  const pack = $("packEl");
+  if (pack) {
+    if (!G.alive) {
+      pack.className = "mut";
+      pack.textContent = "pack —";
+    } else if (G.batt.miss) {
+      pack.className = "bad";
+      pack.textContent = "pack off";
+    } else {
+      pack.className = "ok";
+      pack.textContent = "pack " + G.batt.pack + "V";
+    }
+  }
+  const found = $("foundEl");
+  if (found) {
+    if (!G.alive) {
+      found.className = "mut";
+      found.textContent = "motors —";
+    } else {
+      const n = foundN();
+      found.className = n === 7 ? "ok" : "bad";
+      found.textContent = "motors " + n + "/7";
+    }
+  }
+  const tq = $("tqEl");
+  if (tq) {
+    const on = tqOn();
+    if (!G.alive || !on.length) {
+      tq.className = "mut";
+      tq.textContent = "tq off";
+    } else {
+      tq.className = "bad";
+      tq.textContent = "tq " + on.join(",");
+    }
+  }
+}
+
 function setLink(ok) {
   G.alive = ok;
-  $("link").textContent = ok ? "online" : "offline";
+  $("link").textContent = viaLabel();
   $("link").className = ok ? "ok" : "bad";
   $("dot").className = "dot " + (ok ? "on" : "off");
   $("btnHost").hidden = ok;
   $("btnDisc").hidden = !ok;
-  $("btnStop").hidden = !ok;
+  $("btnStop").disabled = !ok;
+  paintStatus();
   G.hooks.forEach(fn => fn("link"));
 }
 
@@ -83,22 +179,17 @@ function onLine(line) {
     return;
   }
   if (line.startsWith("get LOAD")) { log(line); return; }
-  const g = GET_RE.exec(line);
-  if (g) {
-    const id = +g[1];
-    const next = {
-      miss: false, pos: +g[2], speed: +g[3], load: +g[4], v_raw: +g[5], v: +g[6], temp: +g[7],
-      cur: +g[8], moving: +g[9], tq: g[10], un: +g[11], turns: +g[12], st: +g[13], mode: g[14],
-      raw: line, t: Date.now(), id,
-    };
+  const parsed = parseGet(line);
+  if (parsed) {
+    const id = parsed.id;
     const prev = G.rows[id];
-    const live = !prev || prev.miss || next.moving
-      || Math.abs((prev.pos || 0) - next.pos) >= 2
-      || prev.speed !== next.speed || prev.load !== next.load
-      || prev.cur !== next.cur || prev.tq !== next.tq;
-    G.rows[id] = Object.assign({}, prev, next);
-    if (live) log(line);
-    G.hooks.forEach(fn => fn("sample", G.rows[id]));
+    const next = Object.assign({}, prev, parsed, { miss: false, raw: line, t: Date.now(), id });
+    if (parsed.v == null && prev && prev.v != null) next.v = prev.v;
+    if (parsed.temp == null && prev && prev.temp != null) next.temp = prev.temp;
+    const note = fmtDelta(prev, next);
+    G.rows[id] = next;
+    if (note) log(note);
+    G.hooks.forEach(fn => fn("sample", next));
     return;
   }
   const who = WHO_RE.exec(line);
@@ -120,12 +211,12 @@ function onLine(line) {
   }
   if (/batt pack=miss/.test(line)) {
     G.batt = { pack: null, miss: true, est: null, cells: null, n: null, lvl: null };
-    log(line); paintPack(); G.hooks.forEach(fn => fn("batt")); return;
+    log(line); paintStatus(); G.hooks.forEach(fn => fn("batt")); return;
   }
   const bp = /batt pack=([\d.]+)V est=(\d+)% cells=(\d+) n=(\d+) (\S+)/.exec(line);
   if (bp) {
     G.batt = { miss: false, pack: bp[1], est: +bp[2], cells: +bp[3], n: +bp[4], lvl: bp[5] };
-    log(line); paintPack(); G.hooks.forEach(fn => fn("batt")); return;
+    log(line); paintStatus(); G.hooks.forEach(fn => fn("batt")); return;
   }
   const inf = /info chip=(\S+) cores=(\d+) rev=(\d+) flash=(\d+)KB reset=(\S+)/.exec(line);
   if (inf) {
@@ -153,18 +244,11 @@ function onLine(line) {
   const bleName = /ble=(gibbon-\S+)/.exec(line);
   if (bleName) { G.chip.ble = bleName[1]; G.hooks.forEach(fn => fn("chip")); return; }
   const gp = /gpio 18\(rx\)=(\d+) 19\(tx\)=(\d+)/.exec(line);
-  if (gp) { G.chip.gpio = "18=" + gp[1] + " 19=" + gp[2]; return; }
+  if (gp) { G.chip.gpio = "18=" + gp[1] + " 19=" + gp[2]; G.hooks.forEach(fn => fn("chip")); return; }
   const sms = /stream ms=(\d+) dump=(\d+)/.exec(line);
-  if (sms) { G.chip.stream = sms[1]; G.chip.dump = sms[2]; return; }
+  if (sms) { G.chip.stream = sms[1]; G.chip.dump = sms[2]; G.hooks.forEach(fn => fn("chip")); return; }
   if (/^(get present|batt id=|batt READ|ping |bench v|bus=|stream |listen|reset=|tasks|who EEPROM|state bus|found=)/.test(line)) return;
   log(line);
-}
-
-function paintPack() {
-  const el = $("packEl");
-  if (!el) return;
-  el.className = G.batt.miss ? "bad" : "ok";
-  el.textContent = !G.alive ? "" : G.batt.miss ? "pack off" : ("pack " + G.batt.pack + "V");
 }
 
 async function afterConnect(kind) {
@@ -172,7 +256,6 @@ async function afterConnect(kind) {
   Object.keys(G.rows).forEach(k => delete G.rows[k]);
   G.chip.via = kind;
   setLink(true);
-  paintPack();
   await send("info", true);
   await send("state", true);
   await send("gpio", true);
@@ -187,7 +270,6 @@ async function disconnect() {
   try { if (G.transport && G.transport.write) await G.transport.write("stream 0\n"); } catch {}
   G.transport = null;
   setLink(false);
-  paintPack();
 }
 
 function ensureSse() {
@@ -222,8 +304,16 @@ async function connectHost() {
 
 $("btnHost").onclick = () => connectHost().catch(fail);
 $("btnDisc").onclick = disconnect;
-$("btnStop").onclick = () => send("estop");
+$("btnStop").onclick = () => { if (G.transport) send("estop"); };
 window.addEventListener("keydown", e => { if (e.key === "Escape" && G.transport) send("estop"); });
+G.hooks.push(() => paintStatus());
+const footBtn = $("footToggle");
+if (footBtn) {
+  footBtn.onclick = () => {
+    $("footLog").classList.toggle("wide");
+    paintFoot();
+  };
+}
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister()));
 }
@@ -240,6 +330,7 @@ setInterval(async () => {
   if (G.wantHost) ensureSse();
 }, 2000);
 window.G = G;
+window.MOTORS = MOTORS;
 window.JOINTS = JOINTS;
 window.send = send;
 window.log = log;

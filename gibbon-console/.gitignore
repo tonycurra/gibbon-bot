@@ -4,4 +4,6 @@ __pycache__/
 *.pyc
 .ble-addr
 db.sqlite3
+*.sqlite3
 console/migrations/__pycache__/
+staticfiles/

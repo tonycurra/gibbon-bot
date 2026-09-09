@@ -12,6 +12,7 @@ Start on `/trials/` before you move. Stop when done. Marks (wall, slack, contact
 | **Command** | t_ms, text, source=`ui` — skip auto `info`/`state`/`bench`/`batt`/`who`/`stream` |
 | **Sample** | t_ms, servo 11–17, pos, un, turns, speed, load, v, temp, cur, moving, tq, mode |
 | **Note** | t_ms, text |
+| **Limit** | servo 11–17, home, amin, amax — host notebook from `/calibrate/` |
 
 Ingest: `bridge.db_loop` from the same RX lines the page parses. Miss-spam with pack off is not stored. Pack V set from first `batt pack=…V`.
 
