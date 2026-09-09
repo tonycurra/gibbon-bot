@@ -1,8 +1,14 @@
 # BLE HTML: same data, phone/laptop, all power states
 
-After USB `get` is trusted (`docs/baselines/usb-battery-on.md`). Hand-move next (`docs/plans/hand-move.md`). Not implemented yet.
+**Superseded.** The dashboard is Django in `../../gibbon-console/` (Firefox + laptop USB/BLE bridge). Current docs: `../../gibbon-console/docs/README.md`. Firmware BLE: `../ble.md`.
 
-One **static HTML + JS** page. Chrome **Web Bluetooth**. The chip speaks the **same text lines** as USB (`info`, `bench`, `ping`, `get`, later `raw`). BLE is only a wireless serial pipe (Nordic-UART-style, NimBLE). No WiFi on this WROOM-32 while BLE is on.
+The power-state matrix below is still true.
+
+---
+
+Implemented originally as static HTML + Web Bluetooth (Chrome). Firmware: NimBLE Nordic-UART, advertise `gibbon-XXXX`, same text lines as USB.
+
+One **static HTML + JS** page. Chrome **Web Bluetooth**. The chip speaks the **same text lines** as USB (`info`, `bench`, `ping`, `get`, `stream`, `id N`, `hand`, `twist`). BLE is only a wireless serial pipe (Nordic-UART-style, NimBLE). No WiFi on this WROOM-32 while BLE is on.
 
 The page is a dashboard, not a new protocol. If a field is empty, the power state does not have that sensor — do not invent HAT IMU/INA219/LED.
 

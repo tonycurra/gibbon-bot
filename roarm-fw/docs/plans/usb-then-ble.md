@@ -30,7 +30,7 @@ Do not type `move` / `torque 1` until hand-move `pos` is trusted.
 
 Each board is a **peripheral**. The four-limb host is a **central** later (laptop/Pi, not this firmware).
 
-Simple HTML + JS page, Web Bluetooth, same text as USB. Power-state matrix (USB-only / USB+battery / battery unplug USB): `docs/plans/ble-html.md`.
+Simple HTML is done and grew into Django: `../../gibbon-console/docs/README.md`. NimBLE details: `../ble.md`. Power-state matrix: `docs/plans/ble-html.md`.
 
 **NimBLE**, not Bluedroid. Advertise after USB `get` works once. Phone: that page or nRF Connect. Custom GATT only after the text pipe is boring.
 

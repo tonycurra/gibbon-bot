@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Live sensor table. One screen, overwrites in place. READ only.
+"""Live sensor table. All registers, overwrites in place. READ only.
 
   python3 scripts/listen.py
 
@@ -19,6 +19,8 @@ GET_RE = re.compile(
     r"get id=(\d+) pos=(-?\d+) speed=(-?\d+) load=(-?\d+) "
     r"v_raw=(\d+) v=([\d.]+) temp=(\d+) cur=(-?\d+) moving=(\d+) tq=(\S+)"
     r"(?: un=(-?\d+) turns=(-?\d+))?"
+    r"(?: st=(-?\d+))?"
+    r"(?: mode=(\S+))?"
 )
 JOINT = {
     11: "turn",
@@ -86,6 +88,8 @@ def parse(lines):
             "tq": m.group(10),
             "un": un,
             "turns": tn,
+            "st": m.group(13) if m.group(13) else "?",
+            "mode": m.group(14) if m.group(14) else "?",
         }
     return rows, dump
 
@@ -106,7 +110,7 @@ class Unwrap:
                 elif d < -2048:
                     self.turns[id_] += 1
             self.last[id_] = p
-            if "un" not in r or r["un"] == r["pos"]:
+            if r["un"] == r["pos"]:
                 r["un"] = p + self.turns[id_] * 4096
                 r["turns"] = self.turns[id_]
             else:
@@ -140,9 +144,9 @@ def draw(t_s, rows, prev, miss):
     lines = [
         "  listen  t=%5.1fs  pack=%sV  %s%s" % (t_s, pack, tq_s, miss_s),
         DIM
-        + "  pos = 0–4095 magnet (wraps).  un = pos + turns×4096"
+        + "  pos 0–4095 magnet.  un = pos + turns×4096.  same bytes as get."
         + RST,
-        "  ID  joint      pos     un  tn      °   spd  load  cur mv tq     V  °C",
+        "  ID  joint      pos     un  tn      °   spd  load  cur mv tq     V  °C  st mode",
     ]
     for id_ in range(11, 18):
         r = rows.get(id_)
@@ -151,7 +155,7 @@ def draw(t_s, rows, prev, miss):
             continue
         c = color_row(r, prev.get(id_) if prev else None)
         lines.append(
-            "%s  %2d  %-8s  %4d  %5d %+3d %7s  %4d  %4d  %3d  %d  %s  %4s  %3d%s"
+            "%s  %2d  %-8s  %4d  %5d %+3d %7s  %4d  %4d  %3d  %d  %s  %4s  %3d  %2s %4s%s"
             % (
                 c,
                 id_,
@@ -167,11 +171,13 @@ def draw(t_s, rows, prev, miss):
                 r["tq"],
                 r["v"],
                 r["temp"],
+                r["st"],
+                r["mode"],
                 RST,
             )
         )
     lines.append("")
-    lines.append(DIM + "  green = moving   yellow = load/cur   red = torque on" + RST)
+    lines.append(DIM + "  green = pos/speed   yellow = load/cur   red = torque on" + RST)
     lines.append(DIM + "  backdrive ok.  Ctrl+C stop." + RST)
     sys.stdout.write(HOME_CUR + "\n".join(lines) + "\n" + CLEAR_TAIL)
     sys.stdout.flush()
@@ -181,6 +187,8 @@ def main():
     ser = serial.Serial(PORT, BAUD, timeout=0.05)
     time.sleep(0.25)
     ser.reset_input_buffer()
+    send(ser, "")
+    drain(ser, 0.4)
     send(ser, "listen")
     extra = drain(ser, 0.35)
     _, dump = parse(extra)
@@ -196,7 +204,7 @@ def main():
     try:
         while True:
             send(ser, "get")
-            raw = drain(ser, 1.05)
+            raw = drain(ser, 1.5)
             rows, _ = parse(raw)
             track.apply(rows)
             miss = [i for i in range(11, 18) if i not in rows]

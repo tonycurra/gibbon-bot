@@ -1,8 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdarg.h>
 #include <ctype.h>
 
+#include "ble_nus.h"
 #include "driver/gpio.h"
 #include "driver/uart.h"
 #include "driver/uart_vfs.h"
@@ -25,9 +27,14 @@
 #define INST_PING 1
 #define INST_READ 2
 #define INST_WRITE 3
+#define REG_FW 0
+#define REG_MIN_ANGLE 9
+#define REG_MAX_TORQUE 16
+#define REG_KP 21
 #define REG_MODE 33
 #define REG_TORQUE_EN 40
 #define REG_ACC 41
+#define REG_GOAL 42
 #define REG_GOAL_SPEED 46
 #define REG_LOCK 55
 #define REG_PRESENT 56
@@ -44,6 +51,7 @@
 #define TWIST_MAX 4095
 #define TWIST_CENTER 4050 /* wrap-seam home; 4050 and ~50 are the same neighborhood */
 #define TWIST_STEP_MAX 900 /* host walks a full turn in small hops; refuse a long hop */
+#define NUDGE_MAX 80 /* unwalled IDs 11–15: no long WritePos */
 #define V_CUTOFF 105 /* 10.5 V, 0.1 V LSB */
 #define GUARD_DLOAD 100 /* |load| above moving cruise — cable tighten */
 #define GUARD_LOAD 1350 /* hard |load|; plus-bias cruise is ~1100–1200 */
@@ -74,11 +82,63 @@ static int twist_cruise_n;
 static int twist_cruise_load;
 static int twist_miss;
 static TickType_t twist_guard_last;
+static int move_speed = HAND_SPEED;
+static int move_acc = HAND_ACC;
+static int stream_ms;
+static TickType_t stream_last;
+static int cached_mode[ID_LAST + 1];
+static uint8_t mode_ok[ID_LAST + 1];
+static char ble_line[256];
+static int ble_line_n;
 
 static unsigned long now_ms(void)
 {
     return (unsigned long)(xTaskGetTickCount() * portTICK_PERIOD_MS);
 }
+
+static void emit_bytes(const char *s, int n)
+{
+    int i;
+
+    if (n <= 0) {
+        return;
+    }
+    uart_write_bytes(USB_UART, s, n);
+    for (i = 0; i < n; i++) {
+        if (s[i] == '\n') {
+            if (ble_line_n > 0) {
+                ble_nus_send(ble_line, ble_line_n);
+                ble_nus_send("\n", 1);
+                ble_line_n = 0;
+            } else {
+                ble_nus_send("\n", 1);
+            }
+        } else if (ble_line_n < (int)sizeof(ble_line) - 1) {
+            ble_line[ble_line_n++] = s[i];
+        }
+    }
+}
+
+static int emitf(const char *fmt, ...)
+{
+    char buf[256];
+    va_list ap;
+    int n;
+
+    va_start(ap, fmt);
+    n = vsnprintf(buf, sizeof(buf), fmt, ap);
+    va_end(ap);
+    if (n <= 0) {
+        return n;
+    }
+    if (n >= (int)sizeof(buf)) {
+        n = (int)sizeof(buf) - 1;
+    }
+    emit_bytes(buf, n);
+    return n;
+}
+
+#define printf(...) emitf(__VA_ARGS__)
 
 static const char *reset_str(esp_reset_reason_t r)
 {
@@ -95,6 +155,31 @@ static const char *reset_str(esp_reset_reason_t r)
     }
 }
 
+static const char *id_name(int id)
+{
+    switch (id) {
+    case 11: return "turn";
+    case 12: return "raise-A";
+    case 13: return "raise-B";
+    case 14: return "bend";
+    case 15: return "wrist";
+    case 16: return "twist";
+    case 17: return "hand";
+    default: return "id";
+    }
+}
+
+static const char *id_motor(int id)
+{
+    if (id == 17) {
+        return "ST3215HS";
+    }
+    if (id == 16) {
+        return "ST3215";
+    }
+    return "ST3235";
+}
+
 static void print_help(void)
 {
     printf("commands:\n");
@@ -105,11 +190,18 @@ static void print_help(void)
     printf("  ping     IDs 11-17 (read-only ping, still no move)\n");
     printf("  pingall  IDs 1-253, hits only\n");
     printf("  raw ID   ping + READ present, dump hex\n");
-    printf("  get      pos/speed/load/V/temp/current/moving/torque-en + un/turns (READ)\n");
+    printf("  get      pos/speed/load/V/temp/current/moving/torque-en + un/turns/st/mode\n");
     printf("  get N    same, one ID (16 = twist). faster than full get while moving\n");
-    printf("  estop    cut twist speed + torque (bus miss / bind)\n");
+    printf("  stream   live get all IDs every 180ms. stream 0/off stops. stream N = period ms\n");
+    printf("  who      EEPROM: fw/mode/PID/angle-limit/goal per ID\n");
+    printf("  who N    same, one ID\n");
+    printf("  estop    ALL ids tq=0 + twist speed 0 + servo\n");
     printf("  batt     pack V from servo VIN + 3S rest-%% guess (not a fuel gauge)\n");
     printf("  bench    chip + ping 11-17\n");
+    printf("  move speed N / acc N   next WritePos (default %d / %d)\n",
+           HAND_SPEED, HAND_ACC);
+    printf("  id N free|hold|to G|nudge D   any 11-17. 11-15 hop<=%d (no walls)\n",
+           NUDGE_MAX);
     printf("  hand open   ID 17 to %d (soft open). slow. no other ID\n", HAND_OPEN);
     printf("  hand close  ID 17 to %d (soft close). slow. no other ID\n", HAND_CLOSE);
     printf("  hand to N   ID 17 to N, clamped %d-%d (wall 2088)\n", HAND_OPEN, HAND_TO_MAX);
@@ -121,7 +213,7 @@ static void print_help(void)
     printf("  twist here  declare current pos as cable-home (host still saves un)\n");
     printf("  twist servo / wheel  mode 0 or 1 (EEPROM — always put back to servo)\n");
     printf("  twist speed N  wheel jog, signed. 0=stop. then twist servo\n");
-    printf("  twist estop    same as estop\n");
+    printf("  twist estop    same as estop for twist only\n");
     printf("  help\n");
 }
 
@@ -422,7 +514,7 @@ static int unwrap_pos(int id, int pos)
     return pos + wrap_turns[id] * 4096;
 }
 
-static void joint_to(int id, int goal, int lo, int hi, const char *name)
+static void joint_to(int id, int goal, int lo, int hi, int hop_max, const char *name)
 {
     if (goal < lo) {
         goal = lo;
@@ -436,12 +528,11 @@ static void joint_to(int id, int goal, int lo, int hi, const char *name)
         return;
     }
     unwrap_pos(id, cur);
-    if (id == TWIST_ID) {
-        /* WritePos is linear 0-4095, not shortest-arc. Use raw delta. */
+    if (hop_max > 0) {
         int d = goal - cur;
-        if (d > TWIST_STEP_MAX || d < -TWIST_STEP_MAX) {
+        if (d > hop_max || d < -hop_max) {
             printf("%s abort hop %d cur=%d goal=%d max=%d\n",
-                   name, d, cur, goal, TWIST_STEP_MAX);
+                   name, d, cur, goal, hop_max);
             return;
         }
     }
@@ -456,19 +547,33 @@ static void joint_to(int id, int goal, int lo, int hi, const char *name)
         return;
     }
     uint8_t buf[7];
-    buf[0] = HAND_ACC;
+    buf[0] = (uint8_t)move_acc;
     buf[1] = (uint8_t)(goal & 0xFF);
     buf[2] = (uint8_t)((goal >> 8) & 0xFF);
     buf[3] = 0;
     buf[4] = 0;
-    buf[5] = (uint8_t)(HAND_SPEED & 0xFF);
-    buf[6] = (uint8_t)((HAND_SPEED >> 8) & 0xFF);
+    buf[5] = (uint8_t)(move_speed & 0xFF);
+    buf[6] = (uint8_t)((move_speed >> 8) & 0xFF);
     if (!bus_write(id, REG_ACC, buf, 7)) {
         printf("%s write miss goal=%d\n", name, goal);
         return;
     }
-    printf("%s to id=%d goal=%d speed=%d clamp=%d-%d tq=1\n",
-           name, id, goal, HAND_SPEED, lo, hi);
+    printf("%s to id=%d goal=%d speed=%d acc=%d clamp=%d-%d tq=1\n",
+           name, id, goal, move_speed, move_acc, lo, hi);
+}
+
+static void clamps_for(int id, int *lo, int *hi, int *hop)
+{
+    *lo = 0;
+    *hi = 4095;
+    *hop = NUDGE_MAX;
+    if (id == HAND_ID) {
+        *lo = HAND_OPEN;
+        *hi = HAND_TO_MAX;
+        *hop = 0;
+    } else if (id == TWIST_ID) {
+        *hop = TWIST_STEP_MAX;
+    }
 }
 
 static void cmd_hand(const char *what)
@@ -490,7 +595,7 @@ static void cmd_hand(const char *what)
         printf("err hand open|close|to N|free\n");
         return;
     }
-    joint_to(HAND_ID, goal, HAND_OPEN, hi, "hand");
+    joint_to(HAND_ID, goal, HAND_OPEN, hi, 0, "hand");
 }
 
 static int twist_read_mode(void)
@@ -499,6 +604,8 @@ static int twist_read_mode(void)
     if (!bus_read(TWIST_ID, REG_MODE, 1, &m)) {
         return -1;
     }
+    cached_mode[TWIST_ID] = (int)m;
+    mode_ok[TWIST_ID] = 1;
     return (int)m;
 }
 
@@ -516,6 +623,8 @@ static int twist_set_mode(uint8_t mode)
         return 0;
     }
     bus_write(TWIST_ID, REG_LOCK, &lock, 1);
+    cached_mode[TWIST_ID] = (int)mode;
+    mode_ok[TWIST_ID] = 1;
     return 1;
 }
 
@@ -605,7 +714,202 @@ static void cmd_twist(const char *what)
         printf("twist abort not servo — twist servo first\n");
         return;
     }
-    joint_to(TWIST_ID, goal, TWIST_MIN, TWIST_MAX, "twist");
+    joint_to(TWIST_ID, goal, TWIST_MIN, TWIST_MAX, TWIST_STEP_MAX, "twist");
+}
+
+static void cmd_estop_all(void)
+{
+    uint8_t z[2] = { 0, 0 };
+    uint8_t tq0 = 0;
+    bus_write(TWIST_ID, REG_GOAL_SPEED, z, 2);
+    twist_guard_stop();
+    twist_set_mode(0);
+    for (int id = ID_FIRST; id <= ID_LAST; id++) {
+        bus_write(id, REG_TORQUE_EN, &tq0, 1);
+    }
+    printf("ESTOP all tq=0 twist servo\n");
+}
+
+static void cmd_id(const char *what)
+{
+    int id = atoi(what);
+    const char *rest = what;
+    const char *name;
+    int lo, hi, hop;
+
+    if (id < ID_FIRST || id > ID_LAST) {
+        printf("err id 11-17\n");
+        return;
+    }
+    while (*rest && !isspace((unsigned char)*rest)) {
+        rest++;
+    }
+    while (*rest && isspace((unsigned char)*rest)) {
+        rest++;
+    }
+    name = id_name(id);
+    if (id == 12 || id == 13) {
+        printf("warn raise is dual-drive 12+13 — one motor fights the other\n");
+    }
+    if (strcmp(rest, "free") == 0) {
+        if (id == TWIST_ID) {
+            twist_guard_stop();
+        }
+        joint_free(id, name);
+        return;
+    }
+    if (strcmp(rest, "hold") == 0) {
+        int pos = read_pos(id);
+        if (pos < 0) {
+            printf("%s abort no pos id=%d\n", name, id);
+            return;
+        }
+        joint_to(id, pos, pos, pos, 0, name);
+        return;
+    }
+    clamps_for(id, &lo, &hi, &hop);
+    if (id == TWIST_ID &&
+        (strncmp(rest, "to ", 3) == 0 || strncmp(rest, "nudge ", 6) == 0) &&
+        twist_read_mode() != 0) {
+        printf("twist abort not servo — twist servo first\n");
+        return;
+    }
+    if (strncmp(rest, "to ", 3) == 0) {
+        joint_to(id, atoi(rest + 3), lo, hi, hop, name);
+        return;
+    }
+    if (strncmp(rest, "nudge ", 6) == 0) {
+        int d = atoi(rest + 6);
+        int pos;
+        if (d > NUDGE_MAX) {
+            d = NUDGE_MAX;
+        }
+        if (d < -NUDGE_MAX) {
+            d = -NUDGE_MAX;
+        }
+        pos = read_pos(id);
+        if (pos < 0) {
+            printf("%s abort no pos id=%d\n", name, id);
+            return;
+        }
+        joint_to(id, pos + d, lo, hi, NUDGE_MAX, name);
+        return;
+    }
+    printf("err id N free|hold|to G|nudge D\n");
+}
+
+static void print_who_id(int id)
+{
+    uint8_t fw[2] = { 0, 0 };
+    uint8_t ang[4] = { 0 };
+    uint8_t pid[3] = { 0 };
+    uint8_t tqlim[2] = { 0 };
+    uint8_t goal[2] = { 0 };
+    uint8_t mode = 0;
+    int amin = -1, amax = -1, kp = -1, kd = -1, ki = -1, gl = -1, lim = -1;
+    int md = -1;
+    char fw_s[12];
+
+    snprintf(fw_s, sizeof(fw_s), "?");
+    if (bus_read(id, REG_FW, 2, fw)) {
+        snprintf(fw_s, sizeof(fw_s), "%d.%d", fw[0], fw[1]);
+    }
+    if (bus_read(id, REG_MIN_ANGLE, 4, ang)) {
+        amin = (int)(ang[0] | (ang[1] << 8));
+        amax = (int)(ang[2] | (ang[3] << 8));
+    }
+    if (bus_read(id, REG_KP, 3, pid)) {
+        kp = pid[0];
+        kd = pid[1];
+        ki = pid[2];
+    }
+    if (bus_read(id, REG_MAX_TORQUE, 2, tqlim)) {
+        lim = (int)(tqlim[0] | (tqlim[1] << 8));
+    }
+    if (bus_read(id, REG_MODE, 1, &mode)) {
+        md = (int)mode;
+        cached_mode[id] = md;
+        mode_ok[id] = 1;
+    }
+    if (bus_read(id, REG_GOAL, 2, goal)) {
+        gl = sts_s15((uint16_t)(goal[0] | (goal[1] << 8)));
+    }
+    printf("who id=%d name=%s fw=%s mode=%d kp=%d kd=%d ki=%d amin=%d amax=%d goal=%d tqlim=%d motor=%s\n",
+           id, id_name(id), fw_s, md, kp, kd, ki, amin, amax, gl, lim, id_motor(id));
+}
+
+static void cmd_who(int id)
+{
+    if (id > 0) {
+        if (id < ID_FIRST || id > ID_LAST) {
+            printf("err who 11-17\n");
+            return;
+        }
+        print_who_id(id);
+        return;
+    }
+    printf("who EEPROM+RAM. mode 0=servo 1=wheel. amin/amax=0-4095 means no eeprom wall.\n");
+    for (int i = ID_FIRST; i <= ID_LAST; i++) {
+        print_who_id(i);
+    }
+}
+
+static void cmd_move(const char *what)
+{
+    if (strncmp(what, "speed ", 6) == 0) {
+        int s = atoi(what + 6);
+        if (s < 1) {
+            s = 1;
+        }
+        if (s > 3073) {
+            s = 3073;
+        }
+        move_speed = s;
+        printf("move speed=%d\n", move_speed);
+        return;
+    }
+    if (strncmp(what, "acc ", 4) == 0) {
+        int a = atoi(what + 4);
+        if (a < 0) {
+            a = 0;
+        }
+        if (a > 150) {
+            a = 150;
+        }
+        move_acc = a;
+        printf("move acc=%d\n", move_acc);
+        return;
+    }
+    printf("err move speed N|acc N  now speed=%d acc=%d\n", move_speed, move_acc);
+}
+
+static void cmd_stream(const char *what)
+{
+    while (*what && isspace((unsigned char)*what)) {
+        what++;
+    }
+    if (*what == '\0' || strcmp(what, "on") == 0) {
+        stream_ms = 180;
+    } else if (strcmp(what, "off") == 0) {
+        stream_ms = 0;
+    } else {
+        int ms = atoi(what);
+        if (ms < 0) {
+            ms = 0;
+        }
+        if (ms > 0 && ms < 40) {
+            ms = 40;
+        }
+        if (ms > 2000) {
+            ms = 2000;
+        }
+        stream_ms = ms;
+    }
+    if (stream_ms) {
+        listen_dump = 0;
+    }
+    stream_last = 0;
+    printf("stream ms=%d dump=%d\n", stream_ms, listen_dump);
 }
 
 static void cmd_info(void)
@@ -624,24 +928,24 @@ static void cmd_info(void)
     printf("info mac=%02x:%02x:%02x:%02x:%02x:%02x heap=%u uptime_ms=%lu\n",
            mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],
            (unsigned)esp_get_free_heap_size(), now_ms());
-    printf("info idf=%s usb=115200 bus=gpio18/19@1Mbps ids=11-17\n",
-           esp_get_idf_version());
-    printf("info note=listen-only until ping/get. no move. servos need XT60\n");
+    printf("info idf=%s usb=115200 bus=gpio18/19@1Mbps ids=11-17 ble=%s\n",
+           esp_get_idf_version(), ble_nus_name());
+    printf("info note=no auto-move. same text on USB and BLE. servos need XT60\n");
 }
 
 static void cmd_state(void)
 {
     uint8_t mac[6];
     esp_read_mac(mac, ESP_MAC_WIFI_STA);
-    printf("state t=%lu heap=%u reset=%s tasks=%u bus_rx=%lu dump=%d\n",
+    printf("state t=%lu heap=%u reset=%s tasks=%u bus_rx=%lu dump=%d stream=%d ble=%d\n",
            now_ms(),
            (unsigned)esp_get_free_heap_size(),
            reset_str(esp_reset_reason()),
            (unsigned)uxTaskGetNumberOfTasks(),
            (unsigned long)bus_rx_total,
-           listen_dump);
-    printf("state mac=%02x:%02x:%02x:%02x:%02x:%02x\n",
-           mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+           listen_dump, stream_ms, ble_nus_connected());
+    printf("state mac=%02x:%02x:%02x:%02x:%02x:%02x name=%s\n",
+           mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], ble_nus_name());
     printf("state bus=uart1 gpio18/19 1Mbps rx-only until ping\n");
 #if CONFIG_FREERTOS_USE_TRACE_FACILITY && CONFIG_FREERTOS_USE_STATS_FORMATTING_FUNCTIONS
     {
@@ -700,7 +1004,7 @@ static void cmd_bench(void)
            chip.cores, chip.revision, (unsigned long)(flash_size / 1024));
     printf("mac=%02x:%02x:%02x:%02x:%02x:%02x\n",
            mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-    printf("bus=gpio18/19@1Mbps ids=%d-%d\n", ID_FIRST, ID_LAST);
+    printf("bus=gpio18/19@1Mbps ids=%d-%d ble=%s\n", ID_FIRST, ID_LAST, ble_nus_name());
     printf("ping");
     for (int id = ID_FIRST; id <= ID_LAST; id++) {
         printf(" %d=%s", id, bits[id - ID_FIRST] ? "found" : "miss");
@@ -743,6 +1047,8 @@ static void print_get_id(int id)
 {
     uint8_t d[PRESENT_LEN];
     uint8_t tq = 0;
+    char mode_s[8];
+
     if (!bus_read(id, REG_PRESENT, PRESENT_LEN, d)) {
         printf("get id=%d miss\n", id);
         return;
@@ -752,21 +1058,27 @@ static void print_get_id(int id)
     int load = sts_s15((uint16_t)(d[4] | (d[5] << 8)));
     int v_raw = d[6];
     int temp = d[7];
+    int st = d[9];
     int moving = d[10];
     int current = sts_s15((uint16_t)(d[13] | (d[14] << 8)));
     int tq_ok = bus_read(id, REG_TORQUE_EN, 1, &tq);
     int un = unwrap_pos(id, pos);
+    if (mode_ok[id]) {
+        snprintf(mode_s, sizeof(mode_s), "%d", cached_mode[id]);
+    } else {
+        snprintf(mode_s, sizeof(mode_s), "?");
+    }
     if (load > 400 || load < -400) {
         printf("get LOAD id=%d load=%d pos=%d un=%d\n", id, load, pos, un);
     }
-    printf("get id=%d pos=%d speed=%d load=%d v_raw=%d v=%.1f temp=%d cur=%d moving=%d tq=%s un=%d turns=%d\n",
+    printf("get id=%d pos=%d speed=%d load=%d v_raw=%d v=%.1f temp=%d cur=%d moving=%d tq=%s un=%d turns=%d st=%d mode=%s\n",
            id, pos, speed, load, v_raw, v_raw / 10.0, temp, current, moving,
-           tq_ok ? (tq ? "1" : "0") : "?", un, wrap_turns[id]);
+           tq_ok ? (tq ? "1" : "0") : "?", un, wrap_turns[id], st, mode_s);
 }
 
 static void cmd_get(void)
 {
-    printf("get present+torque-en. writes: hand, twist (clamped)\n");
+    printf("get present+torque-en. writes: id N / hand / twist\n");
     twist_guard_tick();
     for (int id = ID_FIRST; id <= ID_LAST; id++) {
         print_get_id(id);
@@ -782,6 +1094,25 @@ static void cmd_get_one(int id)
     }
     twist_guard_tick();
     print_get_id(id);
+}
+
+static void stream_tick(void)
+{
+    TickType_t t;
+
+    if (stream_ms <= 0) {
+        return;
+    }
+    t = xTaskGetTickCount();
+    if (stream_last != 0 && (t - stream_last) < pdMS_TO_TICKS(stream_ms)) {
+        return;
+    }
+    stream_last = t;
+    twist_guard_tick();
+    for (int id = ID_FIRST; id <= ID_LAST; id++) {
+        print_get_id(id);
+        twist_guard_tick();
+    }
 }
 
 /* 3S LiPo rest SoC from pack millivolts. Coarse. Not charging current. */
@@ -855,7 +1186,9 @@ static void print_banner(void)
     printf("reset=%s\n", reset_str(esp_reset_reason()));
     printf("tasks=%u\n", (unsigned)uxTaskGetNumberOfTasks());
     printf("bus=uart1 gpio18/19 1Mbps rx-only until ping\n");
-    printf("note=no auto-move. hand 689-2075. twist 0-4095 hop<=900.\n");
+    printf("ble=%s nordic-uart. same text as USB.\n", ble_nus_name());
+    printf("note=no auto-move. hand 689-2075. twist hop<=900. id 11-15 hop<=%d.\n",
+           NUDGE_MAX);
 }
 
 static void heartbeat(void)
@@ -865,10 +1198,11 @@ static void heartbeat(void)
         return;
     }
     last_beat = t;
-    printf("t=%lu heap=%u bus_rx=%lu\n",
+    printf("t=%lu heap=%u bus_rx=%lu ble=%d stream=%d\n",
            now_ms(),
            (unsigned)esp_get_free_heap_size(),
-           (unsigned long)bus_rx_total);
+           (unsigned long)bus_rx_total,
+           ble_nus_connected(), stream_ms);
 }
 
 static void handle_line(char *line)
@@ -925,8 +1259,32 @@ static void handle_line(char *line)
         cmd_get_one(atoi(line + 4));
         return;
     }
+    if (strcmp(line, "who") == 0) {
+        cmd_who(0);
+        return;
+    }
+    if (strncmp(line, "who ", 4) == 0) {
+        cmd_who(atoi(line + 4));
+        return;
+    }
+    if (strcmp(line, "stream") == 0) {
+        cmd_stream("");
+        return;
+    }
+    if (strncmp(line, "stream ", 7) == 0) {
+        cmd_stream(line + 7);
+        return;
+    }
+    if (strncmp(line, "move ", 5) == 0) {
+        cmd_move(line + 5);
+        return;
+    }
+    if (strncmp(line, "id ", 3) == 0) {
+        cmd_id(line + 3);
+        return;
+    }
     if (strcmp(line, "estop") == 0) {
-        twist_cut("cmd", 0, 0, read_pos(TWIST_ID));
+        cmd_estop_all();
         return;
     }
     if (strcmp(line, "batt") == 0) {
@@ -964,6 +1322,7 @@ void app_main(void)
 
     bus_init();
     last_beat = xTaskGetTickCount();
+    ble_nus_init();
 
     print_banner();
     print_help();
@@ -972,12 +1331,22 @@ void app_main(void)
     char line[64];
     int line_len = 0;
     for (;;) {
+        char bline[64];
+
         bus_eat(1);
         heartbeat();
         twist_guard_tick();
+        stream_tick();
+        ble_nus_tick();
+        if (ble_nus_subscribed() && listen_dump) {
+            listen_dump = 0;
+        }
+        while (ble_nus_pop_line(bline, (int)sizeof(bline))) {
+            handle_line(bline);
+        }
 
         uint8_t ch;
-        int n = uart_read_bytes(USB_UART, &ch, 1, pdMS_TO_TICKS(20));
+        int n = uart_read_bytes(USB_UART, &ch, 1, pdMS_TO_TICKS(10));
         if (n != 1) {
             continue;
         }

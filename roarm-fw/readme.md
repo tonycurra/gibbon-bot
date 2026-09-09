@@ -4,7 +4,7 @@ This is a modified Waveshare RoArm-M3 Pro (Tony: XT60 battery for portable use) 
 **Every USB start (pack off):** `docs/baselines/usb-start.md`  
 Stop monitor: second terminal `pkill -f esp_idf_monitor`
 
-Firmware: native **ESP-IDF**. No move on boot. READ `get` / `ping` / `batt`. Writes: **hand** (17) and **twist** (16), clamped. Sitting: `scripts/live.py`. Tests: `docs/software.md`. USB first, BLE later. Host UI (not this folder): `../gibbon-panel`.
+Firmware: native **ESP-IDF**. No move on boot. READ `get` / `ping` / `batt` / `stream` / `who`. Writes: any ID via `id N` (11–15 hop ≤80), **hand** (17) and **twist** (16) clamped. Same text on USB and **BLE** (`gibbon-XXXX`, Nordic UART). Sitting: `../gibbon-console` (Django) or `scripts/live.py`. Tests: `docs/software.md`.
 
 | | |
 | --- | --- |
@@ -15,6 +15,8 @@ Firmware: native **ESP-IDF**. No move on boot. READ `get` / `ping` / `batt`. Wri
 | Motor raw data (`get`) | `docs/hardware/motors/sensors.md` |
 | What to say (human names) | `docs/hardware/motors/names.md` |
 | Joint limits (`pos` walls) | `docs/hardware/motors/joint-limits.md` |
+| BLE NimBLE / energy / ghost | `docs/ble.md` |
+| Laptop UI (Django, trials, graphs) | `../gibbon-console/docs/README.md` |
 | USB start (healthy, pack off) | `docs/baselines/usb-start.md` |
 | USB + battery gold | `docs/baselines/usb-battery-on.md` |
 | USB no-battery ping gold | `docs/baselines/usb-no-battery.md` |
@@ -30,7 +32,7 @@ Firmware: native **ESP-IDF**. No move on boot. READ `get` / `ping` / `batt`. Wri
 | Hand open/close limits | `docs/baselines/hand-open-close.md` |
 | Next: twist, then other walls | `docs/plans/joint-limits.md` |
 | Collision vs FK / IK (after walls) | `docs/plans/collision.md` |
-| Then: BLE HTML dashboard | `docs/plans/ble-html.md` |
+| BLE HTML plan (superseded) | `docs/plans/ble-html.md` |
 | HAT swap / wiki | `docs/hardware/hardware.md`, `docs/hardware/SBSD-HAT.md` |
 | USB then BLE | `docs/plans/usb-then-ble.md` |
 | Test notes | `development-logs/` |

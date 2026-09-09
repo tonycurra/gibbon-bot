@@ -1,6 +1,8 @@
 # Software (what we run)
 
-Two sides. Chip talks Feetech on UART1. Laptop talks text on USB (`/dev/ttyACM0` 115200). **One process owns ACM0** — do not run `idf.py monitor` and a Python script together.
+Two sides. Chip talks Feetech on UART1. Laptop talks the same text on USB (`/dev/ttyACM0` 115200) or BLE (`gibbon-XXXX`, Nordic UART). **One process owns ACM0** — do not run `idf.py monitor` and a Python script together.
+
+**Sitting UI:** `../gibbon-console` (Django: live / graphs / act / trials). Docs: `../gibbon-console/docs/README.md`. Chip BLE: `docs/ble.md`. CLI: `scripts/live.py`.
 
 Flash / stop monitor: `docs/framework/espidf.md`.
 
@@ -38,12 +40,16 @@ Next test (no writer yet): wrist up / down (15) by hand in `live.py`.
 
 ## On the chip — `main/main.c`
 
-**No move on boot.** Writes only if you type them: **ID 17 (hand)** and **ID 16 (twist)**.
+**No move on boot.** Writes only if you type them. **ID 17 (hand)** and **ID 16 (twist)** have named commands. Any ID: `id N free|hold|to G|nudge D`. IDs 11–15 hop ≤ **80** (no walls). Raise 12+13 is dual-drive.
 
 | You type | What it does |
 | --- | --- |
 | `get` / `get N` | READ present. `get 16` while twist is moving (full get is slow) |
-| `estop` | cut twist speed + `tq=0` + servo. Chip also does this on `Δload` / `cur` / bus miss |
+| `stream` / `stream N` / `stream 0` | live `get` all IDs every N ms (default 180) |
+| `who` / `who N` | EEPROM fw/mode/PID/angle limits/goal |
+| `id N free\|hold\|to G\|nudge D` | any 11–17. 11–15 hop ≤80 |
+| `move speed N` / `move acc N` | next WritePos (default 300 / 20) |
+| `estop` | all ids `tq=0` + twist speed 0 + servo. Chip also cuts twist on `Δload` / `cur` / bus miss |
 | `hand open` / `close` / `to N` / `free` | ID 17. Soft **689–2008**, `to` max **2075**. Speed 300, acc 20 |
 | `twist to N` | ID 16, 0–4095, linear hop ≤ **900** (WritePos does not short-hop across 0) |
 | `twist mid` | **do not use** — stale goal **4050**, not slack 4068 |
@@ -55,7 +61,7 @@ Next test (no writer yet): wrist up / down (15) by hand in `live.py`.
 
 Pack cutoff 10.5 V in `joint_to`. Hand walls: open **609**, close **2088**. Twist walls: CW **978**, CCW `un` **7126**. Generous cable-only: **1127** / **3798**. Never command the walls.
 
-Chip `turns` starts at 0 each boot. Host `docs/baselines/data/twist-absolute.json` is the memory. Same raw `pos` is three cable states — only slack is home. `load` is 0 with `tq=0`. Host aborts a check on stall or `|load|` past the usual bias (plus ~1200 / minus ~170), not only 2000. IDs 11–15: no write path.
+Chip `turns` starts at 0 each boot. Host `docs/baselines/data/twist-absolute.json` is the memory. Same raw `pos` is three cable states — only slack is home. `load` is 0 with `tq=0`. Host aborts a check on stall or `|load|` past the usual bias (plus ~1200 / minus ~170), not only 2000. IDs 11–15: hop ≤80 only.
 
 ## On the laptop
 
@@ -86,4 +92,4 @@ Chip `turns` starts at 0 each boot. Host `docs/baselines/data/twist-absolute.jso
 
 ## Not this folder
 
-No MySQL. No BLE yet. No writer for IDs 11–15.
+No MySQL. IDs 11–15: hop-limited `id N` only (no walls). BLE is the same text pipe as USB (`docs/plans/ble-html.md`).
