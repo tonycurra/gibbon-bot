@@ -34,6 +34,10 @@ Simple HTML is done and grew into Django: `../../gibbon-console/docs/README.md`.
 
 **NimBLE**, not Bluedroid. Advertise after USB `get` works once. Phone: that page or nRF Connect. Custom GATT only after the text pipe is boring.
 
+Later (do not do this while walls are still hand-marked): see `firmware-minimal.md`.
+
+Chip = raw present + walls + SyncWrite 12+13 + estop/guard. Host = unwrap, degrees, calibrate, %. Same bytes on USB and NimBLE. No `get` loop from the browser.
+
 ## FK / IK
 
 | | Where | When |

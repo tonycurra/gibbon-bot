@@ -4,7 +4,7 @@ There is **no environment sensor**. No IMU, no force/torque cell, no hall on the
 
 Type `get` or `get 16` (USB, XT60 on). Same present block on IDs **11–17**. Servos stay silent until we READ them.
 
-Full snapshot still has every field that is not a default zero. **`stream` omits zeros and skips IDs that did not move** (unflashed until the 2026-09-09 compact `get`). Parsers treat missing keys as 0 / `un=pos` / servo.
+Typed `get` / `get N` prints **every present field including zeros**, plus `hex=` of the 15 bytes @56. **`stream` stays compact**: omits zeros and skips IDs that did not move. Parsers treat missing keys as 0 / `un=pos` / servo. The joint page polls `get N` so the amber line is the full snapshot.
 
 ```
 get id=16 pos=4068 v=11.3 temp=32

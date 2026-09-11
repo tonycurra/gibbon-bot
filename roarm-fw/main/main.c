@@ -15,6 +15,8 @@
 #include "esp_system.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "nvs.h"
+#include "nvs_flash.h"
 
 #define USB_UART UART_NUM_0
 #define BUS_UART UART_NUM_1
@@ -27,6 +29,9 @@
 #define INST_PING 1
 #define INST_READ 2
 #define INST_WRITE 3
+#define INST_SYNC_WRITE 0x83
+#define RAISE_A 12
+#define RAISE_B 13
 #define REG_FW 0
 #define REG_MIN_ANGLE 9
 #define REG_MAX_TORQUE 16
@@ -54,6 +59,8 @@
 #define NUDGE_MAX 80 /* unwalled IDs 11–15: no long WritePos */
 #define V_CUTOFF 105 /* 10.5 V, 0.1 V LSB */
 #define GUARD_DLOAD 100 /* |load| above moving cruise — cable tighten */
+#define HAND_DLOAD 400 /* free close cruise ~800, peak ~1080 → need Δ≳300 */
+#define GUARD_CRUISE 10 /* ~250 ms of motion before dload; skip accel spike */
 #define GUARD_LOAD 1350 /* hard |load|; plus-bias cruise is ~1100–1200 */
 #define GUARD_CUR 80 /* |mA|; free move was 0–9, stall is amps */
 #define GUARD_MISS 3 /* bus miss while pushing → cut */
@@ -82,8 +89,20 @@ static int twist_cruise_n;
 static int twist_cruise_load;
 static int twist_miss;
 static TickType_t twist_guard_last;
+static int move_guard_on;
+static int move_guard_id;
+static int move_guard_b; /* 13 when guarding raise; 0 = one id */
+static int move_cruise_n;
+static int move_cruise_load;
+static int move_miss;
+static int move_idle;
+static TickType_t move_guard_last;
 static int move_speed = HAND_SPEED;
 static int move_acc = HAND_ACC;
+static int g_dload = GUARD_DLOAD;
+static int g_hand = HAND_DLOAD;
+static int g_abs = GUARD_LOAD;
+static int g_curv = GUARD_CUR;
 static int stream_ms;
 static TickType_t stream_last;
 static int cached_mode[ID_LAST + 1];
@@ -99,6 +118,18 @@ static uint8_t pub_tq[ID_LAST + 1];
 static uint8_t pub_ok[ID_LAST + 1];
 static char ble_line[256];
 static int ble_line_n;
+
+/* Host-marked walls. RAM + NVS on the ESP. Not servo EEPROM. */
+#define WALL_HOME 1
+#define WALL_MIN 2
+#define WALL_MAX 4
+typedef struct __attribute__((packed)) {
+    int32_t home;
+    int32_t amin;
+    int32_t amax;
+    uint8_t has;
+} wall_t;
+static wall_t wall[ID_LAST + 1];
 
 static unsigned long now_ms(void)
 {
@@ -199,18 +230,22 @@ static void print_help(void)
     printf("  ping     IDs 11-17 (read-only ping, still no move)\n");
     printf("  pingall  IDs 1-253, hits only\n");
     printf("  raw ID   ping + READ present, dump hex\n");
-    printf("  get      pos/speed/load/V/temp/current/moving/torque-en + un/turns/st/mode\n");
-    printf("  get N    same, one ID (16 = twist). faster than full get while moving\n");
-    printf("  stream   live get all IDs every 180ms. stream 0/off stops. stream N = period ms\n");
+    printf("  get      full present @56 (zeros included) + tq + un/turns/st/mode + hex\n");
+    printf("  get N    same, one ID (15=wrist 16=twist 17=hand). faster while moving\n");
+    printf("  stream   compact live get, skip still IDs. stream 0/off. stream N = period ms\n");
     printf("  who      EEPROM: fw/mode/PID/angle-limit/goal per ID\n");
     printf("  who N    same, one ID\n");
-    printf("  estop    ALL ids tq=0 + twist speed 0 + servo\n");
+    printf("  lim      chip walls (NVS). lim ID / lim ID min|max|home N / lim ID clear\n");
+    printf("  guard    trip: guard / guard hand N / dload N / load N / cur N. 0 = that check off\n");
+    printf("  estop    ALL ids tq=0 + twist speed 0 + servo. also cuts a guarded move\n");
     printf("  batt     pack V from servo VIN + 3S rest-%% guess (not a fuel gauge)\n");
     printf("  bench    chip + ping 11-17\n");
     printf("  move speed N / acc N   next WritePos (default %d / %d)\n",
            HAND_SPEED, HAND_ACC);
-    printf("  id N free|hold|to G|nudge D   any 11-17. 11-15 hop<=%d (no walls)\n",
-           NUDGE_MAX);
+    printf("  id N free|hold|here|to G|nudge D   11-17. 12+13: free/hold/here only\n");
+    printf("  id N here   zero unwrap at current pos (Δ=0). pack-off forgets turns\n");
+    printf("  raise to G12 G13  SyncWrite both. never command 12 or 13 alone\n");
+    printf("  raise hold|free   both motors, one packet (hold) / both tq=0\n");
     printf("  hand open   ID 17 to %d (soft open). slow. no other ID\n", HAND_OPEN);
     printf("  hand close  ID 17 to %d (soft close). slow. no other ID\n", HAND_CLOSE);
     printf("  hand to N   ID 17 to N, clamped %d-%d (wall 2088)\n", HAND_OPEN, HAND_TO_MAX);
@@ -392,6 +427,55 @@ static int bus_write(int id, uint8_t addr, const uint8_t *data, int n)
     return rn >= 6 && rx[0] == 0xFF && rx[1] == 0xFF;
 }
 
+static int bus_sync_write(uint8_t addr, uint8_t nlen,
+                          const uint8_t *ids, int nid, const uint8_t *dat)
+{
+    uint8_t tx[64];
+    int k;
+    uint8_t sum;
+    int i, j;
+
+    if (nid < 1 || nlen < 1 || nid * (nlen + 1) + 8 > (int)sizeof(tx)) {
+        return 0;
+    }
+    tx[0] = 0xFF;
+    tx[1] = 0xFF;
+    tx[2] = 0xFE;
+    tx[3] = (uint8_t)(nid * (nlen + 1) + 4);
+    tx[4] = INST_SYNC_WRITE;
+    tx[5] = addr;
+    tx[6] = nlen;
+    sum = 0;
+    for (i = 2; i <= 6; i++) {
+        sum += tx[i];
+    }
+    k = 7;
+    for (i = 0; i < nid; i++) {
+        tx[k] = ids[i];
+        sum += tx[k++];
+        for (j = 0; j < nlen; j++) {
+            tx[k] = dat[i * nlen + j];
+            sum += tx[k++];
+        }
+    }
+    tx[k++] = (uint8_t)(~sum);
+    uart_flush(BUS_UART);
+    uart_write_bytes(BUS_UART, (const char *)tx, k);
+    uart_wait_tx_done(BUS_UART, pdMS_TO_TICKS(5));
+    return 1;
+}
+
+static void fill_pos_ex(uint8_t *buf, int goal)
+{
+    buf[0] = (uint8_t)move_acc;
+    buf[1] = (uint8_t)(goal & 0xFF);
+    buf[2] = (uint8_t)((goal >> 8) & 0xFF);
+    buf[3] = 0;
+    buf[4] = 0;
+    buf[5] = (uint8_t)(move_speed & 0xFF);
+    buf[6] = (uint8_t)((move_speed >> 8) & 0xFF);
+}
+
 static void joint_free(int id, const char *name)
 {
     uint8_t tq = 0;
@@ -400,6 +484,10 @@ static void joint_free(int id, const char *name)
         return;
     }
     printf("%s free tq=0 id=%d\n", name, id);
+    if (move_guard_on && move_guard_id == id) {
+        move_guard_on = 0;
+        printf("guard idle id=%d\n", id);
+    }
 }
 
 static int read_pos(int id)
@@ -523,6 +611,388 @@ static int unwrap_pos(int id, int pos)
     return pos + wrap_turns[id] * 4096;
 }
 
+static int wall_save(int id)
+{
+    nvs_handle_t h;
+    char key[4];
+    esp_err_t e;
+
+    if (nvs_open("walls", NVS_READWRITE, &h) != ESP_OK) {
+        return 0;
+    }
+    snprintf(key, sizeof(key), "%d", id);
+    e = nvs_set_blob(h, key, &wall[id], sizeof(wall[id]));
+    if (e == ESP_OK) {
+        e = nvs_commit(h);
+    }
+    nvs_close(h);
+    return e == ESP_OK;
+}
+
+static void wall_load(void)
+{
+    nvs_handle_t h;
+    int n = 0;
+
+    memset(wall, 0, sizeof(wall));
+    if (nvs_open("walls", NVS_READONLY, &h) != ESP_OK) {
+        printf("lim loaded n=0 nv=empty\n");
+        return;
+    }
+    for (int id = ID_FIRST; id <= ID_LAST; id++) {
+        char key[4];
+        size_t sz = sizeof(wall[id]);
+        snprintf(key, sizeof(key), "%d", id);
+        if (nvs_get_blob(h, key, &wall[id], &sz) == ESP_OK && wall[id].has) {
+            n++;
+        } else {
+            memset(&wall[id], 0, sizeof(wall[id]));
+        }
+    }
+    nvs_close(h);
+    printf("lim loaded n=%d\n", n);
+}
+
+static int guard_save(void)
+{
+    nvs_handle_t h;
+    esp_err_t e;
+
+    if (nvs_open("guard", NVS_READWRITE, &h) != ESP_OK) {
+        return 0;
+    }
+    e = nvs_set_i32(h, "dload", g_dload);
+    if (e == ESP_OK) {
+        e = nvs_set_i32(h, "hand", g_hand);
+    }
+    if (e == ESP_OK) {
+        e = nvs_set_i32(h, "load", g_abs);
+    }
+    if (e == ESP_OK) {
+        e = nvs_set_i32(h, "cur", g_curv);
+    }
+    if (e == ESP_OK) {
+        e = nvs_commit(h);
+    }
+    nvs_close(h);
+    return e == ESP_OK;
+}
+
+static void guard_load(void)
+{
+    nvs_handle_t h;
+    int32_t v;
+
+    if (nvs_open("guard", NVS_READONLY, &h) != ESP_OK) {
+        printf("guard dload=%d hand=%d load=%d cur=%d nv=empty\n",
+               g_dload, g_hand, g_abs, g_curv);
+        return;
+    }
+    if (nvs_get_i32(h, "dload", &v) == ESP_OK) {
+        g_dload = (int)v;
+    }
+    if (nvs_get_i32(h, "hand", &v) == ESP_OK) {
+        g_hand = (int)v;
+    }
+    if (nvs_get_i32(h, "load", &v) == ESP_OK) {
+        g_abs = (int)v;
+    }
+    if (nvs_get_i32(h, "cur", &v) == ESP_OK) {
+        g_curv = (int)v;
+    }
+    nvs_close(h);
+    printf("guard dload=%d hand=%d load=%d cur=%d nv=ok\n",
+           g_dload, g_hand, g_abs, g_curv);
+}
+
+static void print_guard(const char *nv)
+{
+    printf("guard dload=%d hand=%d load=%d cur=%d nv=%s\n",
+           g_dload, g_hand, g_abs, g_curv, nv);
+}
+
+static void cmd_guard(const char *what)
+{
+    char field[8];
+    int val;
+
+    while (*what && isspace((unsigned char)*what)) {
+        what++;
+    }
+    if (*what == '\0') {
+        print_guard("ok");
+        return;
+    }
+    if (sscanf(what, "%7s %d", field, &val) != 2) {
+        printf("err guard hand|dload|load|cur N  (0 = that check off)\n");
+        return;
+    }
+    if (val < 0 || val > 4000) {
+        printf("err guard range 0-4000\n");
+        return;
+    }
+    if (strcmp(field, "hand") == 0) {
+        g_hand = val;
+    } else if (strcmp(field, "dload") == 0) {
+        g_dload = val;
+    } else if (strcmp(field, "load") == 0) {
+        g_abs = val;
+    } else if (strcmp(field, "cur") == 0) {
+        g_curv = val;
+    } else {
+        printf("err guard hand|dload|load|cur N\n");
+        return;
+    }
+    print_guard(guard_save() ? "ok" : "fail");
+}
+
+static void print_lim_id(int id, const char *nv)
+{
+    printf("lim id=%d", id);
+    if (wall[id].has & WALL_MIN) {
+        printf(" min=%d", (int)wall[id].amin);
+    } else {
+        printf(" min=-");
+    }
+    if (wall[id].has & WALL_MAX) {
+        printf(" max=%d", (int)wall[id].amax);
+    } else {
+        printf(" max=-");
+    }
+    if (wall[id].has & WALL_HOME) {
+        printf(" home=%d", (int)wall[id].home);
+    } else {
+        printf(" home=-");
+    }
+    printf(" nv=%s\n", nv);
+}
+
+static void cmd_lim(const char *what)
+{
+    int id;
+    char field[8];
+    int val;
+    const char *rest;
+
+    while (*what && isspace((unsigned char)*what)) {
+        what++;
+    }
+    if (*what == '\0') {
+        int n = 0;
+        for (id = ID_FIRST; id <= ID_LAST; id++) {
+            if (wall[id].has) {
+                print_lim_id(id, "ok");
+                n++;
+            }
+        }
+        if (!n) {
+            printf("lim none\n");
+        }
+        return;
+    }
+    id = atoi(what);
+    if (id < ID_FIRST || id > ID_LAST) {
+        printf("err lim id 11-17\n");
+        return;
+    }
+    rest = what;
+    while (*rest && !isspace((unsigned char)*rest)) {
+        rest++;
+    }
+    while (*rest && isspace((unsigned char)*rest)) {
+        rest++;
+    }
+    if (*rest == '\0') {
+        print_lim_id(id, wall[id].has ? "ok" : "none");
+        return;
+    }
+    if (strcmp(rest, "clear") == 0) {
+        memset(&wall[id], 0, sizeof(wall[id]));
+        print_lim_id(id, wall_save(id) ? "ok" : "fail");
+        return;
+    }
+    if (sscanf(rest, "%7s %d", field, &val) != 2) {
+        printf("err lim ID min|max|home N | clear\n");
+        return;
+    }
+    if (val < -20000 || val > 20000) {
+        printf("err lim range\n");
+        return;
+    }
+    if (strcmp(field, "min") == 0) {
+        wall[id].amin = val;
+        wall[id].has |= WALL_MIN;
+    } else if (strcmp(field, "max") == 0) {
+        wall[id].amax = val;
+        wall[id].has |= WALL_MAX;
+    } else if (strcmp(field, "home") == 0) {
+        wall[id].home = val;
+        wall[id].has |= WALL_HOME;
+    } else {
+        printf("err lim min|max|home\n");
+        return;
+    }
+    print_lim_id(id, wall_save(id) ? "ok" : "fail");
+}
+
+static void move_guard_stop(void)
+{
+    if (move_guard_on) {
+        if (move_guard_b) {
+            printf("guard idle raise %d+%d\n", move_guard_id, move_guard_b);
+        } else {
+            printf("guard idle id=%d\n", move_guard_id);
+        }
+    }
+    move_guard_on = 0;
+    move_guard_b = 0;
+    move_cruise_n = 0;
+    move_cruise_load = 0;
+    move_miss = 0;
+    move_idle = 0;
+}
+
+static void move_cut(const char *why, int load, int cur, int pos)
+{
+    uint8_t tq0 = 0;
+    int id = move_guard_id;
+    int b = move_guard_b;
+    bus_write(id, REG_TORQUE_EN, &tq0, 1);
+    if (b) {
+        bus_write(b, REG_TORQUE_EN, &tq0, 1);
+    }
+    move_guard_on = 0;
+    move_guard_b = 0;
+    move_cruise_n = 0;
+    move_idle = 0;
+    if (b) {
+        printf("ESTOP raise %d+%d %s load=%d cruise=%d cur=%d pos=%d tq=0\n",
+               id, b, why, load, move_cruise_load, cur, pos);
+    } else {
+        printf("ESTOP id=%d %s load=%d cruise=%d cur=%d pos=%d tq=0\n",
+               id, why, load, move_cruise_load, cur, pos);
+    }
+}
+
+static int guard_dload_for(int id)
+{
+    return id == HAND_ID ? g_hand : g_dload;
+}
+
+static void move_guard_start(int id)
+{
+    move_guard_id = id;
+    move_guard_b = 0;
+    move_cruise_n = 0;
+    move_cruise_load = 0;
+    move_miss = 0;
+    move_idle = 0;
+    move_guard_last = 0;
+    move_guard_on = 1;
+    printf("guard on id=%d dload=%d load>=%d cur>=%d\n",
+           id, guard_dload_for(id), g_abs, g_curv);
+}
+
+static void raise_guard_start(void)
+{
+    move_guard_id = RAISE_A;
+    move_guard_b = RAISE_B;
+    move_cruise_n = 0;
+    move_cruise_load = 0;
+    move_miss = 0;
+    move_idle = 0;
+    move_guard_last = 0;
+    move_guard_on = 1;
+    printf("guard on raise %d+%d dload=%d load>=%d cur>=%d\n",
+           RAISE_A, RAISE_B, g_dload, g_abs, g_curv);
+}
+
+static void move_guard_tick(void)
+{
+    present_t p, q;
+    TickType_t t;
+    int al, ac, need, moving, aspd;
+    int sp;
+
+    if (!move_guard_on) {
+        return;
+    }
+    t = xTaskGetTickCount();
+    if (move_guard_last != 0 &&
+        (t - move_guard_last) < pdMS_TO_TICKS(25)) {
+        return;
+    }
+    move_guard_last = t;
+    if (!read_present(move_guard_id, &p)) {
+        move_miss++;
+        if (move_miss >= GUARD_MISS) {
+            move_cut("bus-miss", 0, 0, -1);
+        }
+        return;
+    }
+    if (move_guard_b) {
+        if (!read_present(move_guard_b, &q)) {
+            move_miss++;
+            if (move_miss >= GUARD_MISS) {
+                move_cut("bus-miss", 0, 0, -1);
+            }
+            return;
+        }
+        if ((q.load < 0 ? -q.load : q.load) > (p.load < 0 ? -p.load : p.load)) {
+            p.load = q.load;
+            p.pos = q.pos;
+        }
+        if ((q.cur < 0 ? -q.cur : q.cur) > (p.cur < 0 ? -p.cur : p.cur)) {
+            p.cur = q.cur;
+        }
+        if ((q.speed < 0 ? -q.speed : q.speed) > (p.speed < 0 ? -p.speed : p.speed)) {
+            p.speed = q.speed;
+        }
+        if (q.moving) {
+            p.moving = 1;
+        }
+    }
+    move_miss = 0;
+    al = p.load < 0 ? -p.load : p.load;
+    ac = p.cur < 0 ? -p.cur : p.cur;
+    if (ac >= g_curv && g_curv > 0) {
+        move_cut("cur", p.load, p.cur, p.pos);
+        return;
+    }
+    if (move_cruise_n < GUARD_CRUISE) {
+        if (p.speed > 40 || p.speed < -40 || p.moving) {
+            move_cruise_load = (move_cruise_load * move_cruise_n + al) /
+                               (move_cruise_n + 1);
+            move_cruise_n++;
+        }
+        return;
+    }
+    aspd = p.speed < 0 ? -p.speed : p.speed;
+    sp = move_speed < 0 ? -move_speed : move_speed;
+    if (sp > 80 && aspd < (sp * 3) / 5) {
+        move_cruise_load = (move_cruise_load * 3 + al) / 4;
+        return;
+    }
+    need = guard_dload_for(move_guard_id);
+    if (need > 0 && al - move_cruise_load >= need) {
+        move_cut("dload", p.load, p.cur, p.pos);
+        return;
+    }
+    if (g_abs > 0 && al >= g_abs) {
+        move_cut("load", p.load, p.cur, p.pos);
+        return;
+    }
+    moving = p.moving || p.speed > 40 || p.speed < -40;
+    if (!moving) {
+        move_idle++;
+        if (move_idle >= 8) {
+            move_guard_stop();
+        }
+        return;
+    }
+    move_idle = 0;
+}
+
 static void joint_to(int id, int goal, int lo, int hi, int hop_max, const char *name)
 {
     if (goal < lo) {
@@ -556,19 +1026,16 @@ static void joint_to(int id, int goal, int lo, int hi, int hop_max, const char *
         return;
     }
     uint8_t buf[7];
-    buf[0] = (uint8_t)move_acc;
-    buf[1] = (uint8_t)(goal & 0xFF);
-    buf[2] = (uint8_t)((goal >> 8) & 0xFF);
-    buf[3] = 0;
-    buf[4] = 0;
-    buf[5] = (uint8_t)(move_speed & 0xFF);
-    buf[6] = (uint8_t)((move_speed >> 8) & 0xFF);
+    fill_pos_ex(buf, goal);
     if (!bus_write(id, REG_ACC, buf, 7)) {
         printf("%s write miss goal=%d\n", name, goal);
         return;
     }
     printf("%s to id=%d goal=%d speed=%d acc=%d clamp=%d-%d tq=1\n",
            name, id, goal, move_speed, move_acc, lo, hi);
+    if (goal != cur) {
+        move_guard_start(id);
+    }
 }
 
 static void clamps_for(int id, int *lo, int *hi, int *hop)
@@ -583,6 +1050,123 @@ static void clamps_for(int id, int *lo, int *hi, int *hop)
     } else if (id == TWIST_ID) {
         *hop = TWIST_STEP_MAX;
     }
+    if (wall[id].has & WALL_MIN) {
+        *lo = (int)wall[id].amin;
+    }
+    if (wall[id].has & WALL_MAX) {
+        *hi = (int)wall[id].amax;
+    }
+    if (*lo > *hi) {
+        int t = *lo;
+        *lo = *hi;
+        *hi = t;
+    }
+    if ((wall[id].has & (WALL_MIN | WALL_MAX)) == (WALL_MIN | WALL_MAX) &&
+        id != TWIST_ID) {
+        *hop = 0;
+    }
+}
+
+static int raise_prep_goal(int id, int goal, int *out, int *cur_out)
+{
+    int lo, hi, hop, cur, d;
+
+    clamps_for(id, &lo, &hi, &hop);
+    if (goal < lo) {
+        goal = lo;
+    }
+    if (goal > hi) {
+        goal = hi;
+    }
+    cur = read_pos(id);
+    if (cur < 0) {
+        printf("raise abort no pos id=%d\n", id);
+        return 0;
+    }
+    unwrap_pos(id, cur);
+    if (hop > 0) {
+        d = goal - cur;
+        if (d > hop || d < -hop) {
+            printf("raise abort hop %d id=%d cur=%d goal=%d max=%d\n",
+                   d, id, cur, goal, hop);
+            return 0;
+        }
+    }
+    *out = goal;
+    *cur_out = cur;
+    return 1;
+}
+
+static void raise_to(int g12, int g13)
+{
+    int c12, c13, n12, n13;
+    uint8_t v = 0;
+    uint8_t tq = 1;
+    uint8_t ids[2] = { RAISE_A, RAISE_B };
+    uint8_t dat[14];
+
+    if (!raise_prep_goal(RAISE_A, g12, &n12, &c12) ||
+        !raise_prep_goal(RAISE_B, g13, &n13, &c13)) {
+        return;
+    }
+    if (!bus_read(RAISE_A, REG_VOLTAGE, 1, &v) || v < V_CUTOFF) {
+        printf("raise abort pack v_raw=%d need>=%d\n", v, V_CUTOFF);
+        return;
+    }
+    if (!bus_write(RAISE_A, REG_TORQUE_EN, &tq, 1) ||
+        !bus_write(RAISE_B, REG_TORQUE_EN, &tq, 1)) {
+        printf("raise torque miss\n");
+        return;
+    }
+    fill_pos_ex(dat, n12);
+    fill_pos_ex(dat + 7, n13);
+    if (!bus_sync_write(REG_ACC, 7, ids, 2, dat)) {
+        printf("raise sync miss goals=%d %d\n", n12, n13);
+        return;
+    }
+    printf("raise to 12=%d 13=%d speed=%d acc=%d tq=1 sync\n",
+           n12, n13, move_speed, move_acc);
+    if (n12 != c12 || n13 != c13) {
+        raise_guard_start();
+    }
+}
+
+static void cmd_raise(const char *what)
+{
+    if (strcmp(what, "free") == 0) {
+        joint_free(RAISE_A, "raise-A");
+        joint_free(RAISE_B, "raise-B");
+        return;
+    }
+    if (strcmp(what, "hold") == 0) {
+        int p12 = read_pos(RAISE_A);
+        int p13 = read_pos(RAISE_B);
+        if (p12 < 0 || p13 < 0) {
+            printf("raise abort no pos\n");
+            return;
+        }
+        raise_to(p12, p13);
+        return;
+    }
+    if (strncmp(what, "to ", 3) == 0) {
+        int g12, g13;
+        const char *p = what + 3;
+        g12 = atoi(p);
+        while (*p && !isspace((unsigned char)*p)) {
+            p++;
+        }
+        while (*p && isspace((unsigned char)*p)) {
+            p++;
+        }
+        if (!*p) {
+            printf("err raise to G12 G13\n");
+            return;
+        }
+        g13 = atoi(p);
+        raise_to(g12, g13);
+        return;
+    }
+    printf("err raise to G12 G13|hold|free\n");
 }
 
 static void cmd_hand(const char *what)
@@ -592,19 +1176,19 @@ static void cmd_hand(const char *what)
         return;
     }
     int goal;
-    int hi = HAND_CLOSE;
+    int lo, hi, hop;
+    clamps_for(HAND_ID, &lo, &hi, &hop);
     if (strcmp(what, "open") == 0) {
-        goal = HAND_OPEN;
+        goal = lo;
     } else if (strcmp(what, "close") == 0) {
         goal = HAND_CLOSE;
     } else if (strncmp(what, "to ", 3) == 0) {
         goal = atoi(what + 3);
-        hi = HAND_TO_MAX;
     } else {
         printf("err hand open|close|to N|free\n");
         return;
     }
-    joint_to(HAND_ID, goal, HAND_OPEN, hi, 0, "hand");
+    joint_to(HAND_ID, goal, lo, hi, 0, "hand");
 }
 
 static int twist_read_mode(void)
@@ -680,7 +1264,15 @@ static void cmd_twist(const char *what)
     }
     if (strcmp(what, "here") == 0) {
         int pos = read_pos(TWIST_ID);
-        printf("twist here pos=%d — host: this is cable-home turns=0. pack-off is stale\n", pos);
+        if (pos < 0) {
+            printf("twist abort no pos\n");
+            return;
+        }
+        wrap_turns[TWIST_ID] = 0;
+        last_pos[TWIST_ID] = pos;
+        pos_seen[TWIST_ID] = 1;
+        printf("twist here pos=%d un=%d turns=0 — slack loom. pack-off is stale\n",
+               pos, pos);
         return;
     }
     if (strcmp(what, "servo") == 0) {
@@ -723,7 +1315,11 @@ static void cmd_twist(const char *what)
         printf("twist abort not servo — twist servo first\n");
         return;
     }
-    joint_to(TWIST_ID, goal, TWIST_MIN, TWIST_MAX, TWIST_STEP_MAX, "twist");
+    {
+        int lo, hi, hop;
+        clamps_for(TWIST_ID, &lo, &hi, &hop);
+        joint_to(TWIST_ID, goal, lo, hi, hop, "twist");
+    }
 }
 
 static void cmd_estop_all(void)
@@ -737,6 +1333,7 @@ static void cmd_estop_all(void)
         bus_write(id, REG_TORQUE_EN, &tq0, 1);
     }
     printf("ESTOP all tq=0 twist servo\n");
+    move_guard_stop();
 }
 
 static void cmd_id(const char *what)
@@ -757,14 +1354,37 @@ static void cmd_id(const char *what)
         rest++;
     }
     name = id_name(id);
-    if (id == 12 || id == 13) {
-        printf("warn raise is dual-drive 12+13 — one motor fights the other\n");
+    if (id == RAISE_A || id == RAISE_B) {
+        if (strcmp(rest, "free") == 0) {
+            cmd_raise("free");
+            return;
+        }
+        if (strcmp(rest, "hold") == 0) {
+            cmd_raise("hold");
+            return;
+        }
+        if (strncmp(rest, "to ", 3) == 0 || strncmp(rest, "nudge ", 6) == 0) {
+            printf("raise abort solo id=%d — use raise to G12 G13 (SyncWrite)\n", id);
+            return;
+        }
     }
     if (strcmp(rest, "free") == 0) {
         if (id == TWIST_ID) {
             twist_guard_stop();
         }
         joint_free(id, name);
+        return;
+    }
+    if (strcmp(rest, "here") == 0) {
+        int pos = read_pos(id);
+        if (pos < 0) {
+            printf("%s abort no pos id=%d\n", name, id);
+            return;
+        }
+        wrap_turns[id] = 0;
+        last_pos[id] = pos;
+        pos_seen[id] = 1;
+        printf("%s here id=%d pos=%d un=%d turns=0\n", name, id, pos, pos);
         return;
     }
     if (strcmp(rest, "hold") == 0) {
@@ -804,7 +1424,7 @@ static void cmd_id(const char *what)
         joint_to(id, pos + d, lo, hi, NUDGE_MAX, name);
         return;
     }
-    printf("err id N free|hold|to G|nudge D\n");
+    printf("err id N free|hold|here|to G|nudge D\n");
 }
 
 static void print_who_id(int id)
@@ -1115,38 +1735,58 @@ static void print_get_id(int id, int stream)
     if (load > 400 || load < -400) {
         printf("get LOAD id=%d load=%d pos=%d un=%d\n", id, load, pos, un);
     }
-    /* omit zeros / defaults: cur, moving, turns, un==pos, st, mode 0, tq 0, speed 0, load 0 */
-    printf("get id=%d pos=%d", id, pos);
-    if (speed) {
-        printf(" speed=%d", speed);
+    if (!stream) {
+        /* typed get: every present field, including zeros. hex = 15 bytes @56 */
+        printf("get id=%d pos=%d speed=%d load=%d cur=%d moving=%d",
+               id, pos, speed, load, current, moving);
+        if (!tq_ok) {
+            printf(" tq=?");
+        } else {
+            printf(" tq=%d", tq_bit);
+        }
+        printf(" un=%d turns=%d st=%d", un, wrap_turns[id], st);
+        if (mode_ok[id]) {
+            printf(" mode=%d", cached_mode[id]);
+        }
+        printf(" v=%.1f temp=%d hex=", v_raw / 10.0, temp);
+        for (int i = 0; i < PRESENT_LEN; i++) {
+            printf("%02x%s", d[i], (i + 1 < PRESENT_LEN) ? ":" : "");
+        }
+        printf("\n");
+    } else {
+        /* omit zeros / defaults: cur, moving, turns, un==pos, st, mode 0, tq 0, speed 0, load 0 */
+        printf("get id=%d pos=%d", id, pos);
+        if (speed) {
+            printf(" speed=%d", speed);
+        }
+        if (load) {
+            printf(" load=%d", load);
+        }
+        if (current) {
+            printf(" cur=%d", current);
+        }
+        if (moving) {
+            printf(" moving=1");
+        }
+        if (!tq_ok) {
+            printf(" tq=?");
+        } else if (tq_bit) {
+            printf(" tq=1");
+        }
+        if (un != pos || wrap_turns[id]) {
+            printf(" un=%d turns=%d", un, wrap_turns[id]);
+        }
+        if (st) {
+            printf(" st=%d", st);
+        }
+        if (mode_ok[id] && cached_mode[id]) {
+            printf(" mode=%d", cached_mode[id]);
+        }
+        if (!pub_ok[id] || v_raw != pub_v[id] || temp != pub_temp[id]) {
+            printf(" v=%.1f temp=%d", v_raw / 10.0, temp);
+        }
+        printf("\n");
     }
-    if (load) {
-        printf(" load=%d", load);
-    }
-    if (current) {
-        printf(" cur=%d", current);
-    }
-    if (moving) {
-        printf(" moving=1");
-    }
-    if (!tq_ok) {
-        printf(" tq=?");
-    } else if (tq_bit) {
-        printf(" tq=1");
-    }
-    if (un != pos || wrap_turns[id]) {
-        printf(" un=%d turns=%d", un, wrap_turns[id]);
-    }
-    if (st) {
-        printf(" st=%d", st);
-    }
-    if (mode_ok[id] && cached_mode[id]) {
-        printf(" mode=%d", cached_mode[id]);
-    }
-    if (!stream || !pub_ok[id] || v_raw != pub_v[id] || temp != pub_temp[id]) {
-        printf(" v=%.1f temp=%d", v_raw / 10.0, temp);
-    }
-    printf("\n");
 
     pub_ok[id] = 1;
     pub_pos[id] = pos;
@@ -1198,13 +1838,16 @@ static void stream_tick(void)
     }
 }
 
-/* 3S LiPo rest SoC from pack millivolts. Coarse. Not charging current. */
+/* 3S LiPo rest SoC from pack millivolts. Rest-voltage guess, not a BMS.
+ * Conservative RC (Oscar Liang land ~3.5V/cell loaded; storage 3.80–3.85V ≈ 40–50%).
+ * Recharge by 20–30% remaining (~3.74–3.80V/cell rest). 3.30V/cell is loaded LVC, not rest. */
 static int lipo3s_pct(int mv)
 {
     static const int t[][2] = {
-        {12600, 100}, {12480, 95}, {12360, 90}, {12210, 80}, {12060, 70},
-        {11910, 60}, {11790, 50}, {11670, 40}, {11550, 30}, {11400, 25},
-        {11310, 20}, {11100, 15}, {10830, 10}, {10500, 5}, {9900, 0},
+        {12600, 100}, {12450, 90}, {12300, 80}, {12150, 70},
+        {12000, 60}, {11850, 50}, {11700, 45}, {11550, 40},
+        {11400, 30}, {11310, 25}, {11220, 20}, {11100, 12},
+        {10800, 6}, {10500, 3}, {9900, 0},
     };
     const int n = (int)(sizeof(t) / sizeof(t[0]));
     if (mv >= t[0][0]) {
@@ -1253,10 +1896,13 @@ static void cmd_batt(void)
     int v_raw = vs[n / 2];
     int mv = v_raw * 100;
     int pct = lipo3s_pct(mv);
-    const char *lvl = (mv < 10500) ? "cutoff" : (mv < 10800) ? "low" : "ok";
+    const char *lvl = (mv < 10500) ? "cutoff"
+        : (pct <= 20) ? "low"
+        : (pct <= 30) ? "recharge"
+        : "ok";
     printf("batt pack=%.1fV est=%d%% cells=3 n=%d %s\n",
            v_raw / 10.0, pct, n, lvl);
-    printf("batt note=rest-voltage guess, not a BMS. HAT does not charge XT60; USB is not a charger.\n");
+    printf("batt note=servo VIN rest-voltage guess, not a BMS. recharge by 20-30%% (~11.2-11.4V rest). never sit below ~11.2V. 9.9V is loaded LVC, not rest.\n");
 }
 
 static void print_banner(void)
@@ -1270,8 +1916,7 @@ static void print_banner(void)
     printf("tasks=%u\n", (unsigned)uxTaskGetNumberOfTasks());
     printf("bus=uart1 gpio18/19 1Mbps rx-only until ping\n");
     printf("ble=%s nordic-uart. same text as USB.\n", ble_nus_name());
-    printf("note=no auto-move. hand 689-2075. twist hop<=900. id 11-15 hop<=%d.\n",
-           NUDGE_MAX);
+    printf("note=no auto-move. hand 689-2075. twist hop<=900. raise 12+13 SyncWrite.\n");
 }
 
 static void heartbeat(void)
@@ -1350,6 +1995,22 @@ static void handle_line(char *line)
         cmd_who(atoi(line + 4));
         return;
     }
+    if (strcmp(line, "lim") == 0) {
+        cmd_lim("");
+        return;
+    }
+    if (strncmp(line, "lim ", 4) == 0) {
+        cmd_lim(line + 4);
+        return;
+    }
+    if (strcmp(line, "guard") == 0) {
+        cmd_guard("");
+        return;
+    }
+    if (strncmp(line, "guard ", 6) == 0) {
+        cmd_guard(line + 6);
+        return;
+    }
     if (strcmp(line, "stream") == 0) {
         cmd_stream("");
         return;
@@ -1376,6 +2037,10 @@ static void handle_line(char *line)
     }
     if (strncmp(line, "raw ", 4) == 0) {
         cmd_raw(atoi(line + 4));
+        return;
+    }
+    if (strncmp(line, "raise ", 6) == 0) {
+        cmd_raise(line + 6);
         return;
     }
     if (strncmp(line, "hand ", 5) == 0) {
@@ -1406,6 +2071,8 @@ void app_main(void)
     bus_init();
     last_beat = xTaskGetTickCount();
     ble_nus_init();
+    wall_load();
+    guard_load();
 
     print_banner();
     print_help();
@@ -1419,6 +2086,7 @@ void app_main(void)
         bus_eat(1);
         heartbeat();
         twist_guard_tick();
+        move_guard_tick();
         stream_tick();
         ble_nus_tick();
         if (ble_nus_subscribed() && listen_dump) {

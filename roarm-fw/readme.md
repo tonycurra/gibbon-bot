@@ -18,6 +18,8 @@ Firmware: native **ESP-IDF**. No move on boot. READ `get` / `ping` / `batt` / `s
 | BLE NimBLE / energy / ghost | `docs/ble.md` |
 | Laptop UI (Django) | `../gibbon-console/docs/README.md` |
 | 2026-09-09 console + compact get | `development-logs/2026-09-09-console.md` |
+| 2026-09-11 calibrate / wrap Δ | `development-logs/2026-09-11-calibrate.md` |
+| Minimal firmware (chip vs host) | `docs/plans/firmware-minimal.md` |
 | USB start (healthy, pack off) | `docs/baselines/usb-start.md` |
 | USB + battery gold | `docs/baselines/usb-battery-on.md` |
 | USB no-battery ping gold | `docs/baselines/usb-no-battery.md` |

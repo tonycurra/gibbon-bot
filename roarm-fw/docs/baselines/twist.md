@@ -61,3 +61,15 @@ Firmware now **refuses** a `twist to` whose linear hop is >2048 counts (would wr
 Never command a raw `pos` as if it were unique. Never command across 0/4095. Watch `load` whenever `tq=1`.
 
 Raw first watch: `docs/baselines/data/twist-watch.txt`.
+
+## 2026-09-11 — new slack, leftover raw, host Δ
+
+Sitting: `development-logs/2026-09-11-calibrate.md`. Console wrap page: degrees + Δ from **here**.
+
+This sitting’s slack **here** was raw **960**, not 4068. Pack-off forgets turns. Same loom, different encoder park after power. **Do not** apply Sep-5 `un` 1058…7046 to home 960.
+
+Leftover host min/max **3108 / 3111** were two raw marks at the same pose (`|a−b|<3`). Not walls. Console clears that pattern on wrap-page load.
+
+Listen after here at 960: now **−103°**, Δ **−1172**, pos **3884**, un **−212**, turns **−1** (`1172 × 360/4096 ≈ 103`). Degrees matched. Wrap Δ walls were not saved (done needs ≥80 counts of sweep after **calibrate**).
+
+`WritePos` still will not wrap. Hop ≤900. Until flash, do not wheel-jog. `twist to 3108` aborted hop (legacy goal).

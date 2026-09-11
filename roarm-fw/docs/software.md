@@ -40,14 +40,17 @@ Next test (no writer yet): wrist up / down (15) by hand in `live.py`.
 
 ## On the chip — `main/main.c`
 
-**No move on boot.** Writes only if you type them. **ID 17 (hand)** and **ID 16 (twist)** have named commands. Any ID: `id N free|hold|to G|nudge D`. IDs 11–15 hop ≤ **80** (no walls). Raise 12+13 is dual-drive.
+**No move on boot.** Writes only if you type them. **ID 17 (hand)** and **ID 16 (twist)** have named commands. Any ID: `id N free|hold|to G|nudge D`. IDs 11–15 hop ≤ **80** (no walls). Raise 12+13 is dual-drive **in this tree** (`raise to` SyncWrite). **Not on the chip until flash.** Until then: `id 12 hold` + `id 13 hold` (two packets). Never command 12 or 13 alone for motion.
 
 | You type | What it does |
 | --- | --- |
 | `get` / `get N` | READ present. Omitted keys = default (speed/load/cur/moving/tq/turns/st/mode 0, `un=pos`). `get 16` while twist is moving |
 | `stream` / `stream N` / `stream 0` | live `get` when an ID **changes** (pos Δ≥2, speed Δ≥80, load, cur, tq, v, temp). Default 180 ms poll. **Flash owed** for compact lines |
 | `who` / `who N` | EEPROM fw/mode/PID/angle limits/goal |
-| `id N free\|hold\|to G\|nudge D` | any 11–17. 11–15 hop ≤80 |
+| `id N free\|hold\|to G\|nudge D` | any 11–17. 11–15 hop ≤80. **12+13:** free/hold/here only until `raise` is on the chip |
+| `id N here` | zero unwrap at current pos. **In source, flash owed** |
+| `raise to G12 G13` | SyncWrite both. **In source, flash owed.** Solo 12/13 `to`/`nudge` abort |
+| `raise hold\|free` | both motors. **Do not send until flash** — chip prints `rx err unknown` |
 | `move speed N` / `move acc N` | next WritePos (default 300 / 20) |
 | `estop` | all ids `tq=0` + twist speed 0 + servo. Chip also cuts twist on `Δload` / `cur` / bus miss |
 | `hand open` / `close` / `to N` / `free` | ID 17. Soft **689–2008**, `to` max **2075**. Speed 300, acc 20 |
@@ -94,4 +97,4 @@ Chip `turns` starts at 0 each boot. Host `docs/baselines/data/twist-absolute.jso
 
 ## Not this folder
 
-No MySQL. IDs 11–15: hop-limited `id N` only (no walls). BLE is the same text pipe as USB (`docs/plans/ble-html.md`).
+No MySQL. IDs 11–15: hop-limited `id N` only until NVS walls. BLE is the same text pipe as USB (`docs/plans/ble-html.md`). Console send queue + wrap Δ: `../gibbon-console/docs/calibrate.md`. Next chip shape: `docs/plans/firmware-minimal.md`.
