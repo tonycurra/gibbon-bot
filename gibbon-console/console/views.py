@@ -2,6 +2,7 @@ import json
 import queue
 import time
 
+from django.db.models import Count
 from django.http import HttpResponse, JsonResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
@@ -14,7 +15,7 @@ from .catalog import CATALOG, JOINTS, SLUGS
 from .models import Limit, Note, Sample, Trial
 
 PAGES = [
-    ("home", "overview"),
+    ("home", "motors"),
     ("calibrate", "calibrate"),
     ("trials", "trials"),
     ("info", "info"),
@@ -27,6 +28,10 @@ def ctx(page, crumb, extra=None):
         "page": page,
         "pages": PAGES,
         "crumb": crumb,
+        "joints": JOINTS,
+        "joint_slug": "",
+        "motor_nav": False,
+        "nav_prefix": "/j/",
         "catalog_json": mark_safe(json.dumps(CATALOG)),
     }
     if extra:
@@ -35,23 +40,35 @@ def ctx(page, crumb, extra=None):
 
 
 def home(request):
-    return render(request, "console/home.html", ctx("home", "overview"))
+    return render(request, "console/home.html", ctx("home", "motors"))
 
 
 def joint_page(request, slug):
     j = SLUGS.get(slug)
     if not j:
         return HttpResponse("unknown joint", status=404)
-    return render(request, "console/joint.html", ctx("home", j["name"], {"joint": j}))
-
-
-def calibrate(request):
-    slug = request.GET.get("j") or "yaw"
-    j = SLUGS.get(slug) or SLUGS["yaw"]
     return render(
         request,
-        "console/calibrate.html",
-        ctx("calibrate", "calibrate / " + j["name"], {"joint": j, "joints": JOINTS}),
+        "console/joint.html",
+        ctx("home", j["name"], {"joint": j, "joint_slug": j["slug"], "motor_nav": True}),
+    )
+
+
+def calibrate(request, slug=None):
+    if not slug:
+        return render(request, "console/calibrate.html", ctx("calibrate", "calibrate"))
+    j = SLUGS.get(slug)
+    if not j:
+        return HttpResponse("unknown joint", status=404)
+    return render(
+        request,
+        "console/calibrate_joint.html",
+        ctx("calibrate", "calibrate / " + j["name"], {
+            "joint": j,
+            "joint_slug": j["slug"],
+            "motor_nav": True,
+            "nav_prefix": "/calibrate/",
+        }),
     )
 
 
@@ -72,14 +89,30 @@ def act(request):
 
 
 def trials(request):
-    rows = Trial.objects.all()[:80]
+    rows = Trial.objects.annotate(
+        n_cmd=Count("commands", distinct=True),
+        n_samp=Count("samples", distinct=True),
+        n_note=Count("notes", distinct=True),
+    )[:80]
     return render(request, "console/trials.html", ctx("trials", "trials", {"trials": rows}))
 
 
 def trial_detail(request, pk):
     t = get_object_or_404(Trial, pk=pk)
-    cmds = t.commands.order_by("-t_ms")[:80]
-    return render(request, "console/trial.html", ctx("trials", "trials / %s" % t, {"trial": t, "cmds": cmds}))
+    cmds = list(t.commands.order_by("-t_ms")[:200])
+    notes = list(t.notes.order_by("-t_ms")[:200])
+    events = sorted(
+        [{"kind": "cmd", "t_ms": c.t_ms, "text": c.text} for c in cmds]
+        + [{"kind": "note", "t_ms": n.t_ms, "text": n.text} for n in notes],
+        key=lambda x: -x["t_ms"],
+    )[:200]
+    return render(request, "console/trial.html", ctx("trials", "trials / %s" % t, {
+        "trial": t,
+        "events": events,
+        "n_samp": t.samples.count(),
+        "n_cmd": t.commands.count(),
+        "n_note": t.notes.count(),
+    }))
 
 
 def api_status(request):
@@ -207,7 +240,11 @@ def api_limits(request):
         return JsonResponse({"err": "servo 11-17"}, status=400)
     row, _ = Limit.objects.get_or_create(servo=servo)
     for k in ("home", "amin", "amax"):
-        if k in data and data[k] is not None and data[k] != "":
+        if k not in data:
+            continue
+        if data[k] is None or data[k] == "":
+            setattr(row, k, None)
+        else:
             setattr(row, k, int(data[k]))
     if "note" in data:
         row.note = str(data.get("note") or "")[:240]

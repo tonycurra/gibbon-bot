@@ -1,26 +1,28 @@
 {% extends "console/base.html" %}
 {% load static %}
 {% block main %}
-<p class="hint">find the wall by hand, tq off. mark home / min / max from live pos. chip still owns the clamp. <a href="/info/#limits">why</a></p>
-<div class="row">
-  <label>joint
-    <select id="calJoint">
-      {% for j in joints %}
-      <option value="{{ j.slug }}"{% if j.slug == joint.slug %} selected{% endif %}>{{ j.name }} ({{ j.axis }})</option>
-      {% endfor %}
-    </select>
-  </label>
+<p class="hint">
+  six <b>joints</b> — shoulder pitch is two motors on one horn.
+  click a row to mark here / − / +. do not jog 12 or 13 from this list.
+</p>
+<div class="row act" id="calBar">
+  <button type="button" id="btnHoldAll">hold pose</button>
+  <button type="button" id="btnFreeAll" class="lock">free all</button>
+  <button type="button" id="btnPush">push all to chip</button>
+  <span class="mut">STOP if it fights.</span>
 </div>
-<p id="calNote" class="hint"></p>
-<table class="ov">
+<p id="calMsg" class="hint next">pick a joint. support the arm before free all.</p>
+<div id="armWrap">
+<table class="ov home">
   <thead>
-    <tr><th>id</th><th>live pos</th><th>home</th><th>min</th><th>max</th><th></th></tr>
+    <tr>
+      <th>joint</th><th>id</th><th>pos</th><th>Δ</th><th>load</th><th>here</th><th>−</th><th>+</th>
+    </tr>
   </thead>
   <tbody id="calBody"></tbody>
 </table>
-<p class="hint next">test is a slow move inside the marked band — only after both min and max exist. STOP if it fights.</p>
+</div>
 {% endblock %}
 {% block js %}
-<script>window.JOINT_SLUG = "{{ joint.slug }}";</script>
 <script src="{% static 'console/js/calibrate.js' %}"></script>
 {% endblock %}

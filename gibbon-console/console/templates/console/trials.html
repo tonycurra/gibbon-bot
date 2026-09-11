@@ -11,21 +11,22 @@
   <label class="grow">mark <input id="mark" placeholder="wall, slack, contact…"></label>
   <button type="submit">add</button>
 </form>
-<p class="hint">samples and commands land here while a trial is open.</p>
+<p class="hint">a sitting starts on the first click or live <code>get</code>. samples (pos/load/mA/…) and commands (<code>hand open</code>, …) land in SQLite. ESTOP / guard / lim acks are marks. start a named trial here if you want a title.</p>
 <table class="list">
-  <thead><tr><th>id</th><th>title</th><th>started</th><th>via</th><th>pack</th><th>open</th></tr></thead>
+  <thead><tr><th>id</th><th>title</th><th>started</th><th>clicks</th><th>samples</th><th>marks</th><th>open</th></tr></thead>
   <tbody>
   {% for t in trials %}
     <tr>
       <td><a href="{% url 'trial' t.pk %}">{{ t.pk }}</a></td>
       <td><a href="{% url 'trial' t.pk %}">{{ t.title|default:"—" }}</a></td>
       <td>{{ t.started|date:"Y-m-d H:i" }}</td>
-      <td>{{ t.via|default:"—" }}</td>
-      <td>{% if t.pack_v %}{{ t.pack_v }}V{% else %}—{% endif %}</td>
+      <td>{{ t.n_cmd }}</td>
+      <td>{{ t.n_samp }}</td>
+      <td>{{ t.n_note }}</td>
       <td>{% if t.open %}<span class="ok">live</span>{% else %}done{% endif %}</td>
     </tr>
   {% empty %}
-    <tr><td colspan="6">no trials yet</td></tr>
+    <tr><td colspan="7">no trials yet</td></tr>
   {% endfor %}
   </tbody>
 </table>

@@ -1,12 +1,13 @@
 {% extends "console/base.html" %}
 {% load static %}
 {% block main %}
-<p class="hint">six joints. click a row. <span class="mut">yaw · pitch · roll</span> — <a href="/info/#axes">what that means</a>. backdrive: watch <b>pos</b>, not moving/load (those stay 0 with tq off).</p>
+<p class="hint">hold locks that joint here. free lets you turn it by hand. slider jogs it — small hops until min/max exist on <a href="/calibrate/">calibrate</a>. shoulder pitch is one joint (12+13 SyncWrite). name → sensors.</p>
+<p id="powerEl" class="sense"><span class="senseRow"><span><b>bus</b> <i id="pwrBus">—</i></span><span><b>Σ mA</b> <i id="pwrMa">—</i></span><span><b>W</b> <i id="pwrW">—</i></span><span class="mut" id="pwrNote">winding estimates, not a pack shunt. light moves often read 0</span></span></p>
 <div id="armWrap">
-<table class="ov">
+<table class="ov home">
   <thead>
     <tr>
-      <th>joint</th><th>axis</th><th>id</th><th>bus</th><th>tq</th><th>pos</th><th>spd</th><th>load</th>
+      <th>joint</th><th>id</th><th>pos</th><th>load</th><th>mA</th><th>grip</th><th></th><th></th>
     </tr>
   </thead>
   <tbody id="homeBody"></tbody>

@@ -2,7 +2,7 @@
 
 A **trial** is one sitting: title, notes, commands you sent, `get` rows the motors sent back.
 
-Start on `/trials/` before you move. Stop when done. Marks (wall, slack, contact) are `Note` rows and append to `Trial.note`.
+Start on `/trials/` before you move, or just click: the first live `get` or non-poll command opens a sitting titled `sitting YYYY-MM-DD HH:MM` if none is open. Stop when done. Marks (wall, slack, contact) are `Note` rows and append to `Trial.note`. `ESTOP` / `guard` / `lim id=` lines are Notes too (they open a sitting if recording was off).
 
 ## Models (`console/models.py`)
 

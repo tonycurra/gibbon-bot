@@ -1,0 +1,40 @@
+{% extends "console/base.html" %}
+{% load static %}
+{% block main %}
+<p class="hint">
+  <a href="/calibrate/">← joints</a>
+  {% if joint.slug == "yaw" or joint.slug == "wrist-roll" %}
+  · watch <b>now</b> in degrees (360° / 4096 counts). one way −, the other +.
+  slack → <b>here</b> → <b>calibrate</b> → move both ways → <b>done</b>. tweaks are still counts.
+  {% else %}
+  · <b>here</b> copies live pos into <b>home</b> (Δ=0). or type a number and <b>set</b>.
+  then − / + as Δ (live or typed).
+  {% if joint.paired %}one joint, two motors — set pair before the slider.{% endif %}
+  {% endif %}
+</p>
+<div class="row act" id="calBar">
+  <button type="button" id="btnHoldAll">hold pose</button>
+  <button type="button" id="btnFreeAll" class="lock">free all</button>
+  <button type="button" id="btnPush">push to chip</button>
+  <label class="grow">speed
+    <input id="calSpd" type="range" min="40" max="480" step="10" value="120">
+  </label>
+  <b id="calSpdVal">120 crawl</b>
+  <a class="mut" href="/j/{{ joint.slug }}/">sensors</a>
+</div>
+{% if joint.paired %}
+<div class="row" id="pairBar">
+  <span class="mut">pair 13 vs 12</span>
+  <button type="button" id="btnPairMirror">mirror −</button>
+  <button type="button" id="btnPairSame">same +</button>
+  <b id="pairState">—</b>
+  <span class="mut">free this, lift the upper arm. opposite pos = mirror.</span>
+</div>
+{% endif %}
+<p id="calMsg" class="hint next">{% if joint.slug == "yaw" or joint.slug == "wrist-roll" %}slack the loom, then here. Δ is 0. then learn range.{% else %}press here at a comfortable pose, then free this joint.{% endif %}</p>
+<div id="calBody" class="calPage"></div>
+{% endblock %}
+{% block js %}
+<script>window.JOINT_SLUG = "{{ joint.slug }}";</script>
+<script src="{% static 'console/js/calibrate.js' %}"></script>
+{% endblock %}

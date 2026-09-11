@@ -11,19 +11,21 @@ const G = {
   alive: false, wantHost: true, hostEs: null, transport: null,
   motorOpen: 0, paintQ: 0, rows: {}, chip: {},
   batt: { pack: null, miss: true, est: null, cells: null, n: null, lvl: null },
-  hooks: [], recent: [],
+  hooks: [], recent: [], lim: {}, guard: "", guardCfg: null,
+  pair12: null,
 };
 
 function paintFoot() {
   const el = $("footLog");
   if (!el) return;
-  const n = el.classList.contains("wide") ? 16 : 5;
+  const n = el.classList.contains("wide") ? 80 : 40;
   el.textContent = G.recent.slice(-n).join("\n") || "—";
+  el.scrollTop = el.scrollHeight;
 }
 
 function log(s) {
   G.recent.push(s);
-  if (G.recent.length > 80) G.recent.shift();
+  if (G.recent.length > 200) G.recent.shift();
   paintFoot();
   const el = $("log");
   if (!el) return;
@@ -61,6 +63,7 @@ function parseGet(line) {
     mode: kv.mode != null ? kv.mode : "0",
     v: kv.v != null ? kv.v : null,
     temp: kv.temp != null ? +kv.temp : null,
+    hex: kv.hex || null,
   };
 }
 
@@ -95,10 +98,29 @@ function modeOf(r) {
   return String(r.mode);
 }
 
-async function send(cmd, quiet) {
-  if (!G.transport) return;
+let sendQ = [];
+let sendBusy = 0;
+
+function send(cmd, quiet) {
+  if (!G.transport) return Promise.resolve();
   if (!quiet) log(">> " + cmd);
-  await G.transport.write(cmd + "\n");
+  if (cmd === "estop") sendQ = sendQ.filter(c => c === "estop");
+  sendQ.push(cmd);
+  return pumpSend();
+}
+
+async function pumpSend() {
+  if (sendBusy) return;
+  sendBusy = 1;
+  try {
+    while (sendQ.length && G.transport) {
+      const cmd = sendQ.shift();
+      await G.transport.write(cmd + "\n");
+    }
+  } finally {
+    sendBusy = 0;
+    if (sendQ.length) pumpSend();
+  }
 }
 
 function viaLabel() {
@@ -112,18 +134,59 @@ function tqOn() {
   return MOTORS.filter(m => G.rows[m.id] && !G.rows[m.id].miss && G.rows[m.id].tq === "1").map(m => m.id);
 }
 
+function lipo3sPct(v) {
+  const t = [
+    [12.60, 100], [12.45, 90], [12.30, 80], [12.15, 70],
+    [12.00, 60], [11.85, 50], [11.70, 45], [11.55, 40],
+    [11.40, 30], [11.31, 25], [11.22, 20], [11.10, 12],
+    [10.80, 6], [10.50, 3], [9.90, 0],
+  ];
+  if (v >= t[0][0]) return 100;
+  if (v <= t[t.length - 1][0]) return 0;
+  for (let i = 1; i < t.length; i++) {
+    if (v >= t[i][0]) {
+      const [v0, p0] = t[i];
+      const [v1, p1] = t[i - 1];
+      return Math.round(p0 + (p1 - p0) * (v - v0) / (v1 - v0));
+    }
+  }
+  return 0;
+}
+
+function packVolts() {
+  const vs = MOTORS.map(m => {
+    const r = G.rows[m.id];
+    return r && !r.miss && r.v != null ? +r.v : null;
+  }).filter(v => v != null && v > 6).sort((a, b) => a - b);
+  if (vs.length) return vs[vs.length >> 1];
+  if (G.batt && !G.batt.miss && G.batt.pack != null) return +G.batt.pack;
+  return null;
+}
+
 function paintStatus() {
   const pack = $("packEl");
   if (pack) {
     if (!G.alive) {
       pack.className = "mut";
       pack.textContent = "pack —";
-    } else if (G.batt.miss) {
+      pack.title = "";
+    } else if (G.batt.miss && packVolts() == null) {
       pack.className = "bad";
       pack.textContent = "pack off";
+      pack.title = "servo VIN miss — XT60 pack off. USB does not power the motors";
     } else {
-      pack.className = "ok";
-      pack.textContent = "pack " + G.batt.pack + "V";
+      const v = packVolts();
+      const pct = v != null ? lipo3sPct(v) : null;
+      const lvl = v == null ? "miss"
+        : v < 10.5 ? "cutoff"
+        : pct <= 20 ? "low"
+        : pct <= 30 ? "recharge"
+        : "ok";
+      pack.className = lvl === "ok" ? "ok" : (lvl === "recharge" ? "warn" : "bad");
+      pack.textContent = v == null ? "pack —" : ("pack " + v.toFixed(1) + "V " + pct + "%");
+      pack.title = "3S rest-voltage guess from servo VIN (same XT60 rail), not a BMS. "
+        + "Recharge by ~20–30% remaining (~11.2–11.4V rest). Do not sit below ~11.2V. "
+        + "9.9V (3.3V/cell) is a loaded ESC cutoff — too low at rest. Storage is ~11.4–11.6V (~40–50%).";
     }
   }
   const found = $("foundEl");
@@ -192,6 +255,37 @@ function onLine(line) {
     G.hooks.forEach(fn => fn("sample", next));
     return;
   }
+  if (line.startsWith("lim id=")) {
+    const kv = {};
+    line.replace(GET_KV, (_, k, v) => { kv[k] = v; return ""; });
+    const id = +kv.id;
+    const num = v => (v == null || v === "-") ? null : +v;
+    const rec = { id, amin: num(kv.min), amax: num(kv.max), home: num(kv.home), nv: kv.nv || "" };
+    G.lim[id] = rec;
+    log(line);
+    G.hooks.forEach(fn => fn("lim", rec));
+    return;
+  }
+  if (line.startsWith("lim ")) { log(line); return; }
+  if (line.startsWith("guard dload=")) {
+    const kv = {};
+    line.replace(GET_KV, (_, k, v) => { kv[k] = v; return ""; });
+    G.guardCfg = {
+      dload: +kv.dload || 0,
+      hand: kv.hand != null ? +kv.hand : 0,
+      load: +kv.load || 0,
+      cur: +kv.cur || 0,
+    };
+    log(line);
+    G.hooks.forEach(fn => fn("guardcfg", G.guardCfg));
+    return;
+  }
+  if (line.startsWith("ESTOP") || line.startsWith("guard on") || line.startsWith("guard idle")) {
+    G.guard = line;
+    log(line);
+    G.hooks.forEach(fn => fn("guard", line));
+    return;
+  }
   const who = WHO_RE.exec(line);
   if (who) {
     const id = +who[1];
@@ -254,6 +348,9 @@ function onLine(line) {
 async function afterConnect(kind) {
   G.batt = { pack: null, miss: true, est: null, cells: null, n: null, lvl: null };
   Object.keys(G.rows).forEach(k => delete G.rows[k]);
+  G.lim = {};
+  G.guard = "";
+  G.guardCfg = null;
   G.chip.via = kind;
   setLink(true);
   await send("info", true);
@@ -263,6 +360,8 @@ async function afterConnect(kind) {
   await send("batt", true);
   await send("stream 180", true);
   await send("who", true);
+  await send("lim", true);
+  await send("guard", true);
 }
 
 async function disconnect() {
@@ -294,7 +393,7 @@ async function connectHost() {
   const st = await fetch("/api/status").then(r => r.ok ? r.json() : null).catch(() => null);
   if (!st || !st.bridge) { log("run: .venv/bin/python manage.py runserver 0.0.0.0:8080"); return; }
   const chip = $("trialChip");
-  if (chip) chip.textContent = st.trial ? ("trial " + (st.trial.title || st.trial.id)) : "";
+  if (chip) chip.textContent = st.trial ? ("rec " + (st.trial.title || ("trial " + st.trial.id))) : "not recording";
   ensureSse();
   G.transport = hostTransport();
   if (!st.ok) { setLink(false); return; }
@@ -324,11 +423,73 @@ setInterval(async () => {
   const st = await fetch("/api/status").then(r => r.ok ? r.json() : null).catch(() => null);
   if (!st) return;
   const chip = $("trialChip");
-  if (chip) chip.textContent = st.trial ? ("trial " + (st.trial.title || st.trial.id)) : "";
+  if (chip) chip.textContent = st.trial ? ("rec " + (st.trial.title || ("trial " + st.trial.id))) : "not recording";
   if (st.ok && !G.alive) connectHost().catch(() => {});
   if (!st.ok && G.alive) setLink(false);
   if (G.wantHost) ensureSse();
 }, 2000);
+async function fetchLimits() {
+  const d = await fetch("/api/limits").then(r => r.json());
+  const m = {};
+  (d.limits || []).forEach(x => { m[x.servo] = x; });
+  return m;
+}
+
+async function saveLimit(id, key, pos, opts) {
+  if (pos == null || pos === "") {
+    throw new Error("no live pos — connect, pack on, wait for a get line");
+  }
+  const r = await fetch("/api/limits", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ servo: id, [key]: +pos }),
+  });
+  if (!r.ok) throw new Error(await r.text());
+  const chip = { home: "home", amin: "min", amax: "max" }[key];
+  const skipChip = opts && opts.chip === false;
+  if (chip && G.transport && !skipChip) {
+    await send("lim " + id + " " + chip + " " + (+pos));
+  }
+  return r.json();
+}
+
+function parsePairNote(note) {
+  const m = /(?:^|\s)pair=(-?1)(?:\s|$)/.exec(note || "");
+  return m ? +m[1] : null;
+}
+
+function pairSign() {
+  if (G.pair12 != null) return G.pair12;
+  try {
+    const s = localStorage.getItem("gibbon.pair.12");
+    if (s === "1" || s === "-1") return +s;
+  } catch (e) {}
+  return null;
+}
+
+function syncPairFromLimits(limits) {
+  const L = limits && limits[12];
+  const n = parsePairNote(L && L.note);
+  if (n != null) G.pair12 = n;
+}
+
+async function savePairSign(sign) {
+  G.pair12 = sign;
+  try { localStorage.setItem("gibbon.pair.12", String(sign)); } catch (e) {}
+  const L = (await fetchLimits())[12] || {};
+  const rest = String(L.note || "").replace(/\s*pair=-?1\b/g, "").trim();
+  const note = (rest + " pair=" + sign).trim();
+  await fetch("/api/limits", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ servo: 12, note }),
+  });
+}
+
+function cmdRaiseTo(g12, g13) {
+  return "raise to " + Math.round(g12) + " " + Math.round(g13);
+}
+
 window.G = G;
 window.MOTORS = MOTORS;
 window.JOINTS = JOINTS;
@@ -337,4 +498,10 @@ window.log = log;
 window.dash = dash;
 window.foundN = foundN;
 window.modeOf = modeOf;
+window.fetchLimits = fetchLimits;
+window.saveLimit = saveLimit;
+window.pairSign = pairSign;
+window.syncPairFromLimits = syncPairFromLimits;
+window.savePairSign = savePairSign;
+window.cmdRaiseTo = cmdRaiseTo;
 window.$ = $;

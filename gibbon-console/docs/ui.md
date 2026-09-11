@@ -15,7 +15,7 @@ Stand **behind the base**. Words + axes: `../roarm-fw/docs/hardware/motors/names
 | wrist roll | roll | 16 | twist |
 | hand | grip | 17 | open / close |
 
-Overview shows those six rows. Click → `/j/<slug>/`. Shoulder pitch actuate sends the **same** op to 12 and 13. If they fight: **STOP**.
+Overview shows those six rows. Click → `/j/<slug>/`. Shoulder pitch: hold/free both IDs; motion is `raise to` **after flash**. If they fight: **STOP**.
 
 Present columns: pos **56**, speed **58**, load **60**, V **62**, °C **63**, mA **69**, moving **66**, tq **40**. EEPROM (`who`) lives on **advanced**.
 
@@ -23,12 +23,18 @@ Footer: `14  pos 2811→2835  spd 150`. Idle heartbeats stay out. `moving`/`load
 
 ## Act (on the joint page)
 
-Firmware clamps; UI does not invent new writes. 11–15 hop ≤80. Twist hop ≤900. Hand 689–2075. Shoulder pitch: free/hold/nudge **both**. Wrist roll: no `twist free` during wheel checks. **STOP** / Escape = `estop`.
+Firmware clamps; UI does not invent new writes. 11–15 hop ≤80. Twist hop ≤900. Hand 689–2075. Shoulder pitch: free/hold **both** as `id 12` / `id 13` until flash. Wrist roll: no `twist free` during wheel checks. **STOP** / Escape = `estop` (queued, jumps).
 
 `move speed` / `move acc` = next WritePos (default 300 / 20).
 
 No auto-move on connect. Support the arm when XT60 goes on.
 
+Home overview slider: wrap joints ignore leftover raw bands (both-positive min/max on 11/16) and ignore negative Δ as a pos band. Twist with real Δ walls (`amin < 0 < amax`) clamps the hop to `[home+amin, home+amax]`.
+
+Shoulder-pitch slider still emits `raise to`. **Do not use it until that firmware is flashed.** Hold/free are two packets: `id 12` / `id 13`.
+
 ## Calibrate
 
-`/calibrate/?j=yaw` (etc). tq off, move by hand, mark **home / min / max** from live pos. Stored in `Limit` (host notebook). Chip still owns clamps for hand/twist. Do not command a joint with no wall.
+Index `/calibrate/`. One joint `/calibrate/<slug>/`. Wrap (11, 16): Δ and degrees. Procedure: `calibrate.md`.
+
+`Limit` is the host notebook. Chip still owns clamps for hand/twist (gold walls). Do not command a joint with no wall. Do not send `raise …` until flash.

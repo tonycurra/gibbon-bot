@@ -1,6 +1,6 @@
 Laptop UI + USB/BLE bridge + trial log. Chip: `../roarm-fw`.
 
-**Docs:** [`docs/README.md`](docs/README.md) (run, architecture, link, data, UI, next).
+**Docs:** [`docs/README.md`](docs/README.md) (run, architecture, link, data, UI, calibrate, next).
 
 ```bash
 cd /home/t/code/gibbon-bot/gibbon-console

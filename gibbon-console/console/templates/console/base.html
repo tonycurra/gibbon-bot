@@ -28,6 +28,13 @@
   <a href="{% url key %}"{% if page == key %} class="on"{% endif %}>{{ label }}</a>
   {% endfor %}
 </nav>
+{% if motor_nav %}
+<nav class="joints">
+  {% for j in joints %}
+  <a href="{{ nav_prefix }}{{ j.slug }}/"{% if joint_slug == j.slug %} class="on"{% endif %}>{{ j.name }}</a>
+  {% endfor %}
+</nav>
+{% endif %}
 <main>
 {% block main %}{% endblock %}
 </main>

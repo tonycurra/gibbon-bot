@@ -22,7 +22,8 @@ a:hover { text-shadow: 0 0 8px #00f0c866; }
   border-bottom: 1px solid var(--cyan);
   box-shadow: 0 0 16px #00f0c818;
 }
-#packEl, #foundEl, #tqEl { font-variant-numeric: tabular-nums; letter-spacing: .04em; }
+#packEl, #foundEl, #tqEl { font-variant-numeric: tabular-nums; letter-spacing: .04em; white-space: nowrap; }
+#packEl.warn { color: var(--amber); text-shadow: 0 0 8px #ffb00088; }
 .stop:disabled { opacity: .35; cursor: not-allowed; box-shadow: none; }
 .brand {
   font-weight: 700; letter-spacing: .18em; text-transform: uppercase; font-size: 12px;
@@ -54,7 +55,17 @@ nav a {
   padding: 7px 14px; color: var(--mut); letter-spacing: .1em; text-transform: uppercase; font-size: 11px;
 }
 nav a.on, nav a:hover { color: var(--cyan); box-shadow: inset 0 -1px var(--cyan); }
-main { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+nav.joints { border-bottom-color: var(--cyan); overflow-x: auto; -webkit-overflow-scrolling: touch; }
+nav.joints a { color: var(--fg); letter-spacing: .06em; white-space: nowrap; }
+#pairBar button.on { color: var(--cyan); border-color: var(--cyan); box-shadow: 0 0 8px #00f0c855; }
+#pairState { min-width: 14em; }
+main {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 24px;
+}
 
 #meta { display: grid; grid-template-columns: repeat(3, 1fr); border-bottom: 1px solid var(--line); }
 .blk { padding: 8px 12px; border-right: 1px solid var(--line); }
@@ -82,6 +93,9 @@ tr.no td { color: var(--mag); }
 tr.go td { color: var(--fg); }
 tr.go td:first-child { color: var(--cyan); }
 tr.on td { background: #00f0c80c; }
+tr.loose td { background: #ffb00014; box-shadow: inset 3px 0 var(--amber); }
+#calMsg { color: var(--amber); min-height: 1.35em; }
+.hot { color: var(--mag); }
 td.hot { color: var(--mag); }
 #acts { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 8px 12px; }
 #acts:empty { padding: 0; }
@@ -90,16 +104,212 @@ td.hot { color: var(--mag); }
 #log.short { flex: 0 0 8em; border-top: 1px solid var(--line); }
 .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 8px 12px; }
 .row label { display: flex; gap: 6px; align-items: center; color: var(--mut); }
-.act { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; padding: 10px 12px; }
+.act {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: end; padding: 10px 12px;
+  position: sticky; top: 0; z-index: 2; background: #000;
+  border-bottom: 1px solid var(--line);
+}
 .act label, .act .grow { display: flex; flex-direction: column; gap: 4px; color: var(--mut); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; }
 .act .grow { flex: 1; min-width: 12em; }
+#handAct { align-items: center; }
+#handAct button { min-width: 5.5em; padding: 10px 14px; }
+#grip { width: 100%; min-height: 1.6em; accent-color: var(--cyan); cursor: pointer; }
+#gripVal { font-size: 16px; min-width: 3.2em; font-variant-numeric: tabular-nums; color: var(--fg); }
+.chartGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-bottom: 1px solid var(--line);
+}
 .chart { padding: 8px 12px 12px; }
-.chart h3 { margin: 0 0 4px; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--mut); font-weight: 400; }
-.chart canvas { width: 100%; height: 88px; display: block; background: #020808; }
+.chart h3 {
+  margin: 0 0 4px; font-size: 10px; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--mut); font-weight: 400;
+  display: flex; justify-content: space-between; gap: 8px;
+}
+.chart h3 b { color: var(--fg); font-weight: 400; letter-spacing: 0; text-transform: none; font-variant-numeric: tabular-nums; }
+.chart canvas { width: 100%; height: 96px; display: block; background: #020808; }
+.chart.wide { grid-column: 1 / -1; }
+.sense { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+.senseRow { display: flex; flex-wrap: wrap; gap: 18px; font-size: 16px; font-variant-numeric: tabular-nums; }
+.senseRow b { color: var(--mut); font-weight: 400; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; margin-right: 6px; }
+.guard { margin: 0; padding: 8px 12px; color: var(--mut); border-bottom: 1px solid var(--line); }
+.guard.on { color: var(--amber); }
+.guard.bad { color: var(--mag); }
+details.more { border-bottom: 1px solid var(--line); }
+details.more summary {
+  padding: 8px 12px; cursor: pointer; color: var(--mut);
+  letter-spacing: .1em; text-transform: uppercase; font-size: 10px;
+}
+details.more summary:hover { color: var(--cyan); }
+#rawGets {
+  margin: 0; padding: 8px 12px; color: var(--amber); font-size: 11px;
+  white-space: pre-wrap; overflow-x: auto; border-bottom: 1px solid var(--line);
+}
+.legend { margin: 0; padding: 4px 12px 8px; color: var(--mut); font-size: 11px; letter-spacing: 0; text-transform: none; }
+.legend b { color: var(--mag); font-weight: 400; }
 .note, .cmds { margin: 0; padding: 8px 12px; color: #6ee0b8; }
 .cmds { list-style: none; max-height: 10em; overflow: auto; }
-.ov tbody tr { cursor: pointer; }
+.cmds .note { color: #ffb000; padding: 0; }
+.ov tbody tr { cursor: default; }
 .ov tbody tr:hover td { background: #00f0c80c; }
+.ov.home tbody tr { cursor: pointer; }
+.ov.home td.goName { text-align: left; }
+.ov.home td.goName a.name {
+  display: inline-block; min-width: 9em; padding: 8px 0;
+}
+.ov td.grip { min-width: 14em; text-align: left; }
+.ov input[type=range] { width: 100%; min-width: 10em; accent-color: var(--cyan); cursor: pointer; vertical-align: middle; }
+.ov button.lock { min-width: 4.8em; }
+.ov button.lock.bad { color: var(--mag); border-color: var(--mag); }
+.ov button.wait { color: var(--amber); border-color: var(--amber); }
+.ov button.ok { color: var(--cyan); border-color: var(--cyan); }
+#calSpdVal { min-width: 7.5em; color: var(--fg); font-variant-numeric: tabular-nums; }
+#calBar .grow input[type=range] { width: 100%; accent-color: var(--cyan); cursor: pointer; }
+tr.testing td { background: #00f0c80c; box-shadow: inset 3px 0 var(--cyan); }
+.calLiveTd { text-align: left; }
+.calLiveTd b { color: var(--cyan); font-size: 16px; font-variant-numeric: tabular-nums; }
+.calLiveTd .mut { display: block; font-size: 11px; }
+.calPos, .calDelta { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.calDelta { color: var(--cyan); font-weight: 700; }
+.calMarks { white-space: nowrap; }
+.calMarks button.wait, .calMark button.wait { color: var(--amber); border-color: var(--amber); }
+.calMarks button.ok, .calMark button.ok { color: var(--cyan); border-color: var(--cyan); }
+.calMarks button:disabled, .calActs button:disabled { opacity: .35; cursor: not-allowed; box-shadow: none; }
+
+.calPage { border-top: 1px solid var(--line); }
+.calLive {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15em, 1fr));
+}
+.calMotor {
+  padding: 14px 16px 16px;
+  border-bottom: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+}
+.calMotor:last-child { border-right: 0; }
+.calMotor h2 {
+  margin: 0 0 10px; font-size: 11px; font-weight: 400;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--mut);
+  display: flex; justify-content: space-between; gap: 8px; align-items: baseline;
+}
+.calMotor h2 i { font-style: normal; color: var(--amber); letter-spacing: .08em; }
+.calNums {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 18px;
+}
+.calNums span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.calNums b {
+  font-size: 10px; font-weight: 400; color: var(--mut);
+  letter-spacing: .12em; text-transform: uppercase;
+}
+.calNums i {
+  font-style: normal; font-size: 22px; line-height: 1.15;
+  font-variant-numeric: tabular-nums; color: var(--cyan);
+  overflow-wrap: anywhere;
+}
+.calNums .dim i { color: var(--fg); font-size: 18px; }
+.calNote:empty { display: none; }
+.calMarksGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-bottom: 1px solid var(--line);
+}
+.calMark {
+  padding: 12px 14px 14px;
+  border-right: 1px solid var(--line);
+  display: flex; flex-direction: column; gap: 8px; align-items: stretch;
+  min-width: 0;
+}
+.calMark:last-child { border-right: 0; }
+.calMark .k {
+  font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--mut);
+}
+.calMark .val {
+  font-size: 18px; font-variant-numeric: tabular-nums; color: var(--fg);
+  overflow-wrap: anywhere;
+}
+.calMark button { width: 100%; }
+.calMark .calIn {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--mut);
+}
+.calMark input[type=number] {
+  width: 100%; min-width: 0; color: var(--fg); padding: 6px 8px;
+}
+.calMark .rowBtns { display: flex; flex-wrap: wrap; gap: 6px; }
+.calMark .rowBtns button { flex: 1; min-width: 4.5em; }
+.calJog { padding: 8px 16px 14px; }
+.calTrackLabs {
+  display: flex; justify-content: space-between;
+  margin-top: 4px; font-size: 12px;
+  font-variant-numeric: tabular-nums; color: var(--mut);
+}
+.calJog label {
+  display: block; margin-bottom: 8px;
+  font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--mut);
+}
+.calJog input[type=range] {
+  width: 100%; min-width: 0; min-height: 2em;
+  accent-color: var(--cyan); cursor: pointer;
+}
+.calActs {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.calActs .lock { min-width: 6.5em; }
+.calPage > div.loose .calMotor,
+.calPage > div.loose { background: #ffb00014; }
+.calPage > div.testing .calMotor { background: #00f0c80c; }
+.calPage > div.learning { box-shadow: inset 0 3px 0 #ffb000; }
+
+.calTrio {
+  display: grid; grid-template-columns: 1fr 1.4fr 1fr;
+  gap: 8px; padding: 18px 16px 8px; text-align: center;
+  align-items: end;
+}
+.calTrio .k {
+  display: block; font-size: 10px; letter-spacing: .16em;
+  text-transform: uppercase; color: var(--mut); margin-bottom: 4px;
+}
+.calTrio b {
+  display: block; font-variant-numeric: tabular-nums; color: var(--fg);
+  font-size: 28px; line-height: 1.1; letter-spacing: -0.02em;
+}
+.calTrio .now b { font-size: 56px; color: var(--cyan); }
+.calTrio i {
+  display: block; font-style: normal; font-size: 13px;
+  color: var(--mut); font-variant-numeric: tabular-nums; margin-top: 2px;
+}
+.calTrio .now i { color: var(--fg); }
+.calQuiet {
+  display: flex; flex-wrap: wrap; gap: 8px 16px;
+  padding: 0 16px 12px; font-size: 12px; color: var(--mut);
+}
+.calQuiet i { font-style: normal; color: var(--fg); font-variant-numeric: tabular-nums; }
+.calQuiet em { font-style: normal; color: var(--amber); font-size: 10px; letter-spacing: .08em; }
+.calWrap .calNote { padding: 0 16px 12px; }
+.calWrapRow {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+}
+.calActs button.go { min-width: 9.5em; color: var(--cyan); border-color: var(--cyan); }
+.calActs button.go.on { background: #ffb000; color: #111; border-color: #ffb000; }
+body.wrapCal #btnPush { display: none; }
+
+@media (max-width: 640px) {
+  nav { overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; }
+  nav a { flex-shrink: 0; }
+  .calMarksGrid, .calWrapRow { grid-template-columns: 1fr; }
+  .calMark { border-right: 0; border-bottom: 1px solid var(--line); }
+  .calMark:last-child { border-bottom: 0; }
+  .calMotor { border-right: 0; }
+  .calTrio { grid-template-columns: 1fr; }
+  .calTrio .now b { font-size: 44px; }
+  .act .grow { min-width: 100%; }
+  #pairBar .mut:last-child { width: 100%; }
+}
 .axis {
   display: inline-block; padding: 0 6px; border: 1px solid var(--line);
   color: var(--amber); letter-spacing: .1em; text-transform: uppercase; font-size: 10px;
@@ -110,8 +320,8 @@ td.hot { color: var(--mag); }
 }
 .jointHead span:nth-child(2) { color: var(--cyan); font-weight: 700; letter-spacing: .08em; }
 .foot {
-  display: flex; gap: 8px; align-items: stretch;
-  border-top: 1px solid var(--cyan); max-height: 28vh; background: #010808;
+  display: flex; gap: 8px; align-items: stretch; flex-shrink: 0;
+  border-top: 1px solid var(--cyan); background: #010808;
 }
 #footToggle {
   border: 0; border-right: 1px solid var(--line);
@@ -119,10 +329,11 @@ td.hot { color: var(--mag); }
   padding: 8px 4px; color: var(--mut); letter-spacing: .12em;
 }
 #footLog {
-  flex: 1; margin: 0; padding: 6px 10px; overflow: auto;
-  font-size: 11px; color: #6ee0b8; white-space: pre-wrap; min-height: 4.5em; max-height: 5.5em;
+  flex: 1; margin: 0; padding: 6px 12px; overflow: auto;
+  font-size: 11px; color: #6ee0b8; white-space: pre-wrap;
+  min-height: 8em; max-height: 11em;
 }
-#footLog.wide { max-height: 22vh; }
+#footLog.wide { max-height: 28vh; min-height: 12em; }
 .docs { flex: 1; overflow: auto; padding: 12px 16px 40px; max-width: 52em; }
 .docs h1 { margin: 0 0 12px; font-size: 16px; letter-spacing: .14em; text-transform: uppercase; color: var(--cyan); }
 .docs h2 { margin: 22px 0 8px; font-size: 13px; color: var(--cyan); letter-spacing: .06em; }
@@ -134,4 +345,6 @@ td.hot { color: var(--mag); }
 @media (max-width: 720px) {
   #meta { grid-template-columns: 1fr; }
   .blk { border-right: 0; border-bottom: 1px solid var(--line); }
+  .chartGrid { grid-template-columns: 1fr; }
+  .ov.home th:nth-child(n+6), .ov.home td:nth-child(n+6) { display: none; }
 }

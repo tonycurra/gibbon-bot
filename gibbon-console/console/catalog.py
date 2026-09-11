@@ -17,7 +17,7 @@ JOINTS = [
         "axis": "yaw",
         "ids": [11],
         "say": "turn left / right",
-        "note": "One motor. The base is this yaw joint.",
+        "note": "One motor. Same wrap as wrist roll: raw pos jumps at 0/4095. Mark here, then − / + as Δ. Servo mode cannot drive through that seam — free, turn through, hold.",
     },
     {
         "slug": "shoulder-pitch",
@@ -26,7 +26,7 @@ JOINTS = [
         "ids": [12, 13],
         "paired": True,
         "say": "raise / lower",
-        "note": "Two motors on one horn, physically coupled. Never command 12 or 13 alone — they fight. When you move the upper arm by hand, watch both positions.",
+        "note": "Two motors on one horn. Never command 12 or 13 alone. Use raise to G12 G13 (SyncWrite). If encoders run opposite, pair is mirror (−).",
     },
     {
         "slug": "elbow",
@@ -50,7 +50,7 @@ JOINTS = [
         "axis": "roll",
         "ids": [16],
         "say": "twist clockwise / counterclockwise",
-        "note": "Looking along the forearm toward the fingers. Slack home ~4068. Chip hop ≤900. Do not command twist until ESTOP is flashed.",
+        "note": "Looking along the forearm toward the fingers. Clockwise = counts fall (−Δ). Counterclockwise = counts rise (+Δ). Same raw pos can be two cable states — mark Δ from here, not min/max. Chip hop ≤900.",
     },
     {
         "slug": "hand",
@@ -62,6 +62,8 @@ JOINTS = [
     },
 ]
 
-CATALOG = {"motors": MOTORS, "joints": JOINTS}
+HAND = {"open": 689, "close": 2008, "to_max": 2075, "wall_open": 609, "wall_close": 2088}
+
+CATALOG = {"motors": MOTORS, "joints": JOINTS, "hand": HAND}
 
 SLUGS = {j["slug"]: j for j in JOINTS}

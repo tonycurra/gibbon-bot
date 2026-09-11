@@ -105,6 +105,8 @@ def unsubscribe(q):
 def broadcast(line):
     if not line:
         return
+    if line.startswith(("ESTOP", "guard ", "err", "hand ")) or " abort " in line:
+        print("rx", line, flush=True)
     try:
         dbq.put_nowait(("rx", line))
     except queue.Full:
@@ -202,6 +204,11 @@ def write_serial(text):
     data = text.encode("utf-8")
     if not data.endswith(b"\n"):
         data += b"\n"
+    s = text.strip()
+    if s and not s.startswith("get") and not s.startswith("stream") and s not in (
+        "info", "state", "gpio", "bench", "batt", "who", "lim", "guard",
+    ):
+        print("tx", s, flush=True)
     with serial_lock:
         if serial_ok and serial_fd is not None:
             os.write(serial_fd, data)
@@ -357,25 +364,46 @@ def ble_thread():
     ble_loop.run_until_complete(ble_task())
 
 
+SKIP_TX = frozenset({"info", "state", "gpio", "bench", "batt", "who", "lim", "guard"})
+
+
+def skip_tx(line):
+    if not line or line in SKIP_TX:
+        return True
+    if line.startswith("stream ") or line.startswith("get"):
+        return True
+    return False
+
+
 def db_loop():
-    from .models import Command, Sample, Trial
+    from .models import Command, Note, Sample, Trial
 
     while True:
         kind, line = dbq.get()
-        trial = Trial.objects.filter(ended__isnull=True).first()
-        if not trial:
-            continue
         t_ms = int(time.time() * 1000)
         try:
             if kind == "tx":
-                if line and not line.startswith("stream ") and line not in ("info", "state", "gpio", "bench", "batt", "who"):
-                    Command.objects.create(trial=trial, t_ms=t_ms, text=line[:240], source="ui")
+                if skip_tx(line):
+                    continue
+                trial = Trial.objects.filter(ended__isnull=True).first()
+                if not trial:
+                    trial = Trial.objects.create(
+                        title="sitting " + time.strftime("%Y-%m-%d %H:%M"),
+                        via=via(),
+                    )
+                Command.objects.create(trial=trial, t_ms=t_ms, text=line[:240], source="ui")
                 continue
             miss = MISS_RE.match(line)
             if miss:
                 continue
             g = parse_get(line)
             if g:
+                trial = Trial.objects.filter(ended__isnull=True).first()
+                if not trial:
+                    trial = Trial.objects.create(
+                        title="sitting " + time.strftime("%Y-%m-%d %H:%M"),
+                        via=via(),
+                    )
                 Sample.objects.create(
                     trial=trial, t_ms=t_ms, servo=g["id"],
                     pos=g["pos"], speed=g["speed"], load=g["load"],
@@ -384,11 +412,21 @@ def db_loop():
                     un=g["un"], turns=g["turns"], mode=g["mode"],
                 )
                 continue
+            trial = Trial.objects.filter(ended__isnull=True).first()
+            if line.startswith("ESTOP") or line.startswith("guard ") or line.startswith("lim id="):
+                if not trial:
+                    trial = Trial.objects.create(
+                        title="sitting " + time.strftime("%Y-%m-%d %H:%M"),
+                        via=via(),
+                    )
+                Note.objects.create(trial=trial, t_ms=t_ms, text=line[:500])
+                continue
             bp = BATT_RE.search(line)
-            if bp and trial.pack_v is None:
-                trial.pack_v = float(bp.group(1))
-                trial.via = via()
-                trial.save(update_fields=["pack_v", "via"])
+            if bp and trial:
+                if trial.pack_v is None:
+                    trial.pack_v = float(bp.group(1))
+                    trial.via = via()
+                    trial.save(update_fields=["pack_v", "via"])
         except Exception as e:
             print("db", e, flush=True)
 

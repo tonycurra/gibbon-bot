@@ -5,6 +5,7 @@ urlpatterns = [
     path("", views.home, name="home"),
     path("j/<slug:slug>/", views.joint_page, name="joint"),
     path("calibrate/", views.calibrate, name="calibrate"),
+    path("calibrate/<slug:slug>/", views.calibrate, name="calibrate_joint"),
     path("info/", views.info, name="info"),
     path("advanced/", views.advanced, name="advanced"),
     path("graphs/", views.graphs, name="graphs"),

@@ -44,20 +44,24 @@
 </table>
 
 <h2 id="read">3. what we can read</h2>
-<p>Only sensors are inside each Feetech ST32xx. Present block at register 56 (15 bytes). USB does not power the motors — pack off → all miss.</p>
+<p>Only sensors are <strong>inside each Feetech ST32xx</strong>. Present block at register 56 (15 bytes). No IMU, no force/torque cell, no HAT current chip. USB does not power the motors — pack off → all miss.</p>
+<p>In the motor table the columns mean:</p>
 <table class="ov">
-  <thead><tr><th>field</th><th>what</th><th>when tq=0 (you turn by hand)</th></tr></thead>
+  <thead><tr><th>column</th><th>kind</th><th>what</th><th>tq off (you turn by hand)</th></tr></thead>
   <tbody>
-    <tr><td>pos</td><td>magnetic encoder 0–4095, wraps</td><td><strong>this is what moves</strong></td></tr>
-    <tr><td>speed</td><td>from that encoder</td><td>usually 0 unless you spin fast</td></tr>
-    <tr><td>load</td><td>inner PID effort, not a torque cell</td><td><strong>always 0</strong></td></tr>
-    <tr><td>cur</td><td>winding current estimate, mA</td><td>0</td></tr>
-    <tr><td>moving</td><td>flag: motor thinks it is tracking a goal</td><td><strong>0</strong> — not a “I touched it” bit</td></tr>
-    <tr><td>tq</td><td>torque enable</td><td>0 = free / backdrive</td></tr>
-    <tr><td>v, temp</td><td>pack at this servo, case °C</td><td>live if pack on</td></tr>
+    <tr><td>id</td><td>label</td><td>bus ID</td><td>—</td></tr>
+    <tr><td><strong>pos</strong></td><td>sensor</td><td>12-bit magnetic encoder on the horn, 0–4095, wraps</td><td><strong>this is what moves</strong></td></tr>
+    <tr><td>un</td><td>derived (ESP)</td><td>pos unwrapped across turns — computed on the chip, not a sensor</td><td>follows pos</td></tr>
+    <tr><td>spd</td><td>derived (motor)</td><td>speed the servo computes from that encoder</td><td>usually 0 unless you spin fast</td></tr>
+    <tr><td>load</td><td>derived (motor)</td><td>inner PID effort, not a torque cell. our force proxy</td><td><strong>always 0</strong></td></tr>
+    <tr><td>mA</td><td>sensor (estimate)</td><td>winding current inside the servo. light hits often 0</td><td>0</td></tr>
+    <tr><td>V</td><td>sensor</td><td>pack voltage at this servo</td><td>live if pack on</td></tr>
+    <tr><td>°C</td><td>sensor</td><td>case / driver temperature</td><td>live if pack on</td></tr>
+    <tr><td>mv</td><td>flag</td><td>moving — motor thinks it is tracking a goal</td><td><strong>0</strong> — not “I touched it”</td></tr>
+    <tr><td>tq</td><td>flag</td><td>torque enable on/off</td><td>0 = free / backdrive</td></tr>
   </tbody>
 </table>
-<p>So: backdrive → watch pos. Commanded hold/fight → watch load (and cur if it ever leaves 0).</p>
+<p>Sensors that exist: encoder, VIN, temperature, current estimate. Everything else is a flag or a calculation from those. The motor page charts all four sensors plus load and speed. Backdrive → watch <strong>pos</strong>. Hold or a commanded fight → watch <strong>load</strong> (and mA if it leaves 0).</p>
 
 <h2 id="modes">4. servo / wheel / step</h2>
 <p>Each motor has a <strong>mode register (33)</strong> in EEPROM. We almost always stay in servo.</p>
@@ -90,10 +94,10 @@
 <p>A laptop PID on top of the servo PID is worse than either alone. Wheel + outer P (command speed from pos error) is only a maybe for twist unwrap.</p>
 
 <h2 id="pair">7. shoulder pitch 12+13</h2>
-<p>One joint, two motors, physically stuck together. Move the upper arm by hand and watch <strong>both</strong> positions. Console actuate on that page sends the same op to both IDs. If they fight, STOP. Firmware does not SyncWrite yet — two packets, same sitting.</p>
+<p>One joint, two motors, physically stuck together. Move the upper arm by hand and watch <strong>both</strong> positions. Hold/free today: <code>id 12 hold</code> and <code>id 13 hold</code> (two packets). SyncWrite <code>raise to G12 G13</code> is in firmware source, <strong>not on this chip</strong> — do not send <code>raise …</code> until flash. If they fight, STOP. Set pair (mirror − / same +) on <a href="/calibrate/shoulder-pitch/">calibrate / shoulder pitch</a> before any raise jog.</p>
 
 <h2 id="limits">8. walls and calibrate</h2>
-<p>Find the wall by hand, tq off. Mark min / max / home on <a href="/calibrate/">calibrate</a> from live pos. Commanded moves are a check inside that band, not a way to find it. Hand is already walled (open 609, close 2088). Twist walls known; do not command twist until chip ESTOP is flashed.</p>
+<p>Find the wall by hand, tq off. Wrap joints (yaw, wrist roll): slack → <b>here</b> → <b>calibrate</b> → move both ways → <b>done</b>. Degrees are 360° / 4096 counts. Other joints: mark here / − / + from live pos on <a href="/calibrate/">calibrate</a>. Commanded moves are a check inside that band, not a way to find it. Hand gold: open 609, close 2088. Twist: Sep-5 slack 4068; this sitting here was 960 — do not mix. Host unwraps wrap joints; the chip does not need to.</p>
 <p>EEPROM amin/amax on the chip are often 0–4095 (no wall). Our walls live on the host + firmware clamps for hand/twist.</p>
 
 <h2 id="safety">9. stop</h2>
