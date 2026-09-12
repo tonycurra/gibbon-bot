@@ -19,7 +19,7 @@ PAGES = [
     ("calibrate", "calibrate"),
     ("trials", "trials"),
     ("hat", "hat"),
-    ("raw", "raw"),
+    ("raw", "hand"),
     ("info", "info"),
     ("advanced", "advanced"),
 ]

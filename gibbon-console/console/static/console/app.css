@@ -329,11 +329,47 @@ body.wrapCal #btnPush { display: none; }
   padding: 8px 4px; color: var(--mut); letter-spacing: .12em;
 }
 #footLog {
-  flex: 1; margin: 0; padding: 6px 12px; overflow: auto;
-  font-size: 11px; color: #6ee0b8; white-space: pre-wrap;
-  min-height: 8em; max-height: 11em;
+  flex: 1; margin: 0; padding: 6px 12px; overflow: hidden;
+  font-size: 11px; color: #6ee0b8; white-space: nowrap; text-overflow: ellipsis;
+  min-height: 2.2em; max-height: 2.2em;
 }
-#footLog.wide { max-height: 28vh; min-height: 12em; }
+#footLog.wide {
+  max-height: 28vh; min-height: 12em;
+  overflow: auto; white-space: pre-wrap; text-overflow: unset;
+}
+.say {
+  margin: 0; padding: 10px 12px;
+  color: var(--amber); letter-spacing: .04em;
+  border-bottom: 1px solid var(--line);
+}
+.tripBox {
+  padding: 10px 12px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.tripHead { margin: 0 0 6px; color: var(--fg); }
+.tripScale {
+  display: flex; justify-content: space-between;
+  font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--mut);
+}
+.tripBox input[type="range"] { width: 100%; accent-color: var(--mag); margin: 4px 0 8px; }
+.loadMeter {
+  position: relative; height: 10px;
+  background: #021a18; border: 1px solid var(--line);
+}
+.loadMeter i {
+  display: block; height: 100%; width: 0;
+  background: var(--cyan); box-shadow: 0 0 8px #00f0c855;
+}
+.loadMeter.hot i { background: var(--mag); box-shadow: 0 0 8px #ff2bd688; }
+.loadMeter em {
+  position: absolute; top: -2px; bottom: -2px; width: 2px;
+  background: var(--mag); margin-left: -1px; pointer-events: none;
+}
+#labDump {
+  margin: 0; padding: 8px 12px 16px;
+  color: #6ee0b8; font-size: 11px; white-space: pre-wrap;
+  max-height: 10em; overflow: auto;
+}
 .docs { flex: 1; overflow: auto; padding: 12px 16px 40px; max-width: 52em; }
 .docs h1 { margin: 0 0 12px; font-size: 16px; letter-spacing: .14em; text-transform: uppercase; color: var(--cyan); }
 .docs h2 { margin: 22px 0 8px; font-size: 13px; color: var(--cyan); letter-spacing: .06em; }

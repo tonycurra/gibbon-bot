@@ -22,8 +22,13 @@ class HatPageTests(TestCase):
         r = self.client.get("/raw/")
         self.assertEqual(r.status_code, 200)
         body = r.content.decode()
-        self.assertIn("ID 17", body)
-        self.assertIn("sensitivity", body)
+        self.assertIn("Hand only", body)
+        self.assertIn("light touch", body)
+        self.assertIn("only a jam", body)
+        self.assertIn("effort", body.lower())
+        self.assertIn('id="charts"', body)
+        self.assertIn("dump bus bytes", body)
+        self.assertNotIn("sensitivity", body.lower())
 
     def test_home_has_fw_chip(self):
         r = self.client.get("/")
@@ -40,3 +45,4 @@ class HatPageTests(TestCase):
         self.assertIn("stream 180", js)
         self.assertNotIn('await send("bench", true)', js)
         self.assertNotIn('await send("gpio", true)', js)
+        self.assertNotIn('await send("who", true)', js)

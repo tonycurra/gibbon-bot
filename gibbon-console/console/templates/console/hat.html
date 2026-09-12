@@ -93,7 +93,7 @@ un = pos + turns × 4096</pre>
 <p>Worth low-level electric control of the motor? <strong>No</strong> on this hardware. Worth a raw sitting on the <em>hand</em> to feel speed/acc/load? Yes — next section.</p>
 
 <h2 id="raw">7. raw hand test</h2>
-<p>ID 17 only, servo mode, walls 689–2075. Live present + who + speed/acc/<code>to</code> + a sensitivity slider that trips <code>estop</code> and <code>hand free</code>. <a href="/raw/">open /raw/</a>. Pack on. Support the jaws. STOP / Escape still kills torque.</p>
+<p>Hand only: open / close / hold / free, grip slider, STOP if effort (servo <code>load</code> counts) goes past the bar. Live graphs of pos, effort, mA, V, °C. Bus hex is behind “servo dump”. <a href="/raw/">open /raw/</a>. Pack on. Support the jaws. STOP / Escape still kills torque.</p>
 
 <h2 id="board">8. this HAT + gold serial</h2>
 <table class="ov">

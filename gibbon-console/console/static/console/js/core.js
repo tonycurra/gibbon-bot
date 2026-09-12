@@ -13,14 +13,25 @@ const G = {
   batt: { pack: null, miss: true, est: null, cells: null, n: null, lvl: null },
   hooks: [], recent: [], lim: {}, guard: "", guardCfg: null,
   pair12: null,
+  logFocus: null,
 };
+
+function footKeep(s) {
+  const id = G.logFocus;
+  if (id == null) return true;
+  if (/^ESTOP|^>> |^guard |^raise blocked/.test(s)) return true;
+  if (s.startsWith(id + "  ") || s.startsWith("get LOAD id=" + id)) return true;
+  if (s.indexOf("id=" + id) >= 0 || /\bhand /.test(s) || s.startsWith("raw ")) return true;
+  return false;
+}
 
 function paintFoot() {
   const el = $("footLog");
   if (!el) return;
-  const n = el.classList.contains("wide") ? 80 : 40;
-  el.textContent = G.recent.slice(-n).join("\n") || "—";
-  el.scrollTop = el.scrollHeight;
+  const lines = G.recent.filter(footKeep);
+  const n = el.classList.contains("wide") ? 80 : 1;
+  el.textContent = lines.slice(-n).join("\n") || "—";
+  if (el.classList.contains("wide")) el.scrollTop = el.scrollHeight;
 }
 
 function log(s) {
@@ -142,23 +153,14 @@ function tqOn() {
   return MOTORS.filter(m => G.rows[m.id] && !G.rows[m.id].miss && G.rows[m.id].tq === "1").map(m => m.id);
 }
 
+/* 3S pack: 12.6 V = 4.2 V/cell full. Empty floor 10.0 V (9.9 is loaded LVC — keep a 0.1 V pad). Linear, not a BMS. */
+const LIPO3S_FULL = 12.6;
+const LIPO3S_EMPTY = 10.0;
+
 function lipo3sPct(v) {
-  const t = [
-    [12.60, 100], [12.45, 90], [12.30, 80], [12.15, 70],
-    [12.00, 60], [11.85, 50], [11.70, 45], [11.55, 40],
-    [11.40, 30], [11.31, 25], [11.22, 20], [11.10, 12],
-    [10.80, 6], [10.50, 3], [9.90, 0],
-  ];
-  if (v >= t[0][0]) return 100;
-  if (v <= t[t.length - 1][0]) return 0;
-  for (let i = 1; i < t.length; i++) {
-    if (v >= t[i][0]) {
-      const [v0, p0] = t[i];
-      const [v1, p1] = t[i - 1];
-      return Math.round(p0 + (p1 - p0) * (v - v0) / (v1 - v0));
-    }
-  }
-  return 0;
+  if (v >= LIPO3S_FULL) return 100;
+  if (v <= LIPO3S_EMPTY) return 0;
+  return Math.round((v - LIPO3S_EMPTY) / (LIPO3S_FULL - LIPO3S_EMPTY) * 100);
 }
 
 function packVolts() {
@@ -192,9 +194,9 @@ function paintStatus() {
         : "ok";
       pack.className = lvl === "ok" ? "ok" : (lvl === "recharge" ? "warn" : "bad");
       pack.textContent = v == null ? "pack —" : ("pack " + v.toFixed(1) + "V " + pct + "%");
-      pack.title = "3S rest-voltage guess from servo VIN (same XT60 rail), not a BMS. "
-        + "Recharge by ~20–30% remaining (~11.2–11.4V rest). Do not sit below ~11.2V. "
-        + "9.9V (3.3V/cell) is a loaded ESC cutoff — too low at rest. Storage is ~11.4–11.6V (~40–50%).";
+      pack.title = "3S linear from servo VIN (same XT60 rail), not a BMS. "
+        + "12.6 V = 100% (4.2 V/cell). 10.0 V = 0% (9.9 V loaded LVC + 0.1 V pad). "
+        + "Chip refuses writes below 10.5 V. Storage ~11.4–11.6 V.";
     }
   }
   const found = $("foundEl");
@@ -375,6 +377,11 @@ function onLine(line) {
   if (gp) { G.chip.gpio = "18=" + gp[1] + " 19=" + gp[2]; G.hooks.forEach(fn => fn("chip")); return; }
   const sms = /stream ms=(\d+) dump=(\d+)/.exec(line);
   if (sms) { G.chip.stream = sms[1]; G.chip.dump = sms[2]; G.hooks.forEach(fn => fn("chip")); return; }
+  if (line.startsWith("raw ping") || line.startsWith("raw read")) {
+    log(line);
+    G.hooks.forEach(fn => fn("lab", line));
+    return;
+  }
   if (/^(get present|batt id=|batt READ|ping |bench v|bus=|stream |listen|reset=|tasks|who EEPROM|state bus|found=)/.test(line)) return;
   log(line);
 }
@@ -392,7 +399,6 @@ async function afterConnect(kind) {
   await send("info", true);
   await send("batt", true);
   await send("stream 180", true);
-  await send("who", true);
   await send("lim", true);
   await send("guard", true);
 }
@@ -441,6 +447,7 @@ window.addEventListener("keydown", e => { if (e.key === "Escape" && G.transport)
 G.hooks.push(() => paintStatus());
 const footBtn = $("footToggle");
 if (footBtn) {
+  footBtn.title = "bus log — click to expand";
   footBtn.onclick = () => {
     $("footLog").classList.toggle("wide");
     paintFoot();

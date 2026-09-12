@@ -37,13 +37,13 @@ Root `index.html` / `console.js` are stale PWA leftovers.
 | `/calibrate/` | joint index — here / − / + per row |
 | `/calibrate/<slug>/` | one joint. Wrap (yaw, wrist-roll): degrees + Δ slider |
 | `/hat/` | gold serial + bus timing, servo chip limits, unwrap vs wheel, memory table |
-| `/raw/` | hand ID 17: pos/speed/acc/`to`, who, load sensitivity trip |
+| `/raw/` | hand: open / close / hold / free, effort trip, live sensor graphs |
 | `/info/` | docs: axes, servo vs wheel, PID layers, 12+13, walls |
 | `/advanced/` | chip / bus / EEPROM `who` + full serial |
 | `/trials/` | sittings |
 | `/trials/<id>/` | recorded samples + commands |
 
-Header (every page): usb/ble, pack V or pack off, motors 7/7, tq, **STOP**. Footer: last ~5 deltas; click **log** to expand.
+Header (every page): usb/ble, pack V or pack off, motors 7/7, tq, **STOP**. Footer: one last delta; click **log** to expand. On `/raw/` the footer only shows the hand.
 
 Slugs: `yaw`, `shoulder-pitch` (ids 12+13), `elbow`, `wrist-pitch`, `wrist-roll`, `hand`.
 
@@ -66,7 +66,7 @@ Slugs: `yaw`, `shoulder-pitch` (ids 12+13), `elbow`, `wrist-pitch`, `wrist-roll`
 
 Same lines USB and BLE. Parser: `core.js` / `bridge.py` (`key=value`; missing = 0 / `un=pos`).
 
-Connect burst (quiet): `info` `batt` `stream 180` `who` `lim` `guard`. `bench` / `state` / `gpio` are on demand (`/hat/`, `/advanced/`). Header `fw old` until the chip prints `info fw=… raise=1` — then `raise …` is allowed. `send()` drops `raise` until that line. Home does **not** extra-`get`; live pos is `stream`. Joint page still polls `get N` for the full snapshot.
+Connect burst (quiet): `info` `batt` `stream 180` `lim` `guard`. `who` / `bench` / `state` / `gpio` are on demand (`/hat/`, `/advanced/`, hand “servo dump”). Header `fw old` until the chip prints `info fw=… raise=1` — then `raise …` is allowed. `send()` drops `raise` until that line. Home does **not** extra-`get`; live pos is `stream`. Joint page still polls `get N` for the full snapshot. Footer is one line until you click **log**.
 
 `send()` (`core.js`) queues UART writes. One at a time. `estop` drops pending then goes. Django is single-threaded; hold-all + STOP must not flood unknown text.
 
