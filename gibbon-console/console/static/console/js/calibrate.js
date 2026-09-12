@@ -508,6 +508,10 @@ function sendSlide(id) {
 
 function driveDelta(ids, d) {
   if (ids[0] === 12 || ids.indexOf(12) >= 0 || ids.indexOf(13) >= 0) {
+    if (!raiseReady()) {
+      say("raise blocked — flash first (header fw old). do not jog 12+13");
+      return;
+    }
     const sign = pairSign();
     const p12 = livePos(12);
     const p13 = livePos(13);
@@ -1146,8 +1150,7 @@ function armTyped(id, key) {
 
 function setTq(ids, on) {
   if (ids[0] === 12 || ids.indexOf(12) >= 0 || ids.indexOf(13) >= 0) {
-    send(on ? "id 12 hold" : "id 12 free");
-    send(on ? "id 13 hold" : "id 13 free");
+    sendRaiseTq(on);
     return;
   }
   ids.forEach(id => send(on ? cmdHold(id) : cmdFree(id)));
@@ -1287,6 +1290,10 @@ async function startTest(id) {
     say("set pair (mirror or same) before a commanded sweep");
     return;
   }
+  if (ids[0] === 12 && !raiseReady()) {
+    say("raise blocked — flash first (header fw old)");
+    return;
+  }
   if (test) stopTest("stopped");
   test = { ids, phases: buildPhases(ids), i: 0, via: {}, t0: Date.now() };
   if (ids.some(i => test.phases.some(ph => ph.goals[i] == null))) {
@@ -1392,8 +1399,7 @@ $("btnHoldAll").onclick = () => {
     if (m.id === 12 || m.id === 13) return;
     send(cmdHold(m.id));
   });
-  send("id 12 hold");
-  send("id 13 hold");
+  sendRaiseTq(true);
   say("hold pose — arm stays. free this on one joint to find a wall");
 };
 $("btnFreeAll").onclick = () => {
@@ -1406,8 +1412,7 @@ $("btnFreeAll").onclick = () => {
       if (m.id === 12 || m.id === 13) return;
       send(cmdFree(m.id));
     });
-    send("id 12 free");
-    send("id 13 free");
+    sendRaiseTq(false);
     say("free all — gravity will drop unsupported joints");
     return;
   }

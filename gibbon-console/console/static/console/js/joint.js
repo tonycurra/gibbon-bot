@@ -35,7 +35,9 @@ function fillOps() {
   if (!$("op")) return;
   $("op").innerHTML = (OPS[slug] || []).map(([v, l]) => `<option value="${v}">${l}</option>`).join("");
   $("actHint").textContent = joint.paired
-    ? "raise SyncWrite — both motors one packet. set pair (mirror/same) on calibrate first. if they fight: STOP."
+    ? (raiseReady()
+      ? "raise SyncWrite — both motors one packet. set pair (mirror/same) on calibrate first. if they fight: STOP."
+      : "raise blocked — header fw old. flash first. hold/free still id 12 + id 13.")
     : "hold = tq on, watch load if you push. nudge = chip guards the move.";
   showVal();
 }
@@ -424,9 +426,13 @@ if ($("actForm")) {
     const n = $("val").value;
     prepSpeed();
     if (joint.paired) {
-      if (op === "free") { go("id 12 free"); go("id 13 free"); return; }
-      if (op === "hold") { go("id 12 hold"); go("id 13 hold"); return; }
+      if (op === "free") { sendRaiseTq(false); return; }
+      if (op === "hold") { sendRaiseTq(true); return; }
       if (op === "nudge") {
+        if (!raiseReady()) {
+          markSay("raise blocked — flash first (header fw old)");
+          return;
+        }
         const sign = pairSign();
         const p12 = livePos(12);
         const p13 = livePos(13);
@@ -450,7 +456,7 @@ $("markRow").onclick = e => {
 };
 $("btnFree").onclick = () => {
   gripGoal = null;
-  if (joint.paired) { go("id 12 free"); go("id 13 free"); }
+  if (joint.paired) sendRaiseTq(false);
   else for (const id of joint.ids) go(cmdFor(id, "free"));
   markSay("free — turn by hand, watch pos, then mark");
 };

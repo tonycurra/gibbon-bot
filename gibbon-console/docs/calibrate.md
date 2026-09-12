@@ -38,6 +38,6 @@ Do not mix this sitting’s slack **960** with Sep-5 slack **4068**. Re-learn Δ
 
 ## UART
 
-`send()` in `core.js` is one command at a time. `estop` drops the queue then goes. Calibrate uses **`stream 180`**. Never send `raise hold` / `raise free` until `raise` is on the metal.
+`send()` in `core.js` is one command at a time. `estop` drops the queue then goes. Calibrate uses **`stream 180`**. `raise …` is dropped until the chip prints `info fw=… raise=1`. Until then hold/free 12+13 are two `id` packets.
 
 Hard-refresh after JS/CSS.

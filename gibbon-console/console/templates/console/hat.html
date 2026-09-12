@@ -1,0 +1,250 @@
+{% extends "console/base.html" %}
+{% block main %}
+<article class="docs">
+<nav class="index">
+  <strong>index</strong>
+  <a href="#time">1. how fast is the bus</a>
+  <a href="#inside">2. inside the servo chip</a>
+  <a href="#cmd">3. ways to command</a>
+  <a href="#wrap">4. unwrap — not wheel</a>
+  <a href="#table">5. ST memory table</a>
+  <a href="#plan">6. plan of attack</a>
+  <a href="#raw">7. raw hand test</a>
+  <a href="#board">8. this HAT + gold serial</a>
+</nav>
+
+<h1>HAT</h1>
+<p>Waveshare Bus Servo Driver HAT (A) + ST servos. USB feeds the ESP32. XT60 feeds the motors. Every sensor byte is a READ of the servo’s own table — not a HAT IMU. Gold dumps from this board sit at the bottom. Low-level hand poke: <a href="/raw/">/raw/</a>.</p>
+
+<h2 id="time">1. how fast is the bus</h2>
+<p><strong>50 ms is comfortable, not the ceiling.</strong> The wire is 1 Mbps. Firmware will not stream faster than <strong>40 ms</strong> (<code>stream N</code>). That is ~25 Hz on the ID you care about. The servo’s position PID inside the case is kHz. BLE to a phone in an olive grove should be 1–5 Hz, not this bus.</p>
+<table class="ov">
+  <thead><tr><th></th><th>dt</th><th></th></tr></thead>
+  <tbody>
+    {% for t in timing %}
+    <tr><td>{{ t.what }}</td><td>{{ t.dt }}</td><td>{{ t.note }}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+<p>Polling all seven IDs at 50 Hz as fat ASCII is what starved twist. Guard a moving joint at 40–80 ms; tell the phone later.</p>
+
+<h2 id="inside">2. inside the servo chip</h2>
+<p>Not just an encoder. Each ST is a closed-loop joint: ARM-class MCU, 12-bit <strong>digital</strong> magnetic encoder (0–4095), MOSFET driver, DC motor + gears, EEPROM. We cannot flash that MCU. We cannot PWM the phases. Analog in the case is VIN and a current estimate — both digitized before they hit the bus.</p>
+<table class="ov">
+  <thead><tr><th>feedback</th><th>kind</th><th>resolution we actually get</th></tr></thead>
+  <tbody>
+    <tr><td>position</td><td>digital encoder</td><td>4096 counts / turn · 0.088°. wraps. this is the good sense</td></tr>
+    <tr><td>speed</td><td>MCU from encoder</td><td>steps/s. lives when you spin</td></tr>
+    <tr><td>load</td><td>PID effort, not a cell</td><td>~±1000. <strong>0 if tq off</strong>. contact proxy while holding</td></tr>
+    <tr><td>VIN</td><td>byte @62</td><td>0.1 V. pack at that servo</td></tr>
+    <tr><td>temp</td><td>byte @63</td><td>1 °C. slow fuse</td></tr>
+    <tr><td>current</td><td>estimate @69</td><td>table says ×6.5 mA/count; our firmware prints the signed count as <code>cur</code>. free moves often 0. stall wiki 2.4–2.7 A</td></tr>
+  </tbody>
+</table>
+<p>External force today = <code>load</code> (and maybe <code>cur</code>) <em>while torque is on</em>. Backdrive with <code>tq=0</code> is blind to strain. Impedance control is not in the vendor loop — later, if ever, as a host layer on <code>load</code>, not Ohm’s law on the winding.</p>
+
+<h2 id="cmd">3. ways to command — you do not pick the spline</h2>
+<p>Yes: you say “go to this angle from here.” The servo MCU does <strong>one</strong> shape: goal position, a speed cap, and an acceleration byte. That is a trapezoid-ish ramp <em>inside the servo</em>. There is no cubic, no S-curve table, no host polynomial. Time register 44 exists; we write 0.</p>
+<table class="ov">
+  <thead><tr><th>mode @33</th><th>you write</th><th>inner loop</th><th>0/4095</th><th>here</th></tr></thead>
+  <tbody>
+    {% for m in modes %}
+    <tr><td>{{ m.n }} {{ m.name }}</td><td>{{ m.cmd }}</td><td>{{ m.loop }}</td><td>{{ m.wrap }}</td><td>{{ m.use }}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+<p>Default path (keep it): <strong>mode 0</strong>, tell it position + speed (default 300) + acc (default 20). The PID is already running. A second PID on the ESP32 that outputs position fights that one. Faster / slower = speed. Softer start = acc. Softer push later = max-torque @16 (not wired). Do not retune Kp/Kd/Ki first. Do not open-loop PWM the motor from here — not worth it, and we cannot reach the phases anyway.</p>
+<p>Many small <code>to</code> hops from the ESP32 (trapezoid on our side) is the only extra curve we can add without touching EEPROM. Leave the vendor loop on. Supervise from the ESP32: walls, VIN, load-cut, unwrap.</p>
+
+<h2 id="wrap">4. unwrap — not wheel. “put it back to 0”</h2>
+<p><strong>Wheel on 16, put it back to 0</strong> meant: after a speed-jog, write register <strong>33 = 0</strong> (servo mode) so the next boot is not still spinning. It did <em>not</em> mean drive the horn to encoder zero. Wheel mode is EEPROM — it survives power-off. That is the hazard.</p>
+<p>Your counter idea is already the right one, and it does <strong>not</strong> need wheel mode. Encoder works in servo and in wheel. Firmware <code>unwrap_pos()</code>:</p>
+<pre class="gold">if Δpos > +2048 → turns −1
+if Δpos < −2048 → turns +1
+un = pos + turns × 4096</pre>
+<p>If counts go up, <code>un</code> goes up. If they go down, down. Crossing 0/4095 is just a ±1 turn. Same code for every ID. Walls live in <code>un</code> (or Δ from a slack <code>here</code>), not in raw 0–4095.</p>
+<p>Wheel was only a way to <em>command</em> through the seam because <code>WritePos</code> is linear and stops at 0/4095. Stay in servo. Walk hops that do not cross the seam, or send a goal on this side of 0. Wrist roll (16) and shoulder <strong>yaw</strong> (11) wrap. Shoulder <strong>pitch</strong> 12+13 is a limited arc (two motors, opposite counts) — magnet wrap is not that joint’s usual problem.</p>
+<p><strong>Do not switch 16 to wheel for range.</strong> 2026-09-05: bus died, wheel kept pushing, cable wound. Servo mode + unwrap + hop limits is the agnostic path.</p>
+
+<h2 id="table">5. ST memory table</h2>
+<p>Waveshare wiki does not paste the table; FAQ says “see the ST3215 series servo memory table.” Same map ST3235 / ST3215 / HS. Official-adjacent sources: protocol PDF + STS spreadsheet (SCServo). HAT schematic is the <strong>TTL PHY</strong> (74LVC1G125/126), not the servo PCB — we do not have that drawing.</p>
+<table class="ov">
+  <thead><tr><th>addr</th><th></th><th></th><th></th></tr></thead>
+  <tbody>
+    {% for r in memory %}
+    <tr><td>{{ r.addr }}</td><td>{{ r.name }}</td><td>{{ r.rw }}</td><td>{{ r.note }}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+<ul>
+  {% for l in links %}
+  <li><a href="{{ l.url }}" rel="noopener" target="_blank">{{ l.title }}</a></li>
+  {% endfor %}
+</ul>
+
+<h2 id="plan">6. plan of attack</h2>
+<ol>
+  <li>Leave vendor PID. Command pos + speed + acc. Flash ESTOP / raise SyncWrite already in the tree.</li>
+  <li>Unwrap + hop for wrap joints (11, 16). No wheel for range.</li>
+  <li>Sensitivity = <code>load</code> trip (console slider → <code>guard hand N</code> / <code>estop</code> / free). Chip must own the cut. Phone/console is backup.</li>
+  <li>Energy later: EMA of V and |I| + mWh on the 40–80 ms tick. Not impedance. Not ms BLE.</li>
+  <li>Grove radio: 1–5 Hz pose/energy; <code>estop</code> immediate. Inner loop stays in the servo.</li>
+</ol>
+<p>Worth low-level electric control of the motor? <strong>No</strong> on this hardware. Worth a raw sitting on the <em>hand</em> to feel speed/acc/load? Yes — next section.</p>
+
+<h2 id="raw">7. raw hand test</h2>
+<p>ID 17 only, servo mode, walls 689–2075. Live present + who + speed/acc/<code>to</code> + a sensitivity slider that trips <code>estop</code> and <code>hand free</code>. <a href="/raw/">open /raw/</a>. Pack on. Support the jaws. STOP / Escape still kills torque.</p>
+
+<h2 id="board">8. this HAT + gold serial</h2>
+<table class="ov">
+  <tbody>
+    <tr><td>board</td><td>{{ chip.board }} · SKU {{ chip.sku }}</td></tr>
+    <tr><td>chip</td><td>{{ chip.mcu }}</td></tr>
+    <tr><td>mac</td><td><code>{{ chip.mac }}</code></td></tr>
+    <tr><td>info chip=</td><td><code>{{ chip.chip }}</code></td></tr>
+    <tr><td>idf</td><td>{{ chip.idf }}</td></tr>
+    <tr><td>host</td><td>{{ chip.usb }}</td></tr>
+    <tr><td>bus</td><td>{{ chip.bus }}</td></tr>
+    <tr><td>firmware</td><td>{{ chip.fw }} — no auto-move, UART switch <strong>ESP32</strong></td></tr>
+  </tbody>
+</table>
+<table class="ov">
+  <thead><tr><th>id</th><th>joint</th><th>model</th></tr></thead>
+  <tbody>
+    {% for m in motors %}
+    <tr><td>{{ m.id }}</td><td>{{ m.joint }}</td><td>{{ m.model }}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<h2 id="read">what <code>get</code> prints</h2>
+<p>One READ of 15 bytes at <strong>56</strong>, plus torque-enable at <strong>40</strong>. Same map on every ID. <code>un</code> / <code>turns</code> are unwrap on the chip.</p>
+<table class="ov">
+  <thead>
+    <tr>
+      <th>addr</th><th>key</th><th>kind</th><th>unit</th>
+      <th>USB, pack off</th><th>USB + XT60, still</th><th>you turn by hand</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for f in fields %}
+    <tr>
+      <td>{{ f.addr }}</td>
+      <td><code>{{ f.key }}</code></td>
+      <td>{{ f.kind }}</td>
+      <td>{{ f.unit }}</td>
+      <td class="bad">{{ f.off }}</td>
+      <td>{{ f.on }}</td>
+      <td>{{ f.hand }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<h2 id="compare">pack off vs on</h2>
+<table class="ov cmp">
+  <thead>
+    <tr><th></th><th>USB, XT60 off</th><th>USB, XT60 on</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>powers</td><td>ESP32 only</td><td>ESP32 + seven servos</td></tr>
+    <tr><td><code>bench found=</code></td><td class="bad">0/7</td><td class="ok">7/7</td></tr>
+    <tr><td><code>guess=</code></td><td><code>usb-no-battery</code></td><td><code>usb-battery-on</code></td></tr>
+    <tr><td><code>ping</code> 11–17</td><td class="bad">all miss</td><td class="ok">all found</td></tr>
+    <tr><td><code>get</code></td><td class="bad"><code>get id=N miss</code></td><td class="ok">seven present rows</td></tr>
+    <tr><td><code>batt pack=</code></td><td class="bad">miss</td><td class="ok">11.4 V · est 25% · ok</td></tr>
+    <tr><td>chip reset</td><td>USB plug = <code>poweron</code></td><td>pack click does <strong>not</strong> reset</td></tr>
+    <tr><td><code>bus_rx</code></td><td>0</td><td>0 until you READ — servos do not broadcast</td></tr>
+  </tbody>
+</table>
+<div class="goldPair">
+  <article>
+    <h3>bench · pack off · 2026-09-03</h3>
+    <pre class="gold">{{ bench_off }}</pre>
+  </article>
+  <article>
+    <h3>bench · pack on · 2026-09-04</h3>
+    <pre class="gold">{{ bench_on }}</pre>
+  </article>
+</div>
+
+<h2 id="get">gold <code>get</code> · 2026-09-04 · sitting still</h2>
+<p>READ only. Positions are where it sat, not a home. Health: voltage, temp, <code>tq=0</code>, speed/load/cur/moving all 0.</p>
+<table class="ov">
+  <thead>
+    <tr><th>id</th><th>joint</th><th>pos</th><th>v</th><th>temp</th><th>speed load cur moving tq</th><th></th></tr>
+  </thead>
+  <tbody>
+    {% for r in get_gold %}
+    <tr>
+      <td>{{ r.id }}</td>
+      <td>{{ r.joint }}</td>
+      <td>{{ r.pos }}</td>
+      <td>{{ r.v }}</td>
+      <td>{{ r.temp }}</td>
+      <td class="mut">0</td>
+      <td>{{ r.note }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+<pre class="gold">{{ get_on }}</pre>
+
+<h2 id="batt">gold <code>batt</code></h2>
+<table class="ov">
+  <thead><tr><th>id</th><th>v</th></tr></thead>
+  <tbody>
+    {% for b in batt_gold %}
+    <tr><td>{{ b.id }}</td><td>{{ b.v }}</td></tr>
+    {% endfor %}
+    <tr><td>pack</td><td class="ok">11.4 V · est 25% · cells 3 · n 7 · ok</td></tr>
+  </tbody>
+</table>
+<div class="goldPair">
+  <article>
+    <h3>batt · pack off</h3>
+    <pre class="gold">{{ batt_off }}</pre>
+  </article>
+  <article>
+    <h3>batt · pack on</h3>
+    <pre class="gold">{{ batt_on }}</pre>
+  </article>
+</div>
+
+<h2 id="start">USB start · pack still off</h2>
+<pre class="gold">{{ info_off }}
+
+{{ state_off }}</pre>
+
+<h2 id="hand">hand-move · <code>tq=0</code> · 2026-09-05</h2>
+<table class="ov">
+  <thead><tr><th>field</th><th>this run</th></tr></thead>
+  <tbody>
+    <tr><td><code>pos</code></td><td class="ok">lives — tracks the horn</td></tr>
+    <tr><td><code>speed</code></td><td class="ok">lives — elbow peaked ~1500 steps/s</td></tr>
+    <tr><td><code>load</code> <code>moving</code> <code>cur</code></td><td>stayed 0. not a hand-force signal</td></tr>
+    <tr><td><code>tq</code></td><td class="ok">stayed 0</td></tr>
+    <tr><td>12 + 13</td><td>one joint: counts opposite, same size</td></tr>
+  </tbody>
+</table>
+<table class="ov">
+  <thead><tr><th>id</th><th></th><th>pos</th><th>v</th><th>temp</th></tr></thead>
+  <tbody>
+    {% for r in hand_rest %}
+    <tr><td>{{ r.id }}</td><td>{{ r.name }}</td><td>{{ r.pos }}</td><td>{{ r.v }}</td><td>{{ r.temp }}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+<table class="ov">
+  <thead><tr><th>id</th><th>rest</th><th>last</th><th>Δ</th><th>≈ deg</th></tr></thead>
+  <tbody>
+    {% for r in hand_net %}
+    <tr><td>{{ r.id }}</td><td>{{ r.rest }}</td><td>{{ r.last }}</td><td>{{ r.d }}</td><td>{{ r.deg }}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<h2 id="yank">pack out, USB stays</h2>
+<pre class="gold">{{ unplug }}</pre>
+</article>
+{% endblock %}

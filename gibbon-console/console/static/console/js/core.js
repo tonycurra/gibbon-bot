@@ -101,8 +101,16 @@ function modeOf(r) {
 let sendQ = [];
 let sendBusy = 0;
 
+function raiseReady() {
+  return String(G.chip.raise || "") === "1";
+}
+
 function send(cmd, quiet) {
   if (!G.transport) return Promise.resolve();
+  if (/^raise\b/.test(cmd) && !raiseReady()) {
+    log("raise blocked — chip missing info fw= raise=1. flash roarm-fw (stop Django first)");
+    return Promise.resolve();
+  }
   if (!quiet) log(">> " + cmd);
   if (cmd === "estop") sendQ = sendQ.filter(c => c === "estop");
   sendQ.push(cmd);
@@ -211,6 +219,22 @@ function paintStatus() {
       tq.textContent = "tq " + on.join(",");
     }
   }
+  const fw = $("fwEl");
+  if (fw) {
+    if (!G.alive) {
+      fw.className = "mut";
+      fw.textContent = "fw —";
+      fw.title = "";
+    } else if (raiseReady()) {
+      fw.className = "ok";
+      fw.textContent = "fw " + (G.chip.fw || "ok");
+      fw.title = "SyncWrite raise on chip. compact stream + move guard.";
+    } else {
+      fw.className = "bad";
+      fw.textContent = "fw old";
+      fw.title = "chip did not print info fw= raise=1 — 12+13 jog blocked. flash roarm-fw, stop Django first.";
+    }
+  }
 }
 
 function setLink(ok) {
@@ -317,6 +341,16 @@ function onLine(line) {
     G.chip.soc = inf[1]; G.chip.cores = inf[2]; G.chip.rev = inf[3]; G.chip.flash = inf[4]; G.chip.reset = inf[5];
     G.hooks.forEach(fn => fn("chip")); return;
   }
+  const ifw = /^info fw=/.test(line);
+  if (ifw) {
+    const kv = {};
+    line.replace(GET_KV, (_, k, v) => { kv[k] = v; return ""; });
+    if (kv.fw) G.chip.fw = kv.fw;
+    G.chip.raise = kv.raise || "0";
+    paintStatus();
+    G.hooks.forEach(fn => fn("chip"));
+    return;
+  }
   const im = /info mac=([0-9a-f:]+) heap=(\d+) uptime_ms=(\d+)/i.exec(line);
   if (im) { G.chip.mac = im[1]; G.chip.heap = im[2]; G.chip.uptime = +im[3]; G.hooks.forEach(fn => fn("chip")); return; }
   const ii = /info idf=(\S+) usb=\S+ bus=(\S+) ids=\S+ ble=(\S+)/.exec(line);
@@ -351,12 +385,11 @@ async function afterConnect(kind) {
   G.lim = {};
   G.guard = "";
   G.guardCfg = null;
+  G.chip.fw = null;
+  G.chip.raise = null;
   G.chip.via = kind;
   setLink(true);
   await send("info", true);
-  await send("state", true);
-  await send("gpio", true);
-  await send("bench", true);
   await send("batt", true);
   await send("stream 180", true);
   await send("who", true);
@@ -490,6 +523,12 @@ function cmdRaiseTo(g12, g13) {
   return "raise to " + Math.round(g12) + " " + Math.round(g13);
 }
 
+function sendRaiseTq(on) {
+  if (raiseReady()) return send(on ? "raise hold" : "raise free");
+  send(on ? "id 12 hold" : "id 12 free");
+  return send(on ? "id 13 hold" : "id 13 free");
+}
+
 window.G = G;
 window.MOTORS = MOTORS;
 window.JOINTS = JOINTS;
@@ -503,5 +542,7 @@ window.saveLimit = saveLimit;
 window.pairSign = pairSign;
 window.syncPairFromLimits = syncPairFromLimits;
 window.savePairSign = savePairSign;
+window.raiseReady = raiseReady;
 window.cmdRaiseTo = cmdRaiseTo;
+window.sendRaiseTq = sendRaiseTq;
 window.$ = $;

@@ -20,8 +20,9 @@ gibbon-console/
     catalog.py                 six joints, yaw/pitch/roll
     bridge.py                  USB termios + bleak NUS + ingest queue
     models.py  views.py  urls.py
-    templates/console/         base, home, joint, calibrate, calibrate_joint, info, advanced, trials
-    static/console/            app.css, js/core.js home.js joint.js calibrate.js …
+    templates/console/         base, home, joint, calibrate, calibrate_joint, hat, raw, info, advanced, trials
+    static/console/            app.css, js/core.js home.js joint.js calibrate.js raw.js …
+    hat.py                     gold USB captures for /hat/
   docs/
 ```
 
@@ -35,6 +36,8 @@ Root `index.html` / `console.js` are stale PWA leftovers.
 | `/j/<slug>/` | one joint: present table, pos/load graph, actuate |
 | `/calibrate/` | joint index — here / − / + per row |
 | `/calibrate/<slug>/` | one joint. Wrap (yaw, wrist-roll): degrees + Δ slider |
+| `/hat/` | gold serial + bus timing, servo chip limits, unwrap vs wheel, memory table |
+| `/raw/` | hand ID 17: pos/speed/acc/`to`, who, load sensitivity trip |
 | `/info/` | docs: axes, servo vs wheel, PID layers, 12+13, walls |
 | `/advanced/` | chip / bus / EEPROM `who` + full serial |
 | `/trials/` | sittings |
@@ -63,7 +66,7 @@ Slugs: `yaw`, `shoulder-pitch` (ids 12+13), `elbow`, `wrist-pitch`, `wrist-roll`
 
 Same lines USB and BLE. Parser: `core.js` / `bridge.py` (`key=value`; missing = 0 / `un=pos`).
 
-Connect burst (quiet): `info` `state` `gpio` `bench` `batt` `stream 180` `who`.
+Connect burst (quiet): `info` `batt` `stream 180` `who` `lim` `guard`. `bench` / `state` / `gpio` are on demand (`/hat/`, `/advanced/`). Header `fw old` until the chip prints `info fw=… raise=1` — then `raise …` is allowed. `send()` drops `raise` until that line. Home does **not** extra-`get`; live pos is `stream`. Joint page still polls `get N` for the full snapshot.
 
 `send()` (`core.js`) queues UART writes. One at a time. `estop` drops pending then goes. Django is single-threaded; hold-all + STOP must not flood unknown text.
 

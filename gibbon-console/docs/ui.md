@@ -2,7 +2,7 @@
 
 Cyberpunk: pure black, cyan `#00f0c8`, magenta `#ff2bd6`, amber for next-action. Mono. `static/console/app.css`.
 
-Stand **behind the base**. Words + axes: `../roarm-fw/docs/hardware/motors/names.md`. Sitting docs: `/info/`.
+Stand **behind the base**. Words + axes: `../roarm-fw/docs/hardware/motors/names.md`. Sitting docs: `/info/`. HAT gold serial (pack off / on): `/hat/`. Raw hand MCU poke: `/raw/`.
 
 ## Joints (bus IDs stay 11–17)
 

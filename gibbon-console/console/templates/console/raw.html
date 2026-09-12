@@ -1,0 +1,42 @@
+{% extends "console/base.html" %}
+{% load static %}
+{% block main %}
+<p class="hint">ID 17 hand only. servo mode. walls 689–2075. you set speed, acc, goal — the servo MCU does the PID. sensitivity trips STOP + free. pack on. jaws clear. <a href="/hat/">hat</a></p>
+<div class="calTrio">
+  <div><span class="k">pos</span><b id="lvPos">—</b><i id="lvUn">un —</i></div>
+  <div class="now"><span class="k">load</span><b id="lvLoad">—</b><i id="lvTq">tq —</i></div>
+  <div><span class="k">mA · V · °C</span><b id="lvCur">—</b><i id="lvVT">—</i></div>
+</div>
+<p class="calQuiet">
+  <span>spd <i id="lvSpd">—</i></span>
+  <span>mode <i id="lvMode">—</i></span>
+  <span>kp/kd/ki <i id="lvPid">—</i></span>
+  <span>hex <i id="lvHex">—</i></span>
+</p>
+<p id="tripEl" class="guard">sensitivity idle</p>
+<div class="act" id="rawAct">
+  <button type="button" id="btnOpen">open</button>
+  <button type="button" id="btnClose">close</button>
+  <button type="button" id="btnHold">hold</button>
+  <button type="button" id="btnFree">free</button>
+  <button type="button" id="btnWho">who</button>
+  <button type="button" id="btnRaw">raw 17</button>
+  <label class="grow">goal
+    <input id="goal" type="range" min="689" max="2075" value="1400">
+  </label>
+  <b id="goalVal">1400</b>
+  <button type="button" id="btnGo">to</button>
+  <label>speed <input id="mvSpeed" type="number" value="300" min="1" max="3073"></label>
+  <label>acc <input id="mvAcc" type="number" value="20" min="0" max="150"></label>
+  <label class="grow">sensitivity |load|
+    <input id="sense" type="range" min="0" max="1500" value="400">
+  </label>
+  <b id="senseVal">400</b>
+</div>
+<p class="hint">0 on the slider = do not trip from the page (chip guard still exists). apply writes <code>guard hand N</code>. vendor curve is pos+speed+acc only — no polynomial.</p>
+<pre id="rawGets">get —</pre>
+<pre id="log" class="short"></pre>
+{% endblock %}
+{% block js %}
+<script src="{% static 'console/js/raw.js' %}"></script>
+{% endblock %}

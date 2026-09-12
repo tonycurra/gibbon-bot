@@ -10,7 +10,7 @@ from django.utils.safestring import mark_safe
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from . import bridge
+from . import bridge, hat as hat_gold
 from .catalog import CATALOG, JOINTS, SLUGS
 from .models import Limit, Note, Sample, Trial
 
@@ -18,6 +18,8 @@ PAGES = [
     ("home", "motors"),
     ("calibrate", "calibrate"),
     ("trials", "trials"),
+    ("hat", "hat"),
+    ("raw", "raw"),
     ("info", "info"),
     ("advanced", "advanced"),
 ]
@@ -74,6 +76,37 @@ def calibrate(request, slug=None):
 
 def info(request):
     return render(request, "console/info.html", ctx("info", "info"))
+
+
+def hat(request):
+    motors = hat_gold.MOTORS
+    by_id = {m["id"]: m for m in motors}
+    get_gold = [{**by_id[r["id"]], **r} for r in hat_gold.GET_GOLD]
+    return render(request, "console/hat.html", ctx("hat", "hat", {
+        "chip": hat_gold.CHIP,
+        "motors": motors,
+        "fields": hat_gold.FIELDS,
+        "get_gold": get_gold,
+        "batt_gold": hat_gold.BATT_GOLD,
+        "hand_rest": hat_gold.HAND_REST,
+        "hand_net": hat_gold.HAND_NET,
+        "bench_off": hat_gold.BENCH_OFF,
+        "bench_on": hat_gold.BENCH_ON,
+        "get_on": hat_gold.GET_ON,
+        "batt_on": hat_gold.BATT_ON,
+        "batt_off": hat_gold.BATT_OFF,
+        "info_off": hat_gold.INFO_OFF,
+        "state_off": hat_gold.STATE_OFF,
+        "unplug": hat_gold.UNPLUG,
+        "timing": hat_gold.TIMING,
+        "memory": hat_gold.MEMORY,
+        "modes": hat_gold.MODES,
+        "links": hat_gold.LINKS,
+    }))
+
+
+def raw(request):
+    return render(request, "console/raw.html", ctx("raw", "raw"))
 
 
 def advanced(request):

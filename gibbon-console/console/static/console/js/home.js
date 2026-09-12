@@ -5,7 +5,6 @@ let lastSpd = null;
 const drag = {};
 const gripUntil = {};
 const gripTimer = {};
-let pollI = 0;
 
 function livePos(id) {
   const r = G.rows[id];
@@ -103,9 +102,14 @@ function paintRow(j) {
   }
   const sl = $("slide-" + j.slug);
   const hold = drag[j.slug] || (gripUntil[j.slug] && Date.now() < gripUntil[j.slug]);
-  if (sl && !hold && pos != null) {
-    applyBand(j);
-    sl.value = Math.max(+sl.min, Math.min(+sl.max, pos));
+  if (sl) {
+    const blocked = j.paired && !raiseReady();
+    sl.disabled = blocked;
+    sl.title = blocked ? "raise blocked until header is cyan (info raise=1)" : "";
+    if (!hold && pos != null && !blocked) {
+      applyBand(j);
+      sl.value = Math.max(+sl.min, Math.min(+sl.max, pos));
+    }
   }
 }
 
@@ -175,6 +179,10 @@ function sendGrip(j) {
     }
   }
   if (j.paired) {
+    if (!raiseReady()) {
+      log("raise blocked — flash first. header fw old");
+      return;
+    }
     const sign = pairSign();
     const p12 = livePos(12);
     const p13 = livePos(13);
@@ -193,8 +201,7 @@ function toggleHold(slug) {
   if (!j || !G.alive) return;
   const on = tqOn(j.ids);
   if (j.paired) {
-    send(on ? "id 12 free" : "id 12 hold");
-    send(on ? "id 13 free" : "id 13 hold");
+    sendRaiseTq(!on);
     return;
   }
   j.ids.forEach(id => send(on ? cmdFree(id) : cmdHold(id)));
@@ -251,10 +258,4 @@ $("homeBody").onclick = e => {
   location.href = "/j/" + tr.id.slice(4) + "/";
 };
 fetchLimits().then(m => { limits = m; syncPairFromLimits(m); requestPaint(); });
-setInterval(() => {
-  if (!G.alive || !G.transport) return;
-  if (JOINTS.some(j => drag[j.slug])) return;
-  const id = MOTORS[pollI++ % MOTORS.length].id;
-  send("get " + id, true);
-}, 400);
 paint();
