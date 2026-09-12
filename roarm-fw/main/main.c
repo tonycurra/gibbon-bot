@@ -1841,32 +1841,19 @@ static void stream_tick(void)
     }
 }
 
-/* 3S LiPo rest SoC from pack millivolts. Rest-voltage guess, not a BMS.
- * Conservative RC (Oscar Liang land ~3.5V/cell loaded; storage 3.80–3.85V ≈ 40–50%).
- * Recharge by 20–30% remaining (~3.74–3.80V/cell rest). 3.30V/cell is loaded LVC, not rest. */
+/* Linear 3S pack % from millivolts. 12.6 V = 100%, 10.0 V = 0%. Not a BMS.
+ * Navbar uses the same numbers. Writes still cut at 10.5 V. */
 static int lipo3s_pct(int mv)
 {
-    static const int t[][2] = {
-        {12600, 100}, {12450, 90}, {12300, 80}, {12150, 70},
-        {12000, 60}, {11850, 50}, {11700, 45}, {11550, 40},
-        {11400, 30}, {11310, 25}, {11220, 20}, {11100, 12},
-        {10800, 6}, {10500, 3}, {9900, 0},
-    };
-    const int n = (int)(sizeof(t) / sizeof(t[0]));
-    if (mv >= t[0][0]) {
+    const int full = 12600;
+    const int empty = 10000;
+    if (mv >= full) {
         return 100;
     }
-    if (mv <= t[n - 1][0]) {
+    if (mv <= empty) {
         return 0;
     }
-    for (int i = 1; i < n; i++) {
-        if (mv >= t[i][0]) {
-            int mv0 = t[i][0], p0 = t[i][1];
-            int mv1 = t[i - 1][0], p1 = t[i - 1][1];
-            return p0 + (p1 - p0) * (mv - mv0) / (mv1 - mv0);
-        }
-    }
-    return 0;
+    return (mv - empty) * 100 / (full - empty);
 }
 
 static void cmd_batt(void)
@@ -1905,7 +1892,7 @@ static void cmd_batt(void)
         : "ok";
     printf("batt pack=%.1fV est=%d%% cells=3 n=%d %s\n",
            v_raw / 10.0, pct, n, lvl);
-    printf("batt note=servo VIN rest-voltage guess, not a BMS. recharge by 20-30%% (~11.2-11.4V rest). never sit below ~11.2V. 9.9V is loaded LVC, not rest.\n");
+    printf("batt note=3S linear 10.0V=0 12.6V=100. servo VIN, not a BMS. writes cut at 10.5V.\n");
 }
 
 static void print_banner(void)

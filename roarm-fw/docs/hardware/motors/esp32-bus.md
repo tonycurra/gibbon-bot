@@ -276,7 +276,7 @@ If step 5–6 fail: `get id=11 miss`. Three misses while a guarded move is runni
 
 ## 10. What this HAT is not
 
-No INA219, no IMU, no OLED, no user LED, no BMS. `batt` is the seven VIN bytes at addr 62, median, then a 3S rest-% table. Pack cutoff for writes: **10.5 V** (`V_CUTOFF 105`).
+No INA219, no IMU, no OLED, no user LED, no BMS. `batt` is the seven VIN bytes at addr 62, median, then linear 3S % (**10.0 V = 0%, 12.6 V = 100%**). Navbar uses the same math (host, no flash needed). Chip `est=` matches after the next flash. Pack cutoff for writes: **10.5 V** (`V_CUTOFF 105`).
 
 TTL activity LEDs by USB-C are PHY blinks, not GPIO.
 

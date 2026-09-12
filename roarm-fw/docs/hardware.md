@@ -59,7 +59,7 @@ Raw fields from `get`: `hardware/motors/sensors.md`.
 | Position | `ReadPos` | 0–4095 (360°) | Command vs actual |
 | Speed | `ReadSpeed` | steps/s | Motion |
 | Load | `ReadLoad` | −1000–1000 | Stall / collision |
-| Voltage | `ReadVoltage` | ÷10 = volts | Pack at that servo (XT60 rail). Type `batt` for median + 3S rest-% guess. **No INA219 / charger on this HAT** |
+| Voltage | `ReadVoltage` | ÷10 = volts | Pack at that servo (XT60 rail). Type `batt` for median + linear 3S % (10.0 V = 0, 12.6 V = 100). **No INA219 / charger on this HAT** |
 | Temp | `ReadTemper` | °C | Overheat |
 | Current | `ReadCurrent` | mA | Draw |
 | Moving | `ReadMove` | 0/1 | Busy |

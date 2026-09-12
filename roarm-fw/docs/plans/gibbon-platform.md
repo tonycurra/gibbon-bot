@@ -126,7 +126,7 @@ Do not wait for RL to walk. Do not wait for a web MuJoCo. A connected gibbon is 
 | Wiki “RoArm-M3 3D mode file” | CAD download; heavy for the phone page |
 | `archive/gibbonBot-RL` torso `.obj` / `.step` | **our** chassis, not the RoArm |
 | `archive/gibbon-rl-mujoco` ape URDF | early four-arm toy; equal arm/leg, not this metal |
-| `digital-twin/readme.md` | intended one-arm MuJoCo — folder empty except the note |
+| `digital-twin/` | one RoArm-M3 on a table plane (`scene.xml`, `urdf/`, `meshes/`) |
 
 **Web, fast:** do not embed MuJoCo in the browser. Stick figure or three.js boxes from FK (six angles) is enough to “see what’s going on” on a phone. Optional: convert URDF meshes to one glTF, load once, drive joints from `un`. MuJoCo viewer stays on the laptop for training.
 
