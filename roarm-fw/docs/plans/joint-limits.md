@@ -15,10 +15,10 @@ Software max/min = that pose **minus a margin** (start at ~80 counts / ~7°). Ne
 ## Order (distal first — less mass, easier to hold)
 
 1. **open hand** / **close hand** (17) — **done**
-2. **twist** (16) — Sep-5 walls known (you). Slack mid **4068**. Soft `un` ~1058–7046. `docs/baselines/twist.md`. 2026-09-11 slack **here** was **960** — re-learn Δ from that origin; leftover raw 3108/3111 was not a wall. Sitting: `docs/baselines/twist-sitting-2026-09-05.md`, `development-logs/2026-09-11-calibrate.md`. Hop ≤900. Chip ESTOP is in source, **flash owed**.
+2. **twist** (16) — Sep-5 walls known (you). Slack mid **4068**. Soft `un` ~1058–7046. `docs/baselines/twist.md`. 2026-09-11 slack **here** was **960** — re-learn Δ from that origin; leftover raw 3108/3111 was not a wall. Sitting: `docs/baselines/twist-sitting-2026-09-05.md`, `development-logs/2026-09-11-calibrate.md`. Hop ≤900. Chip ESTOP **flashed 2026-09-12**.
 3. **wrist up** / **wrist down** (15) — host marks 1126 / 3134, home 2091. Command toward 3134 tripped `ESTOP id=15 dload`. Soft band well inside. Config hits: `docs/plans/collision.md`.
 4. **bend** / **straighten** (14) — host marks 995 / 2997, home 2347. Hop ≤80 until NVS walls.
-5. **raise** / **lower** (12+13) — one motion, both IDs. SyncWrite in source, **not on chip**. Do not send `raise …` until flash. Do not force.
+5. **raise** / **lower** (12+13) — one motion, both IDs. SyncWrite **on chip** (`raise to`). Pair first. If they fight: STOP.
 6. **turn** left / right (11) — wrap. Host home **2084**. Same Δ UX as twist. Hop ≤80.
 
 One phrase. Slow. Support the arm. Say the word out loud. Stop when a cable tightens or plastic meets plastic — not after.
@@ -39,7 +39,7 @@ Table (empty until we run it):
 | wrist down | 15 | **1126** (host) | | home **2091** | well inside 1126 |
 | bend | 14 | **995** / **2997** (host) | | home **2347**. hop ≤80 | |
 | straighten | 14 | same | | | |
-| raise | 12+13 | | | SyncWrite unflashed | |
+| raise | 12+13 | | | SyncWrite on chip 2026-09-12 | |
 | lower | 12+13 | | | | |
 | turn left | 11 | | wrap Δ | host home **2084**. not finished | |
 | turn right | 11 | | wrap Δ | | |

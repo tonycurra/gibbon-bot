@@ -107,4 +107,4 @@ Cadence target: notify 20–50 Hz **for the joint in motion**, 5–10 Hz idle fo
 4. Stream skip-still + notify drop-not-block.
 5. Host: unwrap, calibrate, Δ slider, 3S %, degrees — all already headed that way in the console.
 
-Until (2) is on the metal, the console must not send `raise …`.
+Until (2) is on the metal, the console must not send `raise …`. **(2) flashed 2026-09-12** — console still waits for `info raise=1` so an old image cannot sneak a SyncWrite.

@@ -18,6 +18,7 @@
 #include "nvs.h"
 #include "nvs_flash.h"
 
+#define GIBBON_FW "20260912"
 #define USB_UART UART_NUM_0
 #define BUS_UART UART_NUM_1
 #define S_TXD GPIO_NUM_19
@@ -224,6 +225,7 @@ static void print_help(void)
 {
     printf("commands:\n");
     printf("  (nothing) heartbeats + raw UART1 RX. no move.\n");
+    printf("  info     chip / mac / fw=%s raise=1. no move\n", GIBBON_FW);
     printf("  state    chip / tasks / heap / bus_rx\n");
     printf("  listen   RX hex dump on/off\n");
     printf("  gpio     levels on 18/19 (still UART, not remuxed)\n");
@@ -1562,6 +1564,7 @@ static void cmd_info(void)
            (unsigned)esp_get_free_heap_size(), now_ms());
     printf("info idf=%s usb=115200 bus=gpio18/19@1Mbps ids=11-17 ble=%s\n",
            esp_get_idf_version(), ble_nus_name());
+    printf("info fw=%s raise=1 stream=compact guard=1\n", GIBBON_FW);
     printf("info note=no auto-move. same text on USB and BLE. servos need XT60\n");
 }
 

@@ -13,6 +13,7 @@ Firmware: native **ESP-IDF**. No move on boot. READ `get` / `ping` / `batt` / `s
 | Naming | `docs/framework/naming.md` |
 | Pins, IDs, telemetry | `docs/hardware.md` |
 | Motor raw data (`get`) | `docs/hardware/motors/sensors.md` |
+| ESP32 ↔ ST bus (signal, packets) | `docs/hardware/motors/esp32-bus.md` |
 | What to say (human names) | `docs/hardware/motors/names.md` |
 | Joint limits (`pos` walls) | `docs/hardware/motors/joint-limits.md` |
 | BLE NimBLE / energy / ghost | `docs/ble.md` |
@@ -31,7 +32,10 @@ Firmware: native **ESP-IDF**. No move on boot. READ `get` / `ping` / `batt` / `s
 | Twist walls / check | `docs/baselines/twist.md` |
 | Twist sitting 2026-09-05 (trials + errors) | `docs/baselines/twist-sitting-2026-09-05.md` |
 | Where we are (safety / limits / cal) | `docs/plans/now.md` |
+| Four limbs / rates / ROS2 vs ours | `docs/plans/gibbon-platform.md` |
+| Why firmware+console, not official ROS 2 | `docs/plans/ros2-vs-our-stack.md` |
 | Motor / arm control (PID, smooth, load-stop) | `docs/plans/control.md` |
+| Inside the servo + BLE/energy next | `docs/plans/near-future.md` |
 | Hand open/close limits | `docs/baselines/hand-open-close.md` |
 | Next: twist, then other walls | `docs/plans/joint-limits.md` |
 | Collision vs FK / IK (after walls) | `docs/plans/collision.md` |

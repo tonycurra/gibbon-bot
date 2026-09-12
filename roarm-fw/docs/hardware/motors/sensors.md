@@ -1,5 +1,7 @@
 # Motor data (raw)
 
+How the ESP32 gets these bytes (UART1, half-duplex, packets): `esp32-bus.md`.
+
 There is **no environment sensor**. No IMU, no force/torque cell, no hall on the loom, no HAT current chip. The only sensors are **inside each Feetech ST32xx**. If we do not READ them while `tq=1`, we are blind and the motor keeps pushing.
 
 Type `get` or `get 16` (USB, XT60 on). Same present block on IDs **11–17**. Servos stay silent until we READ them.

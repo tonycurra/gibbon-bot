@@ -27,6 +27,8 @@ HAT “What’s On Board”: ESP32-WROOM-32, 5 V buck, UART switch (must be **ES
 
 ## Bus
 
+Deep dive (signal, packets, echo, registers): `hardware/motors/esp32-bus.md`.
+
 | | |
 | --- | --- |
 | S_RXD | GPIO 18 |
@@ -68,5 +70,5 @@ No IMU on the servos.
 
 - Slow default speed.
 - Voltage &lt; 10.5 V → torque off IDs 11–17.
-- High \|load\| / `Δload` / `cur` / bus miss → cut that move. Twist wheel guard is **in source, not flashed yet** (`ESTOP`). `docs/hardware/motors/sensors.md`.
+- High \|load\| / `Δload` / `cur` / bus miss → cut that move. Move `ESTOP` is **on the chip** (`info fw=20260912 raise=1`). `docs/hardware/motors/sensors.md`.
 - Stock INIT homes are not all-zero (elbow ~π/2, gripper display ~π). Do not slam to sim zero.

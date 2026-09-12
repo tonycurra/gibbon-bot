@@ -40,17 +40,18 @@ Next test (no writer yet): wrist up / down (15) by hand in `live.py`.
 
 ## On the chip — `main/main.c`
 
-**No move on boot.** Writes only if you type them. **ID 17 (hand)** and **ID 16 (twist)** have named commands. Any ID: `id N free|hold|to G|nudge D`. IDs 11–15 hop ≤ **80** (no walls). Raise 12+13 is dual-drive **in this tree** (`raise to` SyncWrite). **Not on the chip until flash.** Until then: `id 12 hold` + `id 13 hold` (two packets). Never command 12 or 13 alone for motion.
+**No move on boot.** Writes only if you type them. **ID 17 (hand)** and **ID 16 (twist)** have named commands. Any ID: `id N free|hold|to G|nudge D`. IDs 11–15 hop ≤ **80** (no walls). Raise 12+13 is dual-drive `raise to` SyncWrite (`info fw=20260912 raise=1`). Never command 12 or 13 alone for motion.
 
 | You type | What it does |
 | --- | --- |
 | `get` / `get N` | READ present. Omitted keys = default (speed/load/cur/moving/tq/turns/st/mode 0, `un=pos`). `get 16` while twist is moving |
-| `stream` / `stream N` / `stream 0` | live `get` when an ID **changes** (pos Δ≥2, speed Δ≥80, load, cur, tq, v, temp). Default 180 ms poll. **Flash owed** for compact lines |
+| `info` | chip / mac / idf. After flash: `info fw=20260912 raise=1 stream=compact guard=1`. Console uses that line to allow `raise` |
+| `stream` / `stream N` / `stream 0` | live `get` when an ID **changes** (pos Δ≥2, speed Δ≥80, load, cur, tq, v, temp). Default 180 ms poll. Compact on chip 2026-09-12 |
 | `who` / `who N` | EEPROM fw/mode/PID/angle limits/goal |
-| `id N free\|hold\|to G\|nudge D` | any 11–17. 11–15 hop ≤80. **12+13:** free/hold/here only until `raise` is on the chip |
-| `id N here` | zero unwrap at current pos. **In source, flash owed** |
-| `raise to G12 G13` | SyncWrite both. **In source, flash owed.** Solo 12/13 `to`/`nudge` abort |
-| `raise hold\|free` | both motors. **Do not send until flash** — chip prints `rx err unknown` |
+| `id N free\|hold\|to G\|nudge D` | any 11–17. 11–15 hop ≤80. **12+13:** free/hold/here only; motion is `raise to` |
+| `id N here` | zero unwrap at current pos |
+| `raise to G12 G13` | SyncWrite both. **On chip (`info raise=1`).** Solo 12/13 `to`/`nudge` abort |
+| `raise hold\|free` | both motors. Console sends these only after `info fw=… raise=1` |
 | `move speed N` / `move acc N` | next WritePos (default 300 / 20) |
 | `estop` | all ids `tq=0` + twist speed 0 + servo. Chip also cuts twist on `Δload` / `cur` / bus miss |
 | `hand open` / `close` / `to N` / `free` | ID 17. Soft **689–2008**, `to` max **2075**. Speed 300, acc 20 |
