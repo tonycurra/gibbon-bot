@@ -9,25 +9,30 @@
 <link rel="icon" href="{% static 'console/icon.svg' %}">
 <link rel="stylesheet" href="{% static 'console/app.css' %}">
 </head>
-<body>
+<body class="page-{{ page }}">
 <header class="bar">
   <span id="dot" class="dot off"></span>
   <a class="brand" href="/">gibbon</a>
-  <span id="link" class="bad">offline</span>
-  <span id="packEl">pack —</span>
-  <span id="foundEl" class="mut">motors —</span>
-  <span id="fwEl" class="mut">fw —</span>
-  <span id="tqEl" class="mut">tq off</span>
-  <a id="trialChip" href="/trials/"></a>
+  <span id="usbEl" class="pill mut">usb</span>
+  <span id="bleEl" class="pill mut">ble</span>
+  <span id="packEl" class="mut">pack —</span>
   <span class="sp"></span>
   <button type="button" id="btnHost">connect</button>
   <button type="button" id="btnDisc" hidden>drop</button>
-  <button type="button" class="stop" id="btnStop">STOP</button>
+  <button type="button" class="huge freeall" id="btnFreeAll" disabled>FREE ALL</button>
+  <button type="button" class="huge lockpose" id="btnLockPose" disabled>LOCK POSE</button>
+  <button type="button" class="stop huge" id="btnStop">STOP</button>
 </header>
 <nav>
   {% for key, label in pages %}
   <a href="{% url key %}"{% if page == key %} class="on"{% endif %}>{{ label }}</a>
   {% endfor %}
+  <details class="navMore">
+    <summary>more</summary>
+    {% for key, label in more %}
+    <a href="{% url key %}"{% if page == key %} class="on"{% endif %}>{{ label }}</a>
+    {% endfor %}
+  </details>
 </nav>
 {% if motor_nav %}
 <nav class="joints">
@@ -36,6 +41,15 @@
   {% endfor %}
 </nav>
 {% endif %}
+<details class="more statusMore">
+  <summary>status</summary>
+  <p class="statusRow">
+    <span id="foundEl" class="mut">motors —</span>
+    <span id="fwEl" class="mut">fw —</span>
+    <span id="boardEl" class="mut">board —</span>
+    <span id="tqEl" class="mut">tq off</span>
+  </p>
+</details>
 <main>
 {% block main %}{% endblock %}
 </main>

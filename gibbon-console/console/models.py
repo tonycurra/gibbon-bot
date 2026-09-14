@@ -62,3 +62,18 @@ class Limit(models.Model):
     amax = models.IntegerField(null=True, blank=True)
     note = models.CharField(max_length=240, blank=True)
     updated = models.DateTimeField(auto_now=True)
+
+
+class Calibration(models.Model):
+    """Dated snapshot of walls for one board + firmware."""
+    created = models.DateTimeField(auto_now_add=True)
+    board = models.CharField(max_length=32)
+    fw = models.CharField(max_length=16, blank=True)
+    via = models.CharField(max_length=8, blank=True)
+    joints = models.JSONField(default=dict)
+
+    class Meta:
+        ordering = ["-created"]
+
+    def __str__(self):
+        return "%s %s %s" % (self.created.strftime("%Y-%m-%d %H:%M"), self.board, self.fw)

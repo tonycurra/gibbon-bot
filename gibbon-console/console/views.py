@@ -4,23 +4,26 @@ import time
 
 from django.db.models import Count
 from django.http import HttpResponse, JsonResponse, StreamingHttpResponse
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.utils.safestring import mark_safe
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from . import bridge, hat as hat_gold
-from .catalog import CATALOG, JOINTS, SLUGS
-from .models import Limit, Note, Sample, Trial
+from .catalog import CATALOG, JOINTS, SLUGS, WIZARD
+from .models import Calibration, Limit, Note, Sample, Trial
 
 PAGES = [
-    ("home", "motors"),
-    ("calibrate", "calibrate"),
+    ("home", "home"),
+    ("calibration", "calibration"),
+]
+MORE = [
     ("trials", "trials"),
     ("hat", "hat"),
     ("raw", "hand"),
     ("info", "info"),
+    ("flash", "flash"),
     ("advanced", "advanced"),
 ]
 
@@ -29,6 +32,7 @@ def ctx(page, crumb, extra=None):
     d = {
         "page": page,
         "pages": PAGES,
+        "more": MORE,
         "crumb": crumb,
         "joints": JOINTS,
         "joint_slug": "",
@@ -42,7 +46,7 @@ def ctx(page, crumb, extra=None):
 
 
 def home(request):
-    return render(request, "console/home.html", ctx("home", "motors"))
+    return render(request, "console/home.html", ctx("home", "home"))
 
 
 def joint_page(request, slug):
@@ -57,19 +61,33 @@ def joint_page(request, slug):
 
 
 def calibrate(request, slug=None):
+    if slug:
+        return redirect("/calibration/" + slug + "/")
+    return redirect("/calibration/")
+
+
+def calibration(request, slug=None):
+    order = [SLUGS[w["slug"]] for w in WIZARD if w["slug"] in SLUGS]
     if not slug:
-        return render(request, "console/calibrate.html", ctx("calibrate", "calibrate"))
+        return render(request, "console/calibrate.html", ctx("calibration", "calibration", {
+            "cal_rows": order,
+        }))
     j = SLUGS.get(slug)
     if not j:
         return HttpResponse("unknown joint", status=404)
+    slugs = [x["slug"] for x in order]
+    i = slugs.index(j["slug"]) if j["slug"] in slugs else -1
+    nxt = order[i + 1] if i >= 0 and i + 1 < len(order) else None
     return render(
         request,
         "console/calibrate_joint.html",
-        ctx("calibrate", "calibrate / " + j["name"], {
+        ctx("calibration", "calibration / " + j["name"], {
             "joint": j,
             "joint_slug": j["slug"],
             "motor_nav": True,
-            "nav_prefix": "/calibrate/",
+            "nav_prefix": "/calibration/",
+            "next_joint": nxt,
+            "cal_rows": order,
         }),
     )
 
@@ -107,6 +125,10 @@ def hat(request):
 
 def raw(request):
     return render(request, "console/raw.html", ctx("raw", "raw"))
+
+
+def flash(request):
+    return render(request, "console/flash.html", ctx("flash", "flash"))
 
 
 def advanced(request):
@@ -150,8 +172,11 @@ def trial_detail(request, pk):
 
 def api_status(request):
     st = bridge.status()
-    cur = Trial.objects.filter(ended__isnull=True).first()
-    st["trial"] = {"id": cur.id, "title": cur.title or ("trial %d" % cur.id)} if cur else None
+    try:
+        cur = Trial.objects.filter(ended__isnull=True).first()
+        st["trial"] = {"id": cur.id, "title": cur.title or ("trial %d" % cur.id)} if cur else None
+    except Exception:
+        st["trial"] = None
     return JsonResponse(st)
 
 
@@ -283,3 +308,44 @@ def api_limits(request):
         row.note = str(data.get("note") or "")[:240]
     row.save()
     return JsonResponse({"limit": _limit_row(row)})
+
+
+def _limits_blob():
+    out = {}
+    for row in Limit.objects.order_by("servo"):
+        out[str(row.servo)] = {
+            "home": row.home, "amin": row.amin, "amax": row.amax, "note": row.note,
+        }
+    return out
+
+
+def _cal_row(row):
+    return {
+        "id": row.id,
+        "created": row.created.isoformat() if row.created else None,
+        "board": row.board,
+        "fw": row.fw,
+        "via": row.via,
+        "joints": row.joints,
+    }
+
+
+@csrf_exempt
+def api_calibrations(request):
+    if request.method == "GET":
+        qs = Calibration.objects.all()
+        board = (request.GET.get("board") or "").strip()
+        if board:
+            qs = qs.filter(board=board)
+        return JsonResponse({"calibrations": [_cal_row(x) for x in qs[:40]]})
+    if request.method != "POST":
+        return JsonResponse({"err": "method"}, status=405)
+    data = json.loads(request.body or b"{}")
+    board = str(data.get("board") or "unknown")[:32]
+    fw = str(data.get("fw") or "")[:16]
+    via = str(data.get("via") or "")[:8]
+    joints = data.get("joints")
+    if not isinstance(joints, dict):
+        joints = _limits_blob()
+    row = Calibration.objects.create(board=board, fw=fw, via=via, joints=joints)
+    return JsonResponse({"ok": True, "calibration": _cal_row(row)})

@@ -11,6 +11,7 @@ const G = {
   alive: false, wantHost: true, hostEs: null, transport: null,
   motorOpen: 0, paintQ: 0, rows: {}, chip: {},
   batt: { pack: null, miss: true, est: null, cells: null, n: null, lvl: null },
+  link: { usb: false, ble: false },
   hooks: [], recent: [], lim: {}, guard: "", guardCfg: null,
   pair12: null,
   logFocus: null,
@@ -142,11 +143,22 @@ async function pumpSend() {
   }
 }
 
-function viaLabel() {
-  if (!G.alive) return "offline";
-  if (G.chip.via === "usb") return "usb";
-  if (G.chip.via === "ble") return "ble";
-  return G.chip.via || "online";
+function boardId() {
+  if (G.chip.board) return G.chip.board;
+  const mac = G.chip.mac || "";
+  const p = mac.toLowerCase().split(":");
+  if (p.length >= 6) return "gibbon-" + p[4] + p[5];
+  const ble = G.chip.ble || "";
+  const m = /gibbon-[0-9a-f]+/i.exec(ble);
+  return m ? m[0].toLowerCase() : "unknown";
+}
+
+function applyHostStatus(st) {
+  if (!st) return;
+  G.link.usb = st.usb != null ? !!st.usb : st.via === "usb";
+  G.link.ble = st.ble_ok != null ? !!st.ble_ok : st.via === "ble";
+  if (G.chip.bleConn && +G.chip.bleConn > 0) G.link.ble = true;
+  paintLink();
 }
 
 function tqOn() {
@@ -186,18 +198,26 @@ function paintStatus() {
       pack.title = "servo VIN miss — XT60 pack off. USB does not power the motors";
     } else {
       const v = packVolts();
-      const pct = v != null ? lipo3sPct(v) : null;
-      const lvl = v == null ? "miss"
-        : v < 10.5 ? "cutoff"
+      const pct = (G.batt && !G.batt.miss && G.batt.est != null)
+        ? G.batt.est
+        : (v != null ? lipo3sPct(v) : null);
+      const lvl = pct == null ? "miss"
+        : (v != null && v < 10.5) ? "cutoff"
         : pct <= 20 ? "low"
         : pct <= 30 ? "recharge"
         : "ok";
       pack.className = lvl === "ok" ? "ok" : (lvl === "recharge" ? "warn" : "bad");
-      pack.textContent = v == null ? "pack —" : ("pack " + v.toFixed(1) + "V " + pct + "%");
-      pack.title = "3S linear from servo VIN (same XT60 rail), not a BMS. "
-        + "12.6 V = 100% (4.2 V/cell). 10.0 V = 0% (9.9 V loaded LVC + 0.1 V pad). "
-        + "Chip refuses writes below 10.5 V. Storage ~11.4–11.6 V.";
+      pack.textContent = pct == null ? "pack —" : ("pack " + pct + "%");
+      pack.title = v != null
+        ? (v.toFixed(1) + " V  ·  3S linear from servo VIN, not a BMS. 12.6 V = 100%. 10.0 V = 0%. Chip refuses writes below 10.5 V.")
+        : "";
     }
+  }
+  const board = $("boardEl");
+  if (board) {
+    const id = boardId();
+    board.className = id === "unknown" ? "mut" : "ok";
+    board.textContent = "board " + id;
   }
   const found = $("foundEl");
   if (found) {
@@ -239,22 +259,44 @@ function paintStatus() {
   }
 }
 
+function paintLink() {
+  const usb = $("usbEl");
+  const ble = $("bleEl");
+  if (usb) {
+    usb.className = "pill " + (G.link.usb ? "ok" : "mut");
+    usb.title = G.link.usb ? "USB connected" : "USB off";
+  }
+  if (ble) {
+    ble.className = "pill " + (G.link.ble ? "ok" : "mut");
+    ble.title = G.link.ble ? "Bluetooth connected" : "Bluetooth off";
+  }
+  const wired = G.link.usb || G.link.ble;
+  $("dot").className = "dot " + (wired ? "on" : "off");
+}
+
 function setLink(ok) {
   G.alive = ok;
-  $("link").textContent = viaLabel();
-  $("link").className = ok ? "ok" : "bad";
-  $("dot").className = "dot " + (ok ? "on" : "off");
+  paintLink();
   $("btnHost").hidden = ok;
   $("btnDisc").hidden = !ok;
   $("btnStop").disabled = !ok;
+  if ($("btnFreeAll")) $("btnFreeAll").disabled = !ok;
+  if ($("btnLockPose")) $("btnLockPose").disabled = !ok;
   paintStatus();
   G.hooks.forEach(fn => fn("link"));
 }
 
 function onLine(line) {
   if (!line || line === "bridge") return;
-  if (line === "serial drop" || line === "ble drop") { G.hooks.forEach(fn => fn("link")); return; }
-  if (line === "serial up" || line.startsWith("ble up")) {
+  if (line === "serial drop") { G.link.usb = false; paintLink(); G.hooks.forEach(fn => fn("link")); return; }
+  if (line === "ble drop") { G.link.ble = false; paintLink(); G.hooks.forEach(fn => fn("link")); return; }
+  if (line === "serial up") {
+    G.link.usb = true; paintLink();
+    if (G.wantHost) connectHost().catch(fail);
+    return;
+  }
+  if (line.startsWith("ble up")) {
+    G.link.ble = true; paintLink();
     if (G.wantHost) connectHost().catch(fail);
     return;
   }
@@ -326,6 +368,8 @@ function onLine(line) {
   if (hb && (line.startsWith("t=") || /^\d+\s+heap=/.test(line))) {
     G.chip.uptime = +hb[1]; G.chip.heap = hb[2]; G.chip.bus_rx = hb[3];
     G.chip.bleConn = hb[4]; G.chip.stream = hb[5];
+    if (+hb[4] > 0) G.link.ble = true;
+    paintLink();
     G.hooks.forEach(fn => fn("chip"));
     return;
   }
@@ -353,6 +397,13 @@ function onLine(line) {
     G.hooks.forEach(fn => fn("chip"));
     return;
   }
+  const ib = /^info board=(\S+)/.exec(line);
+  if (ib) {
+    G.chip.board = ib[1];
+    paintStatus();
+    G.hooks.forEach(fn => fn("chip"));
+    return;
+  }
   const im = /info mac=([0-9a-f:]+) heap=(\d+) uptime_ms=(\d+)/i.exec(line);
   if (im) { G.chip.mac = im[1]; G.chip.heap = im[2]; G.chip.uptime = +im[3]; G.hooks.forEach(fn => fn("chip")); return; }
   const ii = /info idf=(\S+) usb=\S+ bus=(\S+) ids=\S+ ble=(\S+)/.exec(line);
@@ -361,6 +412,8 @@ function onLine(line) {
   if (st) {
     G.chip.uptime = +st[1]; G.chip.heap = st[2]; G.chip.reset = st[3]; G.chip.tasks = st[4];
     G.chip.bus_rx = st[5]; G.chip.dump = st[6]; G.chip.stream = st[7]; G.chip.bleConn = st[8];
+    if (+st[8] > 0) G.link.ble = true;
+    paintLink();
     G.hooks.forEach(fn => fn("chip")); return;
   }
   const sm = /state mac=([0-9a-f:]+) name=(\S+)/i.exec(line);
@@ -430,7 +483,8 @@ function hostTransport() {
 async function connectHost() {
   G.wantHost = true;
   const st = await fetch("/api/status").then(r => r.ok ? r.json() : null).catch(() => null);
-  if (!st || !st.bridge) { log("run: .venv/bin/python manage.py runserver 0.0.0.0:8080"); return; }
+  if (!st || !st.bridge) { log("host not answering — hard-refresh, or restart serve.py"); return; }
+  applyHostStatus(st);
   const chip = $("trialChip");
   if (chip) chip.textContent = st.trial ? ("rec " + (st.trial.title || ("trial " + st.trial.id))) : "not recording";
   ensureSse();
@@ -443,6 +497,8 @@ async function connectHost() {
 $("btnHost").onclick = () => connectHost().catch(fail);
 $("btnDisc").onclick = disconnect;
 $("btnStop").onclick = () => { if (G.transport) send("estop"); };
+if ($("btnFreeAll")) $("btnFreeAll").onclick = () => { if (G.transport) freeAllMotors(); };
+if ($("btnLockPose")) $("btnLockPose").onclick = () => { if (G.transport) lockPose(); };
 window.addEventListener("keydown", e => { if (e.key === "Escape" && G.transport) send("estop"); });
 G.hooks.push(() => paintStatus());
 const footBtn = $("footToggle");
@@ -462,6 +518,7 @@ setInterval(async () => {
   if (!G.wantHost) return;
   const st = await fetch("/api/status").then(r => r.ok ? r.json() : null).catch(() => null);
   if (!st) return;
+  applyHostStatus(st);
   const chip = $("trialChip");
   if (chip) chip.textContent = st.trial ? ("rec " + (st.trial.title || ("trial " + st.trial.id))) : "not recording";
   if (st.ok && !G.alive) connectHost().catch(() => {});
@@ -536,12 +593,35 @@ function sendRaiseTq(on) {
   return send(on ? "id 13 hold" : "id 13 free");
 }
 
+function cmdFreeId(id) {
+  if (id === 17) return "hand free";
+  if (id === 16) return "twist free";
+  return "id " + id + " free";
+}
+
+function freeAllMotors() {
+  MOTORS.forEach(m => {
+    if (m.id === 12 || m.id === 13) return;
+    send(cmdFreeId(m.id));
+  });
+  sendRaiseTq(false);
+}
+
+function lockPose() {
+  MOTORS.forEach(m => {
+    if (m.id === 12 || m.id === 13) return;
+    send("id " + m.id + " hold");
+  });
+  sendRaiseTq(true);
+}
+
 window.G = G;
 window.MOTORS = MOTORS;
 window.JOINTS = JOINTS;
 window.send = send;
 window.log = log;
 window.dash = dash;
+window.boardId = boardId;
 window.foundN = foundN;
 window.modeOf = modeOf;
 window.fetchLimits = fetchLimits;

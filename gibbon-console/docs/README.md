@@ -12,6 +12,8 @@ Firefox (no Web Bluetooth). The **laptop** is the BLE central and USB owner. Pho
 | Trials, Sample rows, MySQL | `data.md` |
 | Joints, axes, act | `ui.md` |
 | Calibrate, wrap Δ, degrees | `calibrate.md` |
+| USB flash / signed firmware | `flash.md` |
+| 2026-09-14 sitting (this UI) | `2026-09-14.md` |
 | What to build next | `next.md` |
 
 HAT gold serial (pack off / on, `get`, `batt`, hand-move) is `/hat/`. Hand open/close + sensor graphs: `/raw/` (nav **hand**).

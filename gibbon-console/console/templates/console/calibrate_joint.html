@@ -1,38 +1,39 @@
 {% extends "console/base.html" %}
 {% load static %}
 {% block main %}
-<p class="hint">
-  <a href="/calibrate/">← joints</a>
-  {% if joint.slug == "yaw" or joint.slug == "wrist-roll" %}
-  · watch <b>now</b> in degrees (360° / 4096 counts). one way −, the other +.
-  slack → <b>here</b> → <b>calibrate</b> → move both ways → <b>done</b>. tweaks are still counts.
-  {% else %}
-  · <b>here</b> copies live pos into <b>home</b> (Δ=0). or type a number and <b>set</b>.
-  then − / + as Δ (live or typed).
-  {% if joint.paired %}one joint, two motors — set pair before the slider.{% endif %}
-  {% endif %}
+<p class="nowline">
+  <b id="degNow">—</b>
+  <span>load <i id="loadLive">—</i></span>
+  <span>mA <i id="curLive">—</i></span>
+  {% if joint.paired %}<span>12 <i id="load-12">—</i> / 13 <i id="load-13">—</i></span>{% endif %}
 </p>
-<div class="row act" id="calBar">
-  <button type="button" id="btnHoldAll">hold pose</button>
-  <button type="button" id="btnFreeAll" class="lock">free all</button>
-  <button type="button" id="btnPush">push to chip</button>
-  <label class="grow">speed
-    <input id="calSpd" type="range" min="40" max="480" step="10" value="120">
-  </label>
-  <b id="calSpdVal">120 crawl</b>
-  <a class="mut" href="/j/{{ joint.slug }}/">sensors</a>
-</div>
 {% if joint.paired %}
-<div class="row" id="pairBar">
-  <span class="mut">pair 13 vs 12</span>
+<p class="row act" id="pairBar">
   <button type="button" id="btnPairMirror">mirror −</button>
   <button type="button" id="btnPairSame">same +</button>
-  <b id="pairState">—</b>
-  <span class="mut">free this, lift the upper arm. opposite pos = mirror.</span>
-</div>
+  <b id="pairState">unset</b>
+</p>
 {% endif %}
-<p id="calMsg" class="hint next">{% if joint.slug == "yaw" or joint.slug == "wrist-roll" %}slack the loom, then here. Δ is 0. then learn range.{% else %}press here at a comfortable pose, then free this joint.{% endif %}</p>
-<div id="calBody" class="calPage"></div>
+<div class="lims">
+  <button type="button" id="btnZero">{% if joint.slug == "hand" %}closed = 0°{% else %}0°{% endif %}</button>
+  <label>{% if joint.slug == "hand" %}closed{% else %}min{% endif %}
+    <input id="inMin" type="number" step="0.1">
+    <button type="button" id="btnMarkMin">mark</button>
+  </label>
+  <label>{% if joint.slug == "hand" %}open{% else %}max{% endif %}
+    <input id="inMax" type="number" step="0.1">
+    <button type="button" id="btnMarkMax">mark</button>
+  </label>
+  <label>go
+    <input id="inGo" type="number" step="0.5">
+    <button type="button" id="btnGo">go</button>
+  </label>
+  <button type="button" class="go" id="btnTest">test</button>
+  {% if next_joint %}
+  <a class="nextJ" href="/calibration/{{ next_joint.slug }}/">next {{ next_joint.name }}</a>
+  {% endif %}
+</div>
+<p id="calMsg" class="hint next"></p>
 {% endblock %}
 {% block js %}
 <script>window.JOINT_SLUG = "{{ joint.slug }}";</script>

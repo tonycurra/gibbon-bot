@@ -1,27 +1,23 @@
 {% extends "console/base.html" %}
 {% load static %}
 {% block main %}
-<p class="hint">
-  six <b>joints</b> — shoulder pitch is two motors on one horn.
-  click a row to mark here / − / +. do not jog 12 or 13 from this list.
-</p>
-<div class="row act" id="calBar">
-  <button type="button" id="btnHoldAll">hold pose</button>
-  <button type="button" id="btnFreeAll" class="lock">free all</button>
-  <button type="button" id="btnPush">push all to chip</button>
-  <span class="mut">STOP if it fights.</span>
-</div>
-<p id="calMsg" class="hint next">pick a joint. support the arm before free all.</p>
-<div id="armWrap">
-<table class="ov home">
+<table class="ov calIdx">
   <thead>
-    <tr>
-      <th>joint</th><th>id</th><th>pos</th><th>Δ</th><th>load</th><th>here</th><th>−</th><th>+</th>
-    </tr>
+    <tr><th>joint</th><th>now</th><th>load</th><th>mA</th><th>min</th><th>max</th></tr>
   </thead>
-  <tbody id="calBody"></tbody>
+  <tbody>
+    {% for j in cal_rows %}
+    <tr id="row-{{ j.slug }}">
+      <td><a href="/calibration/{{ j.slug }}/">{{ j.name }}</a></td>
+      <td id="now-{{ j.slug }}">—</td>
+      <td id="load-{{ j.slug }}">—</td>
+      <td id="cur-{{ j.slug }}">—</td>
+      <td id="min-{{ j.slug }}">—</td>
+      <td id="max-{{ j.slug }}">—</td>
+    </tr>
+    {% endfor %}
+  </tbody>
 </table>
-</div>
 {% endblock %}
 {% block js %}
 <script src="{% static 'console/js/calibrate.js' %}"></script>

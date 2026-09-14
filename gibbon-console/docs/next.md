@@ -16,11 +16,10 @@ Chip plan: `../roarm-fw/docs/plans/firmware-minimal.md`.
 
 ## Try next (this sitting)
 
-1. Hard-refresh. Pack **11.1 V ≈ 42%**. Header **fw 20260912**.
-2. Nav **hand** (`/raw/`): open / close. Graphs should move. Squeeze until STOP. Confirm `ESTOP` in the log (click **log**).
-3. `/calibrate/wrist-roll/` then `/calibrate/yaw/`: slack → **here** → **calibrate** → sweep → **done**. Procedure: `calibrate.md`. Sep-5 twist gold was slack **4068**; 11 Sep **here** was **960** — do not mix.
-4. Soft-band wrist pitch well inside 1126…3134 (3134 tripped `ESTOP id=15 dload`; live was ~3131). Then elbow (host 995…2997).
-5. Pair on `/calibrate/shoulder-pitch/`, **one** SyncWrite nudge. If they fight: STOP.
+1. Hard-refresh. Header: usb, pack %, **FREE ALL**, **LOCK POSE**, **STOP**.
+2. `/calibration/hand/`: close → **closed = 0°** → open → mark open → **test** (full travel). Then **next wrist roll**.
+3. Wrap slack is this sitting (not Sep-5 4068). Wrist pitch stay short of ~3134.
+4. Pair on `/calibration/shoulder-pitch/` before go/test. If they fight: STOP.
 
 ## Later
 

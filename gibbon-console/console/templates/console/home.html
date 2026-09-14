@@ -1,18 +1,23 @@
 {% extends "console/base.html" %}
 {% load static %}
 {% block main %}
-<p class="hint">hold locks that joint here. free lets you turn it by hand. slider jogs it — small hops until min/max exist on <a href="/calibrate/">calibrate</a>. shoulder pitch is one SyncWrite — disabled while header says <b>fw old</b>. live pos comes from <code>stream</code>, not an extra get loop. name → sensors.</p>
-<p id="powerEl" class="sense"><span class="senseRow"><span><b>bus</b> <i id="pwrBus">—</i></span><span><b>Σ mA</b> <i id="pwrMa">—</i></span><span><b>W</b> <i id="pwrW">—</i></span><span class="mut" id="pwrNote">winding estimates, not a pack shunt. light moves often read 0</span></span></p>
-<div id="armWrap">
-<table class="ov home">
-  <thead>
-    <tr>
-      <th>joint</th><th>id</th><th>pos</th><th>load</th><th>mA</th><th>grip</th><th></th><th></th>
-    </tr>
-  </thead>
-  <tbody id="homeBody"></tbody>
-</table>
-</div>
+<ul class="menu" id="homeMenu">
+  <li><a class="ctaGo" id="calGo" href="/calibration/">calibration</a></li>
+</ul>
+<details class="more">
+  <summary>jog after walls exist</summary>
+  <p id="powerEl" class="sense"><span class="senseRow"><span><b>bus</b> <i id="pwrBus">—</i></span><span><b>Σ mA</b> <i id="pwrMa">—</i></span><span><b>W</b> <i id="pwrW">—</i></span></span></p>
+  <div id="armWrap">
+  <table class="ov home">
+    <thead>
+      <tr>
+        <th>joint</th><th>load</th><th>mA</th><th></th>
+      </tr>
+    </thead>
+    <tbody id="homeBody"></tbody>
+  </table>
+  </div>
+</details>
 {% endblock %}
 {% block js %}
 <script src="{% static 'console/js/home.js' %}"></script>

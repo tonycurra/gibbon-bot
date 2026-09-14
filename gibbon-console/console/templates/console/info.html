@@ -94,10 +94,10 @@
 <p>A laptop PID on top of the servo PID is worse than either alone. Wheel + outer P (command speed from pos error) is only a maybe for twist unwrap.</p>
 
 <h2 id="pair">7. shoulder pitch 12+13</h2>
-<p>One joint, two motors, physically stuck together. Move the upper arm by hand and watch <strong>both</strong> positions. Header <code>fw old</code> means the sitting chip has no SyncWrite — console will not send <code>raise …</code>; hold/free stay <code>id 12</code> + <code>id 13</code>. After flash, <code>info fw=20260912 raise=1</code> and the header turns cyan: then <code>raise to</code> / <code>raise hold</code> / <code>raise free</code>. If they fight, STOP. Set pair (mirror − / same +) on <a href="/calibrate/shoulder-pitch/">calibrate / shoulder pitch</a> before any raise jog.</p>
+<p>One joint, two motors, physically stuck together. Move the upper arm by hand and watch <strong>both</strong> positions. Header <code>fw old</code> means the sitting chip has no SyncWrite — console will not send <code>raise …</code>; hold/free stay <code>id 12</code> + <code>id 13</code>. After flash, <code>info fw=20260912 raise=1</code> and the header turns cyan: then <code>raise to</code> / <code>raise hold</code> / <code>raise free</code>. If they fight, STOP. Set pair (mirror − / same +) on <a href="/calibration/shoulder-pitch/">calibration / shoulder pitch</a> before any raise jog.</p>
 
 <h2 id="limits">8. walls and calibrate</h2>
-<p>Find the wall by hand, tq off. Wrap joints (yaw, wrist roll): slack → <b>here</b> → <b>calibrate</b> → move both ways → <b>done</b>. Degrees are 360° / 4096 counts. Other joints: mark here / − / + from live pos on <a href="/calibrate/">calibrate</a>. Commanded moves are a check inside that band, not a way to find it. Hand gold: open 609, close 2088. Twist: Sep-5 slack 4068; this sitting here was 960 — do not mix. Host unwraps wrap joints; the chip does not need to.</p>
+<p>Find the wall by hand, tq off. Wrap joints (yaw, wrist roll): slack → <b>here</b> → <b>calibrate</b> → move both ways → <b>done</b>. Degrees are 360° / 4096 counts. Other joints: mark here / − / + from live pos on <a href="/calibration/">calibration</a>. Commanded moves are a check inside that band, not a way to find it. Hand gold: open 609, close 2088. Twist: Sep-5 slack 4068; this sitting here was 960 — do not mix. Host unwraps wrap joints; the chip does not need to.</p>
 <p>EEPROM amin/amax on the chip are often 0–4095 (no wall). Our walls live on the host + firmware clamps for hand/twist.</p>
 
 <h2 id="safety">9. stop</h2>

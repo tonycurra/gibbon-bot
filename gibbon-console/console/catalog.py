@@ -64,6 +64,52 @@ JOINTS = [
 
 HAND = {"open": 689, "close": 2008, "to_max": 2075, "wall_open": 609, "wall_close": 2088}
 
-CATALOG = {"motors": MOTORS, "joints": JOINTS, "hand": HAND}
+# Distal → proximal. Shoulder yaw last (wrap, after the paired raise).
+WIZARD = [
+    {
+        "slug": "hand",
+        "title": "Hand",
+        "do": "Close until the jaws meet. That is 0°. Then open until the cable just taut.",
+        "minus": "closed",
+        "plus": "open",
+    },
+    {
+        "slug": "wrist-roll",
+        "title": "Wrist roll",
+        "do": "Slack the loom. Here = 0° at that slack. Looking along the forearm toward the fingers: clockwise is −, counterclockwise is +. Do not mix this sitting’s slack with an old home.",
+        "minus": "clockwise −",
+        "plus": "ccw +",
+    },
+    {
+        "slug": "wrist-pitch",
+        "title": "Wrist pitch",
+        "do": "Nod the wrist by hand. Stop at the first taut cable — well before the plastic end. If load spikes, you are at the wall.",
+        "minus": "nod −",
+        "plus": "nod +",
+    },
+    {
+        "slug": "elbow",
+        "title": "Elbow",
+        "do": "Support the forearm. Free the elbow. Bend and straighten slowly. Mark the first taut loom, not the hard stop.",
+        "minus": "bend −",
+        "plus": "straight +",
+    },
+    {
+        "slug": "shoulder-pitch",
+        "title": "Shoulder pitch",
+        "do": "Two motors, one horn. Free both, lift the upper arm by hand. Watch load and mA on 12 and 13 — they should track. Opposite loads while held = they fight: STOP. Set pair (mirror or same) before any jog.",
+        "minus": "lower −",
+        "plus": "raise +",
+    },
+    {
+        "slug": "yaw",
+        "title": "Shoulder yaw",
+        "do": "Stand behind the base. Slack the yaw loom. Here = 0°. Turn left and right by hand. Same wrap as wrist roll: through 0/4095 is fine while free.",
+        "minus": "turn −",
+        "plus": "turn +",
+    },
+]
+
+CATALOG = {"motors": MOTORS, "joints": JOINTS, "hand": HAND, "wizard": WIZARD}
 
 SLUGS = {j["slug"]: j for j in JOINTS}

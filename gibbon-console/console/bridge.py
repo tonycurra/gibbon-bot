@@ -244,6 +244,8 @@ def status():
     return {
         "ok": link_ok(),
         "via": via(),
+        "usb": serial_ok,
+        "ble_ok": ble_ok,
         "port": TTY if serial_ok else (ble_name or TTY),
         "bridge": True,
         "ble": ble_name,

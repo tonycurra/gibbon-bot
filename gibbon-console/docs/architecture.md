@@ -32,10 +32,12 @@ Root `index.html` / `console.js` are stale PWA leftovers.
 
 | URL | |
 | --- | --- |
-| `/` | overview — 6 joints (online / tq / pos). Click a row |
-| `/j/<slug>/` | one joint: present table, pos/load graph, actuate |
-| `/calibrate/` | joint index — here / − / + per row |
-| `/calibrate/<slug>/` | one joint. Wrap (yaw, wrist-roll): degrees + Δ slider |
+| `/` | menu — calibration |
+| `/j/<slug>/` | one joint: sensors + actuate |
+| `/calibration/` | six-joint table (now / load / mA / min / max) |
+| `/calibration/<slug>/` | 0°, min, max, go, test, next |
+| `/calibrate/` | redirect → `/calibration/` |
+| `/flash/` | USB flash plan (Web Serial next) |
 | `/hat/` | gold serial + bus timing, servo chip limits, unwrap vs wheel, memory table |
 | `/raw/` | hand: open / close / hold / free, effort trip, live sensor graphs |
 | `/info/` | docs: axes, servo vs wheel, PID layers, 12+13, walls |
@@ -43,7 +45,7 @@ Root `index.html` / `console.js` are stale PWA leftovers.
 | `/trials/` | sittings |
 | `/trials/<id>/` | recorded samples + commands |
 
-Header (every page): usb/ble, pack V or pack off, motors 7/7, tq, **STOP**. Footer: one last delta; click **log** to expand. On `/raw/` the footer only shows the hand.
+Header: **usb** / **ble**, **pack %** or **pack off**, **FREE ALL**, **LOCK POSE**, **STOP**. USB without pack is the flash path. Trial recording is not in the header.
 
 Slugs: `yaw`, `shoulder-pitch` (ids 12+13), `elbow`, `wrist-pitch`, `wrist-roll`, `hand`.
 
@@ -51,14 +53,15 @@ Slugs: `yaw`, `shoulder-pitch` (ids 12+13), `elbow`, `wrist-pitch`, `wrist-roll`
 
 | | |
 | --- | --- |
-| `GET /api/status` | `{ ok, via, port, bridge, ble, trial }` |
+| `GET /api/status` | `{ ok, via, usb, ble_ok, port, bridge, ble, trial }` |
+| `GET/POST /api/limits` | host notebook: home / amin / amax per servo 11–17 |
+| `GET/POST /api/calibrations` | dated snapshots: board, fw, via, joints |
 | `GET /api/rx` | SSE, `data: <line>` |
 | `POST /api/tx` | raw command body, csrf exempt |
 | `GET/POST /api/trial` | current / start (closes previous) |
 | `POST /api/trial/stop` | |
 | `POST /api/trial/note` | |
 | `GET /api/trials/<id>/samples?servo=` | JSON for graphs |
-| `GET/POST /api/limits` | host notebook: home / amin / amax per servo 11–17 |
 
 `console/apps.py` starts `bridge.start()` only when `RUN_MAIN=true`. One serial/BLE owner.
 

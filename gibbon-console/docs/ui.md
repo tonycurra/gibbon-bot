@@ -1,6 +1,6 @@
 # UI
 
-Cyberpunk: pure black, cyan `#00f0c8`, magenta `#ff2bd6`, amber for next-action. Mono. `static/console/app.css`.
+Pure black. Ice cyan `#7ec4c8` (not mint) and magenta STOP — dim neon, almost no glow. Compact by default. `static/console/app.css`.
 
 Stand **behind the base**. Words + axes: `../roarm-fw/docs/hardware/motors/names.md`. Sitting docs: `/info/`. HAT gold serial (pack off / on): `/hat/`. Hand (open/close + graphs): `/raw/`.
 
@@ -35,6 +35,6 @@ Shoulder-pitch slider still emits `raise to`. **Do not use it until that firmwar
 
 ## Calibrate
 
-Index `/calibrate/`. One joint `/calibrate/<slug>/`. Wrap (11, 16): Δ and degrees. Procedure: `calibrate.md`.
+`/calibration/` table. `/calibration/<slug>/` one joint: 0°, min, max, go, test. Hand: closed = 0°. Header **FREE ALL** / **LOCK POSE** / **STOP**. Procedure: `calibrate.md`. Sitting recap: `2026-09-14.md`. Flash plan: `flash.md`.
 
 `Limit` is the host notebook. Chip still owns clamps for hand/twist (gold walls). Do not command a joint with no wall. Do not send `raise …` until flash.

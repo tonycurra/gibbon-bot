@@ -1,4 +1,5 @@
 const HAND = (window.CATALOG && window.CATALOG.hand) || { open: 689, to_max: 2075 };
+const WIZARD = (window.CATALOG && window.CATALOG.wizard) || [];
 let limits = {};
 let built = 0;
 let lastSpd = null;
@@ -83,8 +84,6 @@ function paintRow(j) {
   const on = tqOn(j.ids);
   const tr = $("row-" + j.slug);
   if (tr) tr.className = miss || !G.alive ? "no" : "go";
-  const p = $("pos-" + j.slug);
-  if (p) p.textContent = pos == null ? "—" : pos;
   const l = $("load-" + j.slug);
   if (l) {
     l.textContent = load;
@@ -100,31 +99,15 @@ function paintRow(j) {
     b.textContent = on ? "free" : "hold";
     b.className = "lock" + (on ? " bad" : "");
   }
-  const sl = $("slide-" + j.slug);
-  const hold = drag[j.slug] || (gripUntil[j.slug] && Date.now() < gripUntil[j.slug]);
-  if (sl) {
-    const blocked = j.paired && !raiseReady();
-    sl.disabled = blocked;
-    sl.title = blocked ? "raise blocked until header is cyan (info raise=1)" : "";
-    if (!hold && pos != null && !blocked) {
-      applyBand(j);
-      sl.value = Math.max(+sl.min, Math.min(+sl.max, pos));
-    }
-  }
 }
 
 function build() {
   $("homeBody").innerHTML = JOINTS.map(j => `<tr id="row-${j.slug}" class="no">
     <td class="goName"><a class="name" href="/j/${j.slug}/">${j.name}</a>${j.paired ? ' <span class="axis">both</span>' : ""}</td>
-    <td>${j.ids.join("+")}</td>
-    <td id="pos-${j.slug}">—</td>
     <td id="load-${j.slug}">—</td>
     <td id="cur-${j.slug}">—</td>
-    <td class="grip"><input id="slide-${j.slug}" type="range" min="0" max="4095" value="2000" data-slug="${j.slug}"></td>
     <td><button type="button" class="lock" id="lock-${j.slug}" data-slug="${j.slug}">hold</button></td>
-    <td class="mut"><a href="/j/${j.slug}/">sensors</a></td>
   </tr>`).join("");
-  JOINTS.forEach(j => bindSlide(j));
   built = 1;
 }
 
@@ -187,7 +170,7 @@ function sendGrip(j) {
     const p12 = livePos(12);
     const p13 = livePos(13);
     if (sign == null || p12 == null || p13 == null) {
-      log("raise needs pair (mirror/same) on /calibrate/shoulder-pitch/ — not jogging 12+13");
+      log("raise needs pair (mirror/same) on /calibration/shoulder-pitch/ — not jogging 12+13");
       return;
     }
     send(cmdRaiseTo(p12 + d, p13 + sign * d));
@@ -226,11 +209,28 @@ function paintPower() {
   if (note) note.textContent = (v != null ? "@ " + v + " V  ·  " : "") + "winding estimates, not a pack shunt. light moves often read 0";
 }
 
+function paintCalCta() {
+  const go = $("calGo");
+  if (!go || !WIZARD.length) return;
+  let n = 0;
+  WIZARD.forEach(w => {
+    const j = JOINTS.find(x => x.slug === w.slug);
+    const L = j && limits[j.ids[0]];
+    const done = !!(j && L && L.home != null && L.amin != null && L.amax != null
+      && Math.abs(+L.amax - +L.amin) >= 80
+      && !(j.paired && pairSign() == null));
+    if (done) n++;
+  });
+  go.href = "/calibration/";
+  go.textContent = n ? ("calibration  " + n + "/6") : "calibration";
+}
+
 function paint() {
   G.paintQ = 0;
   if (!built) build();
   JOINTS.forEach(paintRow);
   paintPower();
+  paintCalCta();
 }
 
 function requestPaint() {

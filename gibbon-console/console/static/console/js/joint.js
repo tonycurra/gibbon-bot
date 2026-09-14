@@ -438,7 +438,7 @@ if ($("actForm")) {
         const p13 = livePos(13);
         const d = +n;
         if (sign == null || p12 == null || p13 == null) {
-          markSay("set pair on /calibrate/shoulder-pitch/ first");
+          markSay("set pair on /calibration/shoulder-pitch/ first");
           return;
         }
         go(cmdRaiseTo(p12 + d, p13 + sign * d));
@@ -462,7 +462,7 @@ $("btnFree").onclick = () => {
 };
 $("btnTest").onclick = async () => {
   if (joint.paired) {
-    markSay("test shoulder pitch from /calibrate/shoulder-pitch/ — needs pair + SyncWrite");
+    markSay("test shoulder pitch from /calibration/shoulder-pitch/ — needs pair + SyncWrite");
     return;
   }
   const spd = Math.max(1, Math.min(3073, +($("testSpeed") && $("testSpeed").value) || +$("mvSpeed").value || 300));
