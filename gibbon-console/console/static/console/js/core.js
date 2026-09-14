@@ -69,8 +69,8 @@ function parseGet(line) {
     cur: kv.cur != null ? +kv.cur : 0,
     moving: kv.moving != null ? +kv.moving : 0,
     tq: kv.tq != null ? kv.tq : "0",
-    un: kv.un != null ? +kv.un : pos,
-    turns: kv.turns != null ? +kv.turns : 0,
+    un: kv.un != null ? +kv.un : null,
+    turns: kv.turns != null ? +kv.turns : null,
     st: kv.st != null ? +kv.st : 0,
     mode: kv.mode != null ? kv.mode : "0",
     v: kv.v != null ? kv.v : null,
@@ -85,6 +85,9 @@ function fmtDelta(prev, next) {
     bits.push("pos " + next.pos);
   } else {
     if (Math.abs(next.pos - prev.pos) >= 2) bits.push("pos " + prev.pos + "→" + next.pos);
+    if (next.un != null && prev.un != null && Math.abs(next.un - prev.un) >= 2) {
+      bits.push("un " + prev.un + "→" + next.un);
+    }
     if ((Math.abs(next.speed) >= 80 || Math.abs(prev.speed || 0) >= 80) && next.speed !== prev.speed) {
       bits.push("spd " + next.speed);
     }
@@ -280,7 +283,6 @@ function setLink(ok) {
   $("btnHost").hidden = ok;
   $("btnDisc").hidden = !ok;
   $("btnStop").disabled = !ok;
-  if ($("btnFreeAll")) $("btnFreeAll").disabled = !ok;
   if ($("btnLockPose")) $("btnLockPose").disabled = !ok;
   paintStatus();
   G.hooks.forEach(fn => fn("link"));
@@ -317,6 +319,10 @@ function onLine(line) {
     const next = Object.assign({}, prev, parsed, { miss: false, raw: line, t: Date.now(), id });
     if (parsed.v == null && prev && prev.v != null) next.v = prev.v;
     if (parsed.temp == null && prev && prev.temp != null) next.temp = prev.temp;
+    if (parsed.un == null && prev && prev.un != null) next.un = prev.un;
+    if (parsed.un == null && next.un == null) next.un = parsed.pos;
+    if (parsed.turns == null && prev && prev.turns != null) next.turns = prev.turns;
+    if (parsed.turns == null && next.turns == null) next.turns = 0;
     const note = fmtDelta(prev, next);
     G.rows[id] = next;
     if (note) log(note);
@@ -450,10 +456,11 @@ async function afterConnect(kind) {
   G.chip.via = kind;
   setLink(true);
   await send("info", true);
-  await send("batt", true);
+  await send("get", true);
   await send("stream 180", true);
   await send("lim", true);
   await send("guard", true);
+  await send("batt", true);
 }
 
 async function disconnect() {
@@ -497,7 +504,6 @@ async function connectHost() {
 $("btnHost").onclick = () => connectHost().catch(fail);
 $("btnDisc").onclick = disconnect;
 $("btnStop").onclick = () => { if (G.transport) send("estop"); };
-if ($("btnFreeAll")) $("btnFreeAll").onclick = () => { if (G.transport) freeAllMotors(); };
 if ($("btnLockPose")) $("btnLockPose").onclick = () => { if (G.transport) lockPose(); };
 window.addEventListener("keydown", e => { if (e.key === "Escape" && G.transport) send("estop"); });
 G.hooks.push(() => paintStatus());
@@ -591,20 +597,6 @@ function sendRaiseTq(on) {
   if (raiseReady()) return send(on ? "raise hold" : "raise free");
   send(on ? "id 12 hold" : "id 12 free");
   return send(on ? "id 13 hold" : "id 13 free");
-}
-
-function cmdFreeId(id) {
-  if (id === 17) return "hand free";
-  if (id === 16) return "twist free";
-  return "id " + id + " free";
-}
-
-function freeAllMotors() {
-  MOTORS.forEach(m => {
-    if (m.id === 12 || m.id === 13) return;
-    send(cmdFreeId(m.id));
-  });
-  sendRaiseTq(false);
 }
 
 function lockPose() {

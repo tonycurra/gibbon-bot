@@ -49,6 +49,10 @@ def home(request):
     return render(request, "console/home.html", ctx("home", "home"))
 
 
+def motors(request):
+    return redirect("/calibration/")
+
+
 def joint_page(request, slug):
     j = SLUGS.get(slug)
     if not j:

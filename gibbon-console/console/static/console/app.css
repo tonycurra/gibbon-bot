@@ -25,11 +25,11 @@ a:hover { border-bottom-color: var(--cyan); }
 #packEl.warn { color: var(--amber); }
 .stop:disabled, .huge:disabled { opacity: .35; cursor: not-allowed; }
 .bar .huge {
-  font-size: 15px; font-weight: 700; padding: 12px 16px;
-  letter-spacing: .08em;
+  font-size: 12px; font-weight: 650; padding: 7px 11px;
+  letter-spacing: .06em;
 }
-.bar .huge.freeall { color: var(--amber); border-color: var(--amber); }
 .bar .huge.lockpose { color: var(--cyan); border-color: var(--cyan); }
+.bar .stop.huge { padding: 7px 12px; }
 .nowline {
   display: flex; flex-wrap: wrap; gap: 16px; align-items: baseline;
   padding: 16px; border-bottom: 1px solid var(--line);
@@ -40,15 +40,26 @@ a:hover { border-bottom-color: var(--cyan); }
 .nowline i { font-style: normal; color: var(--fg); }
 .nowline i.hot { color: var(--mag); }
 .lims {
-  display: flex; flex-wrap: wrap; gap: 10px; align-items: end;
-  padding: 16px;
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: end;
+  padding: 12px 16px;
 }
 .lims label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--mut); }
-.lims input { width: 6em; }
+.lims input { width: 5.5em; padding: 6px 8px; }
+.lims button { padding: 6px 10px; }
 .lims .go { color: var(--cyan); border-color: var(--cyan); }
 .lims .nextJ { align-self: center; padding: 12px; border: 0; }
 table.calIdx td.hot { color: var(--mag); }
 table.calIdx tr.ok a { color: var(--cyan); }
+.set {
+  color: var(--mut); cursor: pointer; min-width: 3.2em;
+  display: inline-block; padding: 4px 6px;
+}
+.set.on { color: var(--cyan); }
+.set:hover { background: var(--line); }
+.set input { width: 4.8em; padding: 4px 6px; }
+.un.wrap, i.wrap { color: var(--amber); }
+.lims .goRow { display: flex; gap: 6px; align-items: center; }
+table.calIdx button.test { padding: 4px 8px; }
 .brand {
   font-weight: 650; letter-spacing: .14em; text-transform: uppercase; font-size: 12px;
   color: var(--cyan); border: 0; text-shadow: 0 0 8px #7ec4c844;

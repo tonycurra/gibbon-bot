@@ -34,9 +34,9 @@ Root `index.html` / `console.js` are stale PWA leftovers.
 | --- | --- |
 | `/` | menu — calibration |
 | `/j/<slug>/` | one joint: sensors + actuate |
-| `/calibration/` | six-joint table (now / load / mA / min / max) |
-| `/calibration/<slug>/` | 0°, min, max, go, test, next |
-| `/calibrate/` | redirect → `/calibration/` |
+| `/calibration/` | six-joint table: now° / pos / un / home / min / max / test |
+| `/calibration/<slug>/` | click-to-set home/min/max, go, test, next. Shoulder rec/play |
+| `/calibrate/` `/motors/` | redirect → `/calibration/` |
 | `/flash/` | USB flash plan (Web Serial next) |
 | `/hat/` | gold serial + bus timing, servo chip limits, unwrap vs wheel, memory table |
 | `/raw/` | hand: open / close / hold / free, effort trip, live sensor graphs |
@@ -45,7 +45,7 @@ Root `index.html` / `console.js` are stale PWA leftovers.
 | `/trials/` | sittings |
 | `/trials/<id>/` | recorded samples + commands |
 
-Header: **usb** / **ble**, **pack %** or **pack off**, **FREE ALL**, **LOCK POSE**, **STOP**. USB without pack is the flash path. Trial recording is not in the header.
+Header: **usb** / **ble**, **pack %** or **pack off**, **LOCK**, **STOP**. USB without pack is the flash path. Trial recording is not in the header.
 
 Slugs: `yaw`, `shoulder-pitch` (ids 12+13), `elbow`, `wrist-pitch`, `wrist-roll`, `hand`.
 
@@ -67,9 +67,9 @@ Slugs: `yaw`, `shoulder-pitch` (ids 12+13), `elbow`, `wrist-pitch`, `wrist-roll`
 
 ## Protocol (chip)
 
-Same lines USB and BLE. Parser: `core.js` / `bridge.py` (`key=value`; missing = 0 / `un=pos`).
+Same lines USB and BLE. Parser: `core.js` / `bridge.py` (`key=value`). Compact `get` omits `un` when `un=pos`; the UI keeps the last unwrap so wrap joints do not snap back.
 
-Connect burst (quiet): `info` `batt` `stream 180` `lim` `guard`. `who` / `bench` / `state` / `gpio` are on demand (`/hat/`, `/advanced/`, hand “servo dump”). Header `fw old` until the chip prints `info fw=… raise=1` — then `raise …` is allowed. `send()` drops `raise` until that line. Home does **not** extra-`get`; live pos is `stream`. Joint page still polls `get N` for the full snapshot. Footer is one line until you click **log**.
+Connect burst (quiet): `info` `get` `stream 180` `lim` `guard` `batt`. `who` / `bench` / `state` / `gpio` are on demand (`/hat/`, `/advanced/`, hand “servo dump”). Header `fw old` until the chip prints `info fw=… raise=1` — then `raise …` is allowed. `send()` drops `raise` until that line. Calibration polls `get` every 400 ms so pos/un/now° keep moving (compact stream skips still IDs). Footer is one line until you click **log**.
 
 `send()` (`core.js`) queues UART writes. One at a time. `estop` drops pending then goes. Django is single-threaded; hold-all + STOP must not flood unknown text.
 

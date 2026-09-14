@@ -3,6 +3,8 @@
 {% block main %}
 <p class="nowline">
   <b id="degNow">—</b>
+  <span>pos <i id="posLive">—</i></span>
+  <span>un <i id="unLive">—</i></span>
   <span>load <i id="loadLive">—</i></span>
   <span>mA <i id="curLive">—</i></span>
   {% if joint.paired %}<span>12 <i id="load-12">—</i> / 13 <i id="load-13">—</i></span>{% endif %}
@@ -12,23 +14,23 @@
   <button type="button" id="btnPairMirror">mirror −</button>
   <button type="button" id="btnPairSame">same +</button>
   <b id="pairState">unset</b>
+  <button type="button" id="btnRec">rec</button>
+  <button type="button" id="btnPlay" disabled>play</button>
+  <b id="recN" class="mut">0 pts</b>
 </p>
 {% endif %}
-<div class="lims">
-  <button type="button" id="btnZero">{% if joint.slug == "hand" %}closed = 0°{% else %}0°{% endif %}</button>
-  <label>{% if joint.slug == "hand" %}closed{% else %}min{% endif %}
-    <input id="inMin" type="number" step="0.1">
-    <button type="button" id="btnMarkMin">mark</button>
-  </label>
-  <label>{% if joint.slug == "hand" %}open{% else %}max{% endif %}
-    <input id="inMax" type="number" step="0.1">
-    <button type="button" id="btnMarkMax">mark</button>
-  </label>
+<p class="hint">{% if joint.slug == "hand" %}Click home when the jaws are closed = 0°. Open is +°.{% elif joint.paired %}STOP, rec, move the upper arm by hand (12 and 13). Stop rec, then play — both motors one <code>raise to</code> packet. Set pair first.{% else %}Click home = this pose is 0°. Click min/max = Enter to use now, or type.{% endif %} Test drives min → max → min. pos is raw; un keeps going through a wrap (4000→12 raw, un 4108).{% if joint.paired %} If they fight: STOP.{% endif %}</p>
+<div class="lims" id="calSet">
+  <label>home <span class="set home">{% if joint.slug == "hand" %}closed{% else %}set{% endif %}</span></label>
+  <label>{% if joint.slug == "hand" %}closed{% else %}min{% endif %} <span class="set min">set</span></label>
+  <label>{% if joint.slug == "hand" %}open{% else %}max{% endif %} <span class="set max">set</span></label>
   <label>go
-    <input id="inGo" type="number" step="0.5">
-    <button type="button" id="btnGo">go</button>
+    <span class="goRow">
+      <input id="inGo" type="number" step="0.5">
+      <button type="button" id="btnGo">go</button>
+    </span>
   </label>
-  <button type="button" class="go" id="btnTest">test</button>
+  <button type="button" class="go test" id="btnTest">test</button>
   {% if next_joint %}
   <a class="nextJ" href="/calibration/{{ next_joint.slug }}/">next {{ next_joint.name }}</a>
   {% endif %}

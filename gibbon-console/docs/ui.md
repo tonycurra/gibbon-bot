@@ -35,6 +35,6 @@ Shoulder-pitch slider still emits `raise to`. **Do not use it until that firmwar
 
 ## Calibrate
 
-`/calibration/` table. `/calibration/<slug>/` one joint: 0°, min, max, go, test. Hand: closed = 0°. Header **FREE ALL** / **LOCK POSE** / **STOP**. Procedure: `calibrate.md`. Sitting recap: `2026-09-14.md`. Flash plan: `flash.md`.
+`/calibration/` table (now° / pos / un / click-to-set / test). `/calibration/<slug>/` one joint: go, test, next. Shoulder pitch: rec/play via `raise to`. Hand: closed = 0°. Header **LOCK** / **STOP**. Procedure: `calibrate.md`. Sitting recap: `2026-09-14.md`. Flash plan: `flash.md`.
 
 `Limit` is the host notebook. Chip still owns clamps for hand/twist (gold walls). Do not command a joint with no wall. Do not send `raise …` until flash.

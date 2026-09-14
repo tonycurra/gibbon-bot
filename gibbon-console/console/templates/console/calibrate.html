@@ -1,19 +1,27 @@
 {% extends "console/base.html" %}
 {% load static %}
 {% block main %}
+<p class="hint">Click the joint name for its page. <b>now°</b> is from unwrap (stays monotonic through 0/4095). <b>pos</b> is raw 0–4095 — a wrap looks like 4000→12 while <b>un</b> keeps going. Click <b>home</b> = this pose is 0°. Click <b>min</b>/<b>max</b> = Enter to use now, or type. <b>test</b> drives min → max → min.</p>
 <table class="ov calIdx">
   <thead>
-    <tr><th>joint</th><th>now</th><th>load</th><th>mA</th><th>min</th><th>max</th></tr>
+    <tr>
+      <th>joint</th><th>now°</th><th>pos</th><th>un</th><th>home</th><th>min</th><th>max</th><th></th>
+      <th>load</th><th>mA</th>
+    </tr>
   </thead>
   <tbody>
     {% for j in cal_rows %}
-    <tr id="row-{{ j.slug }}">
+    <tr id="row-{{ j.slug }}" data-slug="{{ j.slug }}">
       <td><a href="/calibration/{{ j.slug }}/">{{ j.name }}</a></td>
-      <td id="now-{{ j.slug }}">—</td>
-      <td id="load-{{ j.slug }}">—</td>
-      <td id="cur-{{ j.slug }}">—</td>
-      <td id="min-{{ j.slug }}">—</td>
-      <td id="max-{{ j.slug }}">—</td>
+      <td class="now">—</td>
+      <td class="pos">—</td>
+      <td class="un">—</td>
+      <td class="set home">set</td>
+      <td class="set min">set</td>
+      <td class="set max">set</td>
+      <td><button type="button" class="test" disabled>test</button></td>
+      <td class="load">—</td>
+      <td class="cur">—</td>
     </tr>
     {% endfor %}
   </tbody>

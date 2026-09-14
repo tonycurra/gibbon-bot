@@ -16,10 +16,11 @@ Chip plan: `../roarm-fw/docs/plans/firmware-minimal.md`.
 
 ## Try next (this sitting)
 
-1. Hard-refresh. Header: usb, pack %, **FREE ALL**, **LOCK POSE**, **STOP**.
-2. `/calibration/hand/`: close → **closed = 0°** → open → mark open → **test** (full travel). Then **next wrist roll**.
-3. Wrap slack is this sitting (not Sep-5 4068). Wrist pitch stay short of ~3134.
-4. Pair on `/calibration/shoulder-pitch/` before go/test. If they fight: STOP.
+1. Hard-refresh. Header: usb, pack %, **LOCK**, **STOP**.
+2. `/calibration/`: watch **pos** and **un**. Wrap (yaw / wrist roll): turn through 0/4095 — pos jumps, un and now° keep going after home is set.
+3. `/calibration/hand/`: close → click home (closed = 0°) → open → min/max → **test**. Then **next**.
+4. Wrap slack is this sitting (not Sep-5 4068). Wrist pitch stay short of ~3134.
+5. `/calibration/shoulder-pitch/`: set pair. STOP, **rec**, move by hand, stop rec, **play**. If they fight: STOP.
 
 ## Later
 

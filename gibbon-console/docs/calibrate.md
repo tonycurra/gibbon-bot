@@ -1,18 +1,25 @@
 # Calibrate
 
-`/calibration/` is the six-joint table (live now / load / mA / min / max). `/calibration/hand/` (and the other slugs) is one joint. Old `/calibrate/` redirects.
+`/calibration/` is the six-joint table. `/calibration/<slug>/` is one joint. `/calibrate/` and `/motors/` redirect here.
 
 Order: hand → wrist roll → wrist pitch → elbow → shoulder pitch (pair 12+13) → yaw.
 
-Every joint, same page:
+## Table
 
-1. **FREE ALL** (header) if you need to move by hand.
-2. Put the joint at 0° — hand: jaws closed. Wrap: this sitting’s slack (not Sep-5 4068).
-3. **0°** / **closed = 0°**.
-4. Move to the stops. **mark** min and max, or type degrees.
-5. **go** to a typed angle (check). **test** drives min → max → min for real (full travel, not a 7° hop).
-6. **next** joint. **LOCK POSE** holds everything.
+Live **now°** (from unwrap, so wrap joints stay monotonic), raw **pos** (0–4095), **un** (unwrap). A wrap looks like pos `4000→12` while un goes `4000→4108`. now° only tracks after **home** is set.
 
-Hand: closed = 0°, open = +°. Pitch 12+13: set pair before go/test. Wrap 11/16: chip hop ≤900; host walks.
+Click **home** = this pose is 0° (hand: jaws closed). Click **min** / **max** = Enter to use now, or type a degree. **test** drives min → max → min (wrap hops ≤900). Joint name opens the dedicated page.
 
-`Limit` is the live notebook. Chip `lim` is for non-wrap IDs. Dated snapshots: `POST /api/calibrations` (board + fw). Header **rec sitting** is gone — that was a trial log, not walls.
+The page polls `get` so compact `stream` skipping still IDs does not freeze the numbers.
+
+## Joint page
+
+Same click-to-set. **go** to a typed angle. **next**. Shoulder pitch: set **mirror −** / **same +** before go/test/play.
+
+**rec** / **play** (shoulder only): STOP, rec, move the upper arm by hand, stop rec, play. Replay is `raise to` on both 12 and 13 in one packet. Path stays in the browser (`localStorage`). If they fight: STOP.
+
+## Safety
+
+STOP / Esc limp. LOCK holds pose. Never command 12 or 13 alone. Twist homes: this sitting’s slack, not Sep-5 **4068** mixed with Sep-11 **960**. Pack writes cut at 10.5 V.
+
+`Limit` is the live notebook. Chip `lim` for non-wrap IDs. Snapshots: `POST /api/calibrations`.
