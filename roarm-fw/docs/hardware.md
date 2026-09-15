@@ -8,7 +8,7 @@ Waveshare RoArm-M3 Pro, modified with XT60 battery for portable use, Bus Servo D
 
 **UART control switch = ESP32.** USB or Pi isolates the data pins; bus goes silent.
 
-Power: 9–25 V on the HAT (match the servos). ST3215s: 7–12.6 V typical (12 V 5 A or **3S LiPo**). Battery / board switch ON for servos to answer. **2S max is 8.4 V — do not plug it in.** Pack rules, storage, back-EMF: `hardware/lipo.md`.
+Power: 9–25 V on the HAT (match the servos). ST3215s: 7–12.6 V typical (12 V 5 A or **3S LiPo**). **3S on XT60 is still the intended pack** — safe if rest is ~11.1–12.4 V and not puffy. Battery / board switch ON for servos to answer. **2S max is 8.4 V — do not plug it in.** Pack rules: `hardware/lipo.md`.
 
 USB debug: **115200**. This machine saw the board as `/dev/ttyACM0`. USB powers the **ESP32 only**. Servos need XT60.
 
@@ -68,7 +68,7 @@ No IMU on the servos.
 
 ## Safety (keep in firmware)
 
-- Pack on the bench: `hardware/lipo.md`. Meter rest V before XT60 or a charger. Store 3S at ~11.4 V. Recycle puffy / &lt;9 V 3S / 2S.
+- Pack on the bench: `hardware/lipo.md`. Meter rest V on XT60 before the HAT or a charger. Store 3S at ~11.4 V. Recycle puffy / 3S &lt;9 V (lab: **5.6 V** and **8.2 V**).
 - Slow default speed.
 - Voltage &lt; 10.5 V → torque off IDs 11–17.
 - High \|load\| / `Δload` / `cur` / bus miss → cut that move. Move `ESTOP` is **on the chip** (`info fw=20260912 raise=1`). `docs/hardware/motors/sensors.md`.

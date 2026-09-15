@@ -55,13 +55,19 @@ Navbar pack % is the **3S rest table**: 12.6 V = 100%, 10.8 V = 20%, 10.5 V = 10
 
 `/raw/` is a **hand** page: open / close / hold / free, effort trip in load counts (left = light touch), live sensor graphs. `who` / `raw 17` are under servo dump. Footer is one line until **log**; on that page it only shows ID 17. Connect no longer `who`s all seven.
 
-## 2026-09-15 — four limbs, two packs, last hours
+## 2026-09-15 — four limbs, two packs
 
-Chassis is assembled. **Two 3S short.** Leftovers included 5 V, 8 V, and a **2S** — do not put 2S on XT60. Rules: `docs/hardware/lipo.md`. Log: `development-logs/2026-09-15-packs.md`.
+Chassis is assembled. **Two healthy 3S** for the lab. Leftovers **5.6 V** and **8.2 V** — recycle; do not plug. 3S on XT60 is still the pack: `docs/hardware/lipo.md`. Log: `development-logs/2026-09-15-packs.md`.
 
-Do **not** write standing firmware. Do **not** start a four-bridge rewrite. Console is still one USB / one BLE. Standing is lock-at-pose after four healthy packs, not a gait.
+### Pack plan
 
-**This sitting (teleop one powered limb):**
+1. **Now:** test with the **two** good 3S. One pack = one limb. Body **supported**. Do not hang the chassis on dead limbs. Do not Y-split. Do not buy the other two yet.
+2. **Good enough** (then buy two more 3S XT60): ESTOP trips on purpose; each of two limbs does free → pose → hold → one nudge; VIN ~11 V; no sag, no puff, STOP works. Same image on both HATs.
+3. **Then:** four packs on the chassis, **southern Italy** — all four limbs talking, operator present. Not harvest MVP. Not a gait.
+
+Do **not** write standing firmware. Do **not** start a four-bridge rewrite. Console is still one USB / one BLE until Italy needs four pipes.
+
+**This sitting (teleop, two packs):**
 
 1. Pack on one HAT, UART **ESP32**. Header **usb**, pack %, **fw 20260912** (metal). In-tree sitting stamp is **20260915** — only after you flash `main/`. Django `:8080` **or** `./scripts/mon.sh` (one ACM0).
 2. `/raw/` or `hand open` / `close`. Squeeze until chip prints `ESTOP`. If that fails, stay in the lab.
@@ -72,7 +78,7 @@ Do **not** write standing firmware. Do **not** start a four-bridge rewrite. Cons
 
 Bring-up `bringup/02-ble-monitor`: flash USB, **unplug USB**, pack on. Chromium `/monitor/` paints packed `g1`. Listen-only. Sitting chip `mat` is ASCII — not `g1`. Flash **sitting** `main/main.c` when you need motion, not 02.
 
-**After packs / after this sitting:** wrap Δ on 16 then 11 from *this* slack (not Sep-5 4068). Elbow host 995…2997. One `raise to` nudge. Chip `lock` / `free` / `rec` / `play` as five words. Limb picker when four HATs talk. Tree is operator-present taught replay, not harvest MVP.
+**After two-pack tests are good:** buy **two** more 3S XT60 (plus keep storing the working pair at ~11.4 V). Four-limb metal in **southern Italy**. Wrap Δ on 16 then 11 from *this* slack (not Sep-5 4068). Elbow host 995…2997. One `raise to` nudge. Chip `lock` / `free` / `rec` / `play` as five words. Limb picker when four HATs talk. Tree is operator-present taught replay, not harvest MVP.
 
 WBSO calendar is Phase 4 (31-10). Metal is late Phase 1 + a physical four-limb prototype. Count S&O on motion/guard, not console chrome. Plan text: `../../business/wbso-plan.md`.
 

@@ -4,7 +4,7 @@ https://www.waveshare.com/product/robotics/drivers-sensors/drivers/bus-servo-dri
 
 Wiki: www.waveshare.com/wiki/Bus_Servo_Driver_HAT_(A)
 
-Lab note (not Waveshare): input **9–25 V** → **3S** on XT60, never 2S. Packs / storage / BEMF: `lipo.md`.
+Lab note (not Waveshare): **3S LiPo on XT60 is still the intended pack** (HAT **9–25 V**). Never 2S. Healthy ~11 V is fine; no diode does not mean regen into 11 V. Dead lab packs were **5.6 V** / **8.2 V**. Rules: `lipo.md`.
 
 | | |
 | --- | --- |

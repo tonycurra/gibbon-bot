@@ -8,7 +8,7 @@ Notes of what we tried, named by the test. Durable how-tos live in `docs/`.
 | [2026-09-09-console.md](2026-09-09-console.md) | Six-joint console, compact `get`/`stream` (then unflashed) |
 | [2026-09-11-calibrate.md](2026-09-11-calibrate.md) | Wrap Δ calibrate, host unwrap, UART send queue (raise still unflashed that day) |
 | [2026-09-12-flash.md](2026-09-12-flash.md) | Flashed ESTOP + raise SyncWrite + compact stream + `info fw=20260912` |
-| [2026-09-15-packs.md](2026-09-15-packs.md) | Two 3S short, 2S in the pile, storage vs regen. Rules: `docs/hardware/lipo.md` |
+| [2026-09-15-packs.md](2026-09-15-packs.md) | Two 3S short; multimeter **5.6 V** and **8.2 V**. Rules: `docs/hardware/lipo.md` |
 | [listen-xt60.md](listen-xt60.md) | Listen, XT60, `get`/`batt`, power cycle |
 | [hand-move.md](hand-move.md) | Backdrive, hand walls, commanded hand, contact CSV |
 | [espidf-start.md](espidf-start.md) | Once-on-this-machine. **Every time:** `docs/framework/espidf.md` |
