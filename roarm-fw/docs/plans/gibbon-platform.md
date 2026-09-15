@@ -96,17 +96,17 @@ phone / laptop  --WiFi-->  gibbon-console (one process)
                      (each: ESP32 + UART1 + IDs 11–17)
 ```
 
-**Now (this arm, USB):**
+**Now (15 Sep — four limbs bolted, two 3S short):**
 
-1. **Done 2026-09-12:** flash ESTOP + compact `stream` + `raise` SyncWrite (`info fw=20260912 raise=1`).
-2. Finish 1D walls joint-by-joint (`now.md`). Hand is done. Twist: unwrap + hops, **no wheel for range**.
-3. Sensitivity slider already on `/raw/` (host backup). Chip `guard *` is the real fuse.
+1. **Done 2026-09-12 on metal:** ESTOP + compact `stream` + `raise` SyncWrite (`info fw=20260912 raise=1`). In-tree sitting stamp **20260915** (`sweep`, `mat` ASCII, `info board=`).
+2. Last hours: **teleop one powered limb** (lock / free / nudge / STOP). Two packs = two limbs, body supported. Do not write a stand/walk controller. Do not hang the chassis. Packs: `docs/hardware/lipo.md`.
+3. Finish 1D walls on a limb that has a pack (`now.md`). Hand is done. Twist: unwrap + hops, **no wheel for range**. Sensitivity on `/raw/`; chip `guard *` is the fuse.
 
 **Then one limb is “a gibbon part”:**
 
 4. Teach-replay (imitation **without** a net): host path is live at `gibbon-console` `/imitation/` (browser rec/play, hop-walk, |load| slider). Chip ring-buffer dump is still later. That *is* the I/O translation: sensors = present block, actuators = `WritePos` + speed/acc.
-5. Console: limb picker **gibbon / right arm / left arm / right leg / left leg**. Today only `right arm` is live. Overview = four `found=7/7` + pack V. Click → same calibrate/raw pages with a limb prefix.
-6. Second physical arm: flash same FW, `ble=gibbon-XXXX` different MAC, console adds a second bridge. No ROS required to “connect” them.
+5. Console: limb picker **gibbon / right arm / left arm / right leg / left leg**. Today only **one** USB/BLE bridge. Overview = four `found=7/7` + pack V comes after the second/third/fourth HAT talks.
+6. Same FW image on every HAT, `ble=gibbon-XXXX` from MAC. No ROS to “connect” them. Four-at-once waits on four healthy 3S + N pipes.
 
 **Then twin, then four on a chassis:**
 
@@ -154,4 +154,4 @@ Input/output for IL: human `un[7]` trajectory → same `un[7]` goals. Sensors we
 - Cloud in the force-cut path.
 - MuJoCo in the phone page.
 
-Next sitting is still `now.md` items 2–4 (wrap Δ, wrist soft band, one raise nudge). This page is the map after that.
+Last hours: `now.md` teleop on one powered limb. This page is the map after packs and walls.

@@ -45,7 +45,9 @@ Sitting log: `development-logs/2026-09-11-calibrate.md`. Console: `/calibrate/` 
 
 Twist slack this sitting **960** (Sep-5 gold was **4068** — do not mix). Leftover raw 3108/3111 cleared. Wrist pitch toward 3134 tripped `ESTOP id=15 dload`. Raise SyncWrite is on the chip as of 2026-09-12.
 
-Firmware in tree, **flashed 2026-09-12** (`info fw=20260912 raise=1`): `raise to` / `raise hold` / `raise free` SyncWrite, solo 12/13 abort, `id N here`, compact `stream`, move `ESTOP`. Plan: `docs/plans/firmware-minimal.md`.
+Firmware **on metal 2026-09-12** (`info fw=20260912 raise=1`): `raise to` / `raise hold` / `raise free` SyncWrite, solo 12/13 abort, `id N here`, compact `stream`, move `ESTOP`.
+
+**In tree, not yet flashed** (`info fw=20260915 mat=1`): `mat` 7×8 dump, `lim ID min|max|home` marks live pos, `sweep ID` min→max→min (raise = `sweep 12`). Serial sitting: `scripts/mon.sh`. Plan: `docs/plans/firmware-minimal.md`.
 
 ## 2026-09-12 later (console)
 
@@ -53,22 +55,26 @@ Navbar pack % is the **3S rest table**: 12.6 V = 100%, 10.8 V = 20%, 10.5 V = 10
 
 `/raw/` is a **hand** page: open / close / hold / free, effort trip in load counts (left = light touch), live sensor graphs. `who` / `raw 17` are under servo dump. Footer is one line until **log**; on that page it only shows ID 17. Connect no longer `who`s all seven.
 
-## 2026-09-15 (packs + BLE listen)
+## 2026-09-15 — four limbs, two packs, last hours
 
-Two 3S short on the assembled four-limb. Leftovers included 5 V, 8 V, and a **2S**. Storage/over-discharge, not 4 V regen into 11.1 V. Rules: `docs/hardware/lipo.md`. Sitting log: `development-logs/2026-09-15-packs.md`. Test two limbs supported; do not Y-split; 2S stays off this HAT. Do not hang the chassis on two dead limbs.
+Chassis is assembled. **Two 3S short.** Leftovers included 5 V, 8 V, and a **2S** — do not put 2S on XT60. Rules: `docs/hardware/lipo.md`. Log: `development-logs/2026-09-15-packs.md`.
 
-Bring-up `bringup/02-ble-monitor`: flash USB, **unplug USB**, pack on. Console Chromium `/monitor/` paints packed `g1`. Listen-only (`tq=0` once). Sitting chip is still `main/main.c` (`mat` is ASCII, not `g1`).
+Do **not** write standing firmware. Do **not** start a four-bridge rewrite. Console is still one USB / one BLE. Standing is lock-at-pose after four healthy packs, not a gait.
 
-## Next sitting — try this
+**This sitting (teleop one powered limb):**
 
-1. Hard-refresh. Confirm **fw 20260912** and pack **40% at 11.1 V**.
-2. `/raw/`: open and close. Watch pos / effort / mA. Trip STOP on purpose once (chip `ESTOP` should print).
-3. Wrap Δ on **16** then **11** from a slack **here** this sitting. Do not reuse Sep-5 `un` 1058…7046 against home **960**.
-4. Soft-band wrist pitch well inside 1126 … short of 3134. Then elbow (host 995…2997, hop ≤80).
-5. Pair on `/calibrate/shoulder-pitch/`, **one** SyncWrite nudge. If they fight: STOP.
-6. Deg/count → FK only after walls you trust. BLE after USB is boring. Optional flash so `batt est=` matches the navbar.
+1. Pack on one HAT, UART **ESP32**. Header **usb**, pack %, **fw 20260912** (metal). In-tree sitting stamp is **20260915** — only after you flash `main/`. Django `:8080` **or** `./scripts/mon.sh` (one ACM0).
+2. `/raw/` or `hand open` / `close`. Squeeze until chip prints `ESTOP`. If that fails, stay in the lab.
+3. Per joint: **free** → pose by hand → **hold**. Then one **nudge** (11–15 hop ≤80). Wrist short of **3134**. Never 12 or 13 alone — `raise`. No twist **wheel**.
+4. After this tree is flashed: `lim N home` / `min` / `max` at live pos, then `sweep N` (raise = `sweep 12`). `estop` cuts. Hand 17 can sweep on the built-in soft band.
+5. Phone: header **LOCK**, per-joint free, **STOP**. Support the limb; STOP drops it.
+6. Second healthy pack → second limb the same way, body **supported**. Do not hang the chassis on two dead limbs.
 
-Pack-off hand-move (silence) can wait. It does not protect cables.
+Bring-up `bringup/02-ble-monitor`: flash USB, **unplug USB**, pack on. Chromium `/monitor/` paints packed `g1`. Listen-only. Sitting chip `mat` is ASCII — not `g1`. Flash **sitting** `main/main.c` when you need motion, not 02.
+
+**After packs / after this sitting:** wrap Δ on 16 then 11 from *this* slack (not Sep-5 4068). Elbow host 995…2997. One `raise to` nudge. Chip `lock` / `free` / `rec` / `play` as five words. Limb picker when four HATs talk. Tree is operator-present taught replay, not harvest MVP.
+
+WBSO calendar is Phase 4 (31-10). Metal is late Phase 1 + a physical four-limb prototype. Count S&O on motion/guard, not console chrome. Plan text: `../../business/wbso-plan.md`.
 
 Four limbs, ROS2 vs ours, BLE/guard rates, bus is serial: `docs/plans/gibbon-platform.md`. Business + operational evaluation (keep our firmware/console): `docs/plans/ros2-vs-our-stack.md`.
 

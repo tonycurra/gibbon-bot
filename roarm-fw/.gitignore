@@ -2,6 +2,7 @@ build/
 managed_components/
 sdkconfig
 sdkconfig.old
+bringup/main/app.c
 dependencies.lock
 .cache/
 __pycache__/

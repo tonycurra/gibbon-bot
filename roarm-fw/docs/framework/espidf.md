@@ -14,24 +14,37 @@ No IDF env needed. The monitor tab should drop back to a prompt. Then you can fl
 
 Do not start a second `flash monitor` until that process is dead.
 
-## Start
+## Fast serial (no IDF)
 
-New terminal = source the env again (`idf.py: command not found` means you skipped this).
+Django and `idf.py monitor` both steal ACM0. For a sitting, free the port and type chip commands:
+
+```bash
+cd ~/code/gibbon-bot/roarm-fw
+./scripts/mon.sh
+```
+
+Ctrl+C quits. `lim` / `sweep` / `estop` work here. Commands: `docs/software.md`.
+
+## Start (flash)
+
+New terminal = source the env again (`idf.py: command not found` means you skipped this). Stop Django / `mon.sh` first.
 
 ```bash
 cd ~/code/gibbon-bot/roarm-fw
 . scripts/idf-env.sh
 sudo chmod 666 /dev/ttyACM0          # until a full desktop logout
-idf.py -p /dev/ttyACM0 flash monitor
+idf.py -p /dev/ttyACM0 flash
+./scripts/mon.sh
 ```
 
 | | |
 | --- | --- |
-| Stop monitor | Second tab: `pkill -f esp_idf_monitor` |
+| Sit / type commands | `./scripts/mon.sh` |
+| Stop IDF monitor | Second tab: `pkill -f esp_idf_monitor` |
 | `idf.py: command not found` | `. scripts/idf-env.sh` in **this** shell |
 | Path not readable | `sudo chmod 666 /dev/ttyACM0` |
 
-Edit → `pkill -f esp_idf_monitor` → same start commands.
+Edit → free ACM0 → `idf.py flash` → `./scripts/mon.sh`.
 
 ## Now on the chip
 
@@ -56,9 +69,12 @@ Type in the monitor, Enter:
 | `pingall` | IDs 1–253, only prints hits |
 | `raw ID` | ping + READ present, dump hex |
 | `get` | READ pos/speed/load/V/temp/current/moving/torque-en. **After** XT60 listen |
+| `mat 50` | 7×8 number matrix. `scripts/listen.py` |
+| `lim ID min\|max\|home` | mark live pos into NVS |
+| `sweep ID` | min→max→min inside walls. `estop` cuts. **Needs this tree flashed** |
 | Host `watch-hand.py` | Laptop loops `get` while you backdrive. `scripts/watch-hand.py`. Do not run monitor at the same time |
 | `hand open` / `hand close` / `hand to N` / `hand free` | ID 17 only. Soft 689–2008, `to` max 2075. Walls 609 / 2088 |
-| `batt` | pack V from servo VIN + 3S rest-% guess. Not a BMS. USB does not charge XT60 |
+| `batt` | pack V from servo VIN + 3S rest table. Not a BMS. USB does not charge XT60. 3S only: `docs/hardware/lipo.md` |
 | `bench` | one-shot baseline: chip + ping 11–17 — compare `docs/baselines/usb-no-battery.md` |
 | `help` | list |
 

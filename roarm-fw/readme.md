@@ -4,7 +4,7 @@ This is a modified Waveshare RoArm-M3 Pro (Tony: XT60 battery for portable use) 
 **Every USB start (pack off):** `docs/baselines/usb-start.md`  
 Stop monitor: second terminal `pkill -f esp_idf_monitor`
 
-Firmware: native **ESP-IDF**. No move on boot. READ `get` / `ping` / `batt` / `stream` / `who`. Writes: any ID via `id N` (11–15 hop ≤80), **hand** (17) and **twist** (16) clamped. Same text on USB and **BLE** (`gibbon-XXXX`, Nordic UART). Sitting: `../gibbon-console` (Django) or `scripts/live.py`. Tests: `docs/software.md`.
+Firmware: native **ESP-IDF**. No move on boot. READ `get` / `ping` / `batt` / `stream` / `mat` / `who`. Writes: any ID via `id N` (11–15 hop ≤80), **hand** (17) and **twist** (16) clamped. Same text on USB and **BLE** (`gibbon-XXXX`, Nordic UART). Sitting: `../gibbon-console` (Django), `./scripts/mon.sh` (serial), or `scripts/live.py`. Tests: `docs/software.md`.
 
 | | |
 | --- | --- |
@@ -26,7 +26,8 @@ Firmware: native **ESP-IDF**. No move on boot. READ `get` / `ping` / `batt` / `s
 | USB + battery gold | `docs/baselines/usb-battery-on.md` |
 | USB no-battery ping gold | `docs/baselines/usb-no-battery.md` |
 | Hand-move (USB + pack, `tq=0`) | `docs/baselines/hand-move-usb-battery-on.md` |
-| Live sensor table | `scripts/listen.py` |
+| Live sensor matrix (`mat`) | `scripts/listen.py` |
+| Fast serial (no IDF) | `scripts/mon.sh` |
 | Host watch (hand-move) | `scripts/watch-hand.py` |
 | Listen + control (one ACM0) | `scripts/live.py` |
 | Software + test catalog | `docs/software.md` |
