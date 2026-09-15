@@ -56,6 +56,44 @@ function fail(e) {
   log(m);
 }
 
+function parseG1(line) {
+  if (!line.startsWith("g1 ")) return null;
+  const h = line.slice(3).replace(/\s/g, "");
+  if (h.length < 10 || h.length % 2) return null;
+  const b = new Uint8Array(h.length / 2);
+  for (let i = 0; i < b.length; i++) b[i] = parseInt(h.substr(i * 2, 2), 16);
+  const dv = new DataView(b.buffer, b.byteOffset, b.byteLength);
+  const t = dv.getUint32(0, true);
+  const miss = b[4];
+  const rows = [];
+  let o = 5;
+  for (let i = 0; i < 7 && o + 11 <= b.length; i++) {
+    const id = 11 + i;
+    if (miss & (1 << i)) {
+      rows.push({ id, miss: true });
+      o += 11;
+      continue;
+    }
+    const flags = b[o + 10];
+    rows.push({
+      id,
+      miss: false,
+      pos: dv.getUint16(o, true),
+      speed: dv.getInt16(o + 2, true),
+      load: dv.getInt16(o + 4, true),
+      cur: dv.getInt16(o + 6, true),
+      v: (b[o + 8] / 10).toFixed(1),
+      temp: b[o + 9],
+      tq: (flags & 1) ? "1" : "0",
+      moving: (flags & 2) ? 1 : 0,
+      un: dv.getUint16(o, true),
+      turns: 0,
+    });
+    o += 11;
+  }
+  return { t, rows };
+}
+
 function parseGet(line) {
   if (!line.startsWith("get id=")) return null;
   const kv = {};
@@ -258,6 +296,10 @@ function paintStatus() {
       fw.className = "mut";
       fw.textContent = "fw —";
       fw.title = "";
+    } else if (G.chip.mat === "1") {
+      fw.className = "ok";
+      fw.textContent = "fw " + (G.chip.fw || "monitor");
+      fw.title = "BLE monitor. packed g1 frames. no move.";
     } else if (raiseReady()) {
       fw.className = "ok";
       fw.textContent = "fw " + (G.chip.fw || "ok");
@@ -320,6 +362,16 @@ function onLine(line) {
     return;
   }
   if (line.startsWith("get LOAD")) { log(line); return; }
+  const g1 = parseG1(line);
+  if (g1) {
+    g1.rows.forEach(r => {
+      const prev = G.rows[r.id];
+      G.rows[r.id] = Object.assign({}, prev, r, { t: Date.now() });
+    });
+    G.hooks.forEach(fn => fn("mat", g1));
+    paintStatus();
+    return;
+  }
   const parsed = parseGet(line);
   if (parsed) {
     const id = parsed.id;
@@ -407,6 +459,7 @@ function onLine(line) {
     line.replace(GET_KV, (_, k, v) => { kv[k] = v; return ""; });
     if (kv.fw) G.chip.fw = kv.fw;
     G.chip.raise = kv.raise || "0";
+    G.chip.mat = kv.mat || "0";
     paintStatus();
     G.hooks.forEach(fn => fn("chip"));
     return;
@@ -463,6 +516,11 @@ async function afterConnect(kind) {
   G.chip.raise = null;
   G.chip.via = kind;
   setLink(true);
+  if (window.GIBBON_MONITOR) {
+    await send("info", true);
+    await send("mat 50", true);
+    return;
+  }
   await send("info", true);
   await send("get", true);
   await send("stream 180", true);

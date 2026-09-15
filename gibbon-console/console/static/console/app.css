@@ -217,6 +217,8 @@ details.more summary:hover { color: var(--cyan); }
 .cmds .note { color: #ffb000; padding: 0; }
 .ov tbody tr { cursor: default; }
 .ov tbody tr:hover td { background: #2a282422; }
+#matTable tr.hot td { color: var(--mag); }
+#matTable tr.warn td { color: var(--amber); }
 .ov.home tbody tr { cursor: pointer; }
 .ov.home td.goName { text-align: left; }
 .ov.home td.goName a.name {

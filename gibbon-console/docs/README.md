@@ -16,6 +16,6 @@ Firefox (no Web Bluetooth). The **laptop** is the BLE central and USB owner. Pho
 | 2026-09-14 sitting (this UI) | `2026-09-14.md` |
 | What to build next | `next.md` |
 
-Sitting flow: `/calibration/` (walls) → `/j/<slug>/` (jog) → `/imitation/` (teach). Hand graphs: `/raw/`. HAT gold serial: `/hat/`. Axes: `/info/`.
+Sitting flow: `/calibration/` (walls) → `/j/<slug>/` (jog) → `/imitation/` (teach). Hand graphs: `/raw/`. BLE listen-only matrix (Chromium, USB unplugged): `/monitor/`. HAT gold serial: `/hat/`. Axes: `/info/`.
 
 Chip: `docs` in `roarm-fw` (sensors, names, walls, flash). Do not invent HAT IMU / INA219 / LED.

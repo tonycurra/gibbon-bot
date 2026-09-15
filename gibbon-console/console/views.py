@@ -20,6 +20,7 @@ PAGES = [
     ("imitation", "imitation"),
 ]
 MORE = [
+    ("monitor", "monitor"),
     ("trials", "trials"),
     ("hat", "hat"),
     ("raw", "hand"),
@@ -99,6 +100,10 @@ def calibration(request, slug=None):
 
 def info(request):
     return render(request, "console/info.html", ctx("info", "info"))
+
+
+def monitor(request):
+    return render(request, "console/monitor.html", ctx("monitor", "monitor"))
 
 
 def hat(request):

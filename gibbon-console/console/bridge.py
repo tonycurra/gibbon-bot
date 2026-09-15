@@ -205,7 +205,7 @@ def write_serial(text):
     if not data.endswith(b"\n"):
         data += b"\n"
     s = text.strip()
-    if s and not s.startswith("get") and not s.startswith("stream") and s not in (
+    if s and not s.startswith("get") and not s.startswith("stream") and not s.startswith("mat") and s not in (
         "info", "state", "gpio", "bench", "batt", "who", "lim", "guard",
     ):
         print("tx", s, flush=True)
@@ -372,7 +372,7 @@ SKIP_TX = frozenset({"info", "state", "gpio", "bench", "batt", "who", "lim", "gu
 def skip_tx(line):
     if not line or line in SKIP_TX:
         return True
-    if line.startswith("stream ") or line.startswith("get"):
+    if line.startswith("stream ") or line.startswith("get") or line.startswith("mat"):
         return True
     return False
 
@@ -394,6 +394,8 @@ def db_loop():
                         via=via(),
                     )
                 Command.objects.create(trial=trial, t_ms=t_ms, text=line[:240], source="ui")
+                continue
+            if line.startswith("g1 "):
                 continue
             miss = MISS_RE.match(line)
             if miss:

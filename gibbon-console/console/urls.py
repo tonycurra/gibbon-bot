@@ -9,6 +9,7 @@ urlpatterns = [
     path("calibration/<slug:slug>/", views.calibration, name="calibration_joint"),
     path("calibrate/", views.calibrate, name="calibrate"),
     path("calibrate/<slug:slug>/", views.calibrate, name="calibrate_joint"),
+    path("monitor/", views.monitor, name="monitor"),
     path("hat/", views.hat, name="hat"),
     path("raw/", views.raw, name="raw"),
     path("info/", views.info, name="info"),

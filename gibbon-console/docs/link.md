@@ -26,6 +26,8 @@ Nordic UART: svc `6e400001-…`, RX write `…0002`, TX notify `…0003`. Advert
 
 Laptop is central. Direct connect to that address — no 5 s name scan. Names on BlueZ are often empty; filtering `gibbon*` misses a live advertiser.
 
+**Chromium `/monitor/`** talks Nordic UART in the browser (Web Bluetooth). Firefox cannot. That page is listen-only: subscribe starts packed `g1` from bring-up firmware `02-ble-monitor`. Unplug USB (USB + pack fight on the 5 V rail). Sitting UI still uses this Django bridge.
+
 ### Why “unplug USB / already on pack” needed a battery yank
 
 BlueZ keeps a GATT session after Django/python dies (`fuser -k`, reloader). Firmware `MAX_CONNECTIONS=1` → no advertise → scan finds nothing. Power cycle cleared the radio.
@@ -41,7 +43,7 @@ Until that flash, host disconnect is enough to recover without pulling XT60.
 - Do not discover() in a 5 s loop. Address connect first.
 - No BLE scan while USB is up.
 - Advertise slow on the chip (after flash).
-- `stream 180` is the bus poll. Stop with `stream 0` on drop.
+- `stream 180` is the bus poll. Stop with `stream 0` on drop. Bring-up monitor is `g1` at 50 ms instead — USB unplugged, no `stream`.
 
 ## Page auto-connect
 

@@ -47,6 +47,16 @@ class HatPageTests(TestCase):
         self.assertIn("/imitation/", body)
         self.assertIn('"slug": "hand"', body)
 
+    def test_monitor_page(self):
+        r = self.client.get("/monitor/")
+        self.assertEqual(r.status_code, 200)
+        body = r.content.decode()
+        self.assertIn("Web Bluetooth", body)
+        self.assertIn("g1", body)
+        self.assertIn("Unplug USB", body)
+        self.assertIn("VIN", body)
+        self.assertIn("step/s", body)
+
     def test_imitation_page(self):
         from pathlib import Path
         r = self.client.get("/imitation/")

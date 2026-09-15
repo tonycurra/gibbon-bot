@@ -15,7 +15,7 @@ Start on `/trials/` if you want a named tape. Otherwise the first live `get` sti
 | **Limit** | servo 11–17, home, amin, amax — live notebook |
 | **Calibration** | dated snapshot: board, fw, via, joints JSON |
 
-Ingest: `bridge.db_loop` from the same RX lines the page parses. Miss-spam with pack off is not stored. Pack V set from first `batt pack=…V`.
+Ingest: `bridge.db_loop` from the same RX lines the page parses. Miss-spam with pack off is not stored. Pack V set from first `batt pack=…V`. Quiet TX (`mat`, `get`, `stream`, `info`…) is not a Command. Packed `g1` lines are not Samples.
 
 Index: `(trial, servo, t_ms)`. Cap read API 8000 samples.
 

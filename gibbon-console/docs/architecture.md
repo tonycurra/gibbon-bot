@@ -8,7 +8,7 @@ browser  ──HTTP/SSE──►  Django :8080  ──USB ACM0 and/or BLE NUS─
                          Trial / Command / Sample / Note / Limit
 ```
 
-Firefox has no Web Serial / Web Bluetooth. The host bridge is the real link.
+Firefox has no Web Serial / Web Bluetooth. The host bridge is the real link for the sitting UI. `/monitor/` is the exception: Chromium Web Bluetooth, packed `g1` frames, no commands.
 
 ## Tree
 
@@ -20,7 +20,7 @@ gibbon-console/
     catalog.py                 six joints, yaw/pitch/roll
     bridge.py                  USB termios + bleak NUS + ingest queue
     models.py  views.py  urls.py
-    templates/console/         base, home, joint, calibrate, calibrate_joint, imitation, hat, raw, info, advanced, trials
+    templates/console/         base, home, joint, calibrate, calibrate_joint, imitation, monitor, hat, raw, info, advanced, trials
     static/console/            app.css, js/core.js home.js joint.js calibrate.js imitate.js raw.js …
     hat.py                     gold USB captures for /hat/
   docs/
@@ -30,7 +30,7 @@ Root `index.html` / `console.js` are stale PWA leftovers.
 
 ## Pages
 
-Nav: **home · calibration · imitation**. More: trials, hat, hand, info, flash, advanced.
+Nav: **home · calibration · imitation**. More: monitor, trials, hat, hand, info, flash, advanced.
 
 | URL | |
 | --- | --- |
@@ -39,6 +39,7 @@ Nav: **home · calibration · imitation**. More: trials, hat, hand, info, flash,
 | `/calibration/<slug>/` | one joint. Buttons save this pose. Shoulder: pair, then test. Rec/play under details |
 | `/j/<slug>/` | jog one joint: sensors + actuate (after walls) |
 | `/imitation/` | teach-replay: rec limp path, play hops, \|load\| STOP slider |
+| `/monitor/` | Chromium Web Bluetooth. Packed `g1` matrix. No commands. Unplug USB |
 | `/raw/` | hand: open / close / hold / free, effort trip, live graphs |
 | `/hat/` | gold serial + bus timing, servo chip limits, unwrap vs wheel |
 | `/info/` | axes, servo vs wheel, PID, 12+13, walls |
@@ -72,9 +73,11 @@ Slugs: `hand`, `wrist-roll`, `wrist-pitch`, `elbow`, `shoulder-pitch` (ids 12+13
 
 ## Protocol (chip)
 
-Same lines USB and BLE. Parser: `core.js` / `bridge.py` (`key=value`). Compact `get` omits `un` when `un=pos`; the UI keeps the last unwrap so wrap joints do not snap back.
+Same lines USB and BLE. Parser: `core.js` / `bridge.py` (`key=value`). Compact `get` omits `un` when `un=pos`; the UI keeps the last unwrap so wrap joints do not snap back. Packed `g1` hex (bring-up monitor) also parses in `core.js`; the `/monitor/` page parses it itself.
 
-Connect burst (quiet): `info` `get` `stream 180` `lim` `guard` `batt`. `who` / `bench` / `state` / `gpio` are on demand (`/hat/`, `/advanced/`, hand “servo dump”). Header `fw old` until the chip prints `info fw=… raise=1` — then `raise …` is allowed. `send()` drops `raise` until that line. Calibration polls `get` every 400 ms so pos/un/now° keep moving (compact stream skips still IDs). Footer is one line until you click **log**.
+Connect burst (quiet): `info` `get` `stream 180` `lim` `guard` `batt`. If `window.GIBBON_MONITOR`, burst is `info` + `mat 50` only. `who` / `bench` / `state` / `gpio` are on demand (`/hat/`, `/advanced/`, hand “servo dump”). Header `fw old` until the chip prints `info fw=… raise=1` — then `raise …` is allowed. `send()` drops `raise` until that line. Calibration polls `get` every 400 ms so pos/un/now° keep moving (compact stream skips still IDs). Footer is one line until you click **log**.
+
+`mat` TX and `g1 ` RX are not trial Commands. Sitting chip `mat` is an ASCII 7×8 number dump (`vec` + `m t` + rows). Bring-up `02-ble-monitor` is packed `g1` hex — that is what `/monitor/` paints.
 
 `send()` (`core.js`) queues UART writes. One at a time. `estop` drops pending then goes. Django is single-threaded; hold-all + STOP must not flood unknown text.
 

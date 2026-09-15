@@ -1,6 +1,6 @@
 # Next
 
-Do not start a new protocol. Parse the text the chip already prints (compact or fat `get`).
+Do not start a new protocol on the sitting chip. Parse the text it already prints (compact or fat `get`). Packed `g1` is **bring-up only** (`02-ble-monitor` + `/monitor/`).
 
 ## Do not invent
 
@@ -21,6 +21,7 @@ Chip plan: `../roarm-fw/docs/plans/firmware-minimal.md`.
 3. `/calibration/hand/`: close → click home (closed = 0°) → open → min/max → **test**. Then **next**.
 4. Wrap slack is this sitting (not Sep-5 4068). Wrist pitch stay short of ~3134.
 5. `/calibration/shoulder-pitch/`: **mirror −** if 12 and 13 count opposite. Click home / min / max as this pose. **test**. Rec/play is optional under details. If they fight: STOP.
+6. Chromium `/monitor/`: flash `02-ble-monitor`, unplug USB, pack on. Connect. No commands. Confirm 7/7 VIN ~11 V.
 
 ## Later
 
@@ -29,7 +30,7 @@ Chip plan: `../roarm-fw/docs/plans/firmware-minimal.md`.
 - MySQL when mariadb is installed (`docs/run.md`).
 - Delete stale root `index.html` / `console.js` / `console.css` / `sw.js` once nobody uses the old PWA.
 - Trial graphs: overlay Command marks on Sample traces.
-- Phone Chromium can Web Bluetooth later; Firefox stays on this WiFi bridge.
+- Phone Chromium can Web Bluetooth later; Firefox stays on this WiFi bridge. Laptop Chromium `/monitor/` is the listen-only path today (`02-ble-monitor`, USB unplugged).
 
 Arm-side order: `../roarm-fw/docs/plans/now.md`.
 

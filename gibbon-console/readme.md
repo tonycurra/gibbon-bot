@@ -9,3 +9,5 @@ cd /home/t/code/gibbon-bot/gibbon-console
 ```
 
 Firefox `http://127.0.0.1:8080` — **home · calibration · imitation**. Header: usb / ble / pack / **LOCK** / **STOP**. Phone: same WiFi. One process owns ACM0.
+
+Chromium `/monitor/` is BLE listen-only (packed `g1`). Unplug USB. Flash `../roarm-fw/bringup/02-ble-monitor` first.

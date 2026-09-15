@@ -2,7 +2,7 @@
 
 Pure black. Ice cyan `#7ec4c8` (not mint) and magenta STOP — dim neon, almost no glow. Compact by default. `static/console/app.css`.
 
-Stand **behind the base**. Words + axes: `../roarm-fw/docs/hardware/motors/names.md`. Sitting docs: `/info/`. HAT gold serial (pack off / on): `/hat/`. Hand (open/close + graphs): `/raw/`.
+Stand **behind the base**. Words + axes: `../roarm-fw/docs/hardware/motors/names.md`. Sitting docs: `/info/`. HAT gold serial (pack off / on): `/hat/`. Hand (open/close + graphs): `/raw/`. BLE listen-only matrix: `/monitor/` (Chromium).
 
 ## Joints (bus IDs stay 11–17)
 
@@ -42,3 +42,7 @@ Shoulder-pitch slider still emits `raise to`. **Do not use it until that firmwar
 ## Imitation
 
 `/imitation/`: STOP, rec, move by hand, stop rec, play. Path is in the browser. Replay hop-walks (11–15 ≤80, twist ≤900, 12+13 `raise to`). Slider = |load| trip (page + chip `guard load` / `dload`). 0 = page off. Wrap on yaw/roll aborts play. Arm drops on STOP.
+
+## Monitor
+
+`/monitor/` is a standalone Chromium page (no Django chrome, no LOCK/STOP). Web Bluetooth → Nordic UART notify. It sends **no commands**. Packed `g1` only. Flash `roarm-fw/bringup/02-ble-monitor`, **unplug USB**, pack on, HAT switch ESP32. Firefox cannot open this. Sitting firmware `mat` is a different ASCII dump — do not expect `/monitor/` to paint it.
