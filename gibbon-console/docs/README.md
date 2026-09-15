@@ -8,7 +8,7 @@ Firefox (no Web Bluetooth). The **laptop** is the BLE central and USB owner. Pho
 | --- | --- |
 | Run | `run.md` |
 | Pages / protocol | `architecture.md` |
-| USB vs BLE, reconnect, energy | `link.md` |
+| USB vs BLE, reconnect, energy | `link.md` (3S only on XT60; `../roarm-fw/docs/hardware/lipo.md`) |
 | Trials, Sample rows, MySQL | `data.md` |
 | Joints, axes, act | `ui.md` |
 | Calibrate, wrap Δ, degrees | `calibrate.md` |

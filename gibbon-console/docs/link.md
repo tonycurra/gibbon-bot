@@ -9,7 +9,7 @@ This chip: ESP32-WROOM-32 on Bus Servo Driver HAT. UART switch **ESP32**.
 | XT60 on, USB out | on from buck | live if chip stayed up |
 | nothing | dead | — |
 
-USB powers the chip; **XT60 powers servos**. USB does not charge the pack.
+USB powers the chip; **XT60 powers servos**. USB does not charge the pack. Limb pack is **3S** (HAT 9–25 V). **2S max 8.4 V — do not plug it in.** Meter / store / recycle: `../roarm-fw/docs/hardware/lipo.md`.
 
 ## USB
 
