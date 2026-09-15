@@ -13,7 +13,9 @@ Same as `.venv/bin/python serve.py` (thin wrapper around `runserver`).
 - Phone: `http://<lan-ip>:8080`
 - **STOP** / Escape = `estop`
 
-One process owns `/dev/ttyACM0`. Do not run `idf.py monitor` or `live.py` at the same time.
+One process owns `/dev/ttyACM0`. Do not run `idf.py monitor`, `roarm-fw/scripts/mon.sh`, or `live.py` at the same time.
+
+Chromium `/monitor/` (Web Bluetooth) does **not** use ACM0. Unplug USB. Flash `../roarm-fw/bringup/02-ble-monitor` first.
 
 User `t` is in `dialout`. Bluetooth: BlueZ powered on (`rfkill unblock bluetooth`). Not in group `bluetooth` is OK if DBus works.
 
