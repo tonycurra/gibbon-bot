@@ -7,7 +7,7 @@ Firefox (no Web Bluetooth). The **laptop** is the BLE central and USB owner. Pho
 | Doc | |
 | --- | --- |
 | Run | `run.md` |
-| Layout / protocol / pages | `architecture.md` |
+| Pages / protocol | `architecture.md` |
 | USB vs BLE, reconnect, energy | `link.md` |
 | Trials, Sample rows, MySQL | `data.md` |
 | Joints, axes, act | `ui.md` |
@@ -16,6 +16,6 @@ Firefox (no Web Bluetooth). The **laptop** is the BLE central and USB owner. Pho
 | 2026-09-14 sitting (this UI) | `2026-09-14.md` |
 | What to build next | `next.md` |
 
-HAT gold serial (pack off / on, `get`, `batt`, hand-move) is `/hat/`. Hand open/close + sensor graphs: `/raw/` (nav **hand**).
+Sitting flow: `/calibration/` (walls) → `/j/<slug>/` (jog) → `/imitation/` (teach). Hand graphs: `/raw/`. HAT gold serial: `/hat/`. Axes: `/info/`.
 
 Chip: `docs` in `roarm-fw` (sensors, names, walls, flash). Do not invent HAT IMU / INA219 / LED.

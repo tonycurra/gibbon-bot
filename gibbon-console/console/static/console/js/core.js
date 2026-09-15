@@ -168,14 +168,24 @@ function tqOn() {
   return MOTORS.filter(m => G.rows[m.id] && !G.rows[m.id].miss && G.rows[m.id].tq === "1").map(m => m.id);
 }
 
-/* 3S pack: 12.6 V = 4.2 V/cell full. Empty floor 10.0 V (9.9 is loaded LVC — keep a 0.1 V pad). Linear, not a BMS. */
-const LIPO3S_FULL = 12.6;
-const LIPO3S_EMPTY = 10.0;
+/* 3S rest table from servo VIN. Not a BMS. Writes still cut at 10.5 V. */
+const LIPO3S = [
+  [12.6, 100], [12.3, 90], [12.0, 80], [11.7, 70], [11.4, 60],
+  [11.25, 50], [11.1, 40], [10.95, 30], [10.8, 20], [10.5, 10], [9.0, 0],
+];
 
 function lipo3sPct(v) {
-  if (v >= LIPO3S_FULL) return 100;
-  if (v <= LIPO3S_EMPTY) return 0;
-  return Math.round((v - LIPO3S_EMPTY) / (LIPO3S_FULL - LIPO3S_EMPTY) * 100);
+  if (v >= LIPO3S[0][0]) return 100;
+  const last = LIPO3S[LIPO3S.length - 1];
+  if (v <= last[0]) return 0;
+  for (let i = 0; i < LIPO3S.length - 1; i++) {
+    const v0 = LIPO3S[i][0], p0 = LIPO3S[i][1];
+    const v1 = LIPO3S[i + 1][0], p1 = LIPO3S[i + 1][1];
+    if (v <= v0 && v >= v1) {
+      return Math.round(p0 + (v - v0) / (v1 - v0) * (p1 - p0));
+    }
+  }
+  return 0;
 }
 
 function packVolts() {
@@ -201,18 +211,16 @@ function paintStatus() {
       pack.title = "servo VIN miss — XT60 pack off. USB does not power the motors";
     } else {
       const v = packVolts();
-      const pct = (G.batt && !G.batt.miss && G.batt.est != null)
-        ? G.batt.est
-        : (v != null ? lipo3sPct(v) : null);
+      const pct = v != null ? lipo3sPct(v) : null;
       const lvl = pct == null ? "miss"
         : (v != null && v < 10.5) ? "cutoff"
-        : pct <= 20 ? "low"
-        : pct <= 30 ? "recharge"
+        : pct <= 10 ? "low"
+        : pct <= 20 ? "recharge"
         : "ok";
       pack.className = lvl === "ok" ? "ok" : (lvl === "recharge" ? "warn" : "bad");
       pack.textContent = pct == null ? "pack —" : ("pack " + pct + "%");
       pack.title = v != null
-        ? (v.toFixed(1) + " V  ·  3S linear from servo VIN, not a BMS. 12.6 V = 100%. 10.0 V = 0%. Chip refuses writes below 10.5 V.")
+        ? (v.toFixed(1) + " V  ·  3S rest table from servo VIN, not a BMS. 12.6V=100% 10.8V=20% 10.5V=10% 9.0V=0%. Writes cut at 10.5 V.")
         : "";
     }
   }
@@ -624,4 +632,5 @@ window.savePairSign = savePairSign;
 window.raiseReady = raiseReady;
 window.cmdRaiseTo = cmdRaiseTo;
 window.sendRaiseTq = sendRaiseTq;
+window.lockPose = lockPose;
 window.$ = $;

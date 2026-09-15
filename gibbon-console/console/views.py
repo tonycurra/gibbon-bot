@@ -17,6 +17,7 @@ from .models import Calibration, Limit, Note, Sample, Trial
 PAGES = [
     ("home", "home"),
     ("calibration", "calibration"),
+    ("imitation", "imitation"),
 ]
 MORE = [
     ("trials", "trials"),
@@ -140,11 +141,15 @@ def advanced(request):
 
 
 def graphs(request):
-    return render(request, "console/graphs.html", ctx("home", "graphs"))
+    return redirect("/raw/")
 
 
 def act(request):
-    return render(request, "console/act.html", ctx("home", "act"))
+    return redirect("/")
+
+
+def imitation(request):
+    return render(request, "console/imitation.html", ctx("imitation", "imitation"))
 
 
 def trials(request):

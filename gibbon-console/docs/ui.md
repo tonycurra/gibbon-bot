@@ -35,6 +35,10 @@ Shoulder-pitch slider still emits `raise to`. **Do not use it until that firmwar
 
 ## Calibrate
 
-`/calibration/` table (now° / pos / un / click-to-set / test). `/calibration/<slug>/` one joint: go, test, next. Shoulder pitch: rec/play via `raise to`. Hand: closed = 0°. Header **LOCK** / **STOP**. Procedure: `calibrate.md`. Sitting recap: `2026-09-14.md`. Flash plan: `flash.md`.
+`/calibration/` table (now° / pos / un / click-to-set / test). `/calibration/<slug>/` one joint: this-pose buttons, go, test, next. Shoulder: pair, then test; rec/play under details. Hand: closed = 0°. Header **LOCK** / **STOP**. Procedure: `calibrate.md`. Sitting recap: `2026-09-14.md`. Flash plan: `flash.md`.
 
-`Limit` is the host notebook. Chip still owns clamps for hand/twist (gold walls). Do not command a joint with no wall. Do not send `raise …` until flash.
+`Limit` is the host notebook. Chip still owns clamps for hand/twist (gold walls). Do not command a joint with no wall. Do not send `raise …` until flash. Pack %: 3S rest table in `core.js` (12.6 V = 100%, 9.0 V = 0%). Chip writes cut at 10.5 V.
+
+## Imitation
+
+`/imitation/`: STOP, rec, move by hand, stop rec, play. Path is in the browser. Replay hop-walks (11–15 ≤80, twist ≤900, 12+13 `raise to`). Slider = |load| trip (page + chip `guard load` / `dload`). 0 = page off. Wrap on yaw/roll aborts play. Arm drops on STOP.

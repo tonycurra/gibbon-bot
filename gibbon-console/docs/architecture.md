@@ -20,8 +20,8 @@ gibbon-console/
     catalog.py                 six joints, yaw/pitch/roll
     bridge.py                  USB termios + bleak NUS + ingest queue
     models.py  views.py  urls.py
-    templates/console/         base, home, joint, calibrate, calibrate_joint, hat, raw, info, advanced, trials
-    static/console/            app.css, js/core.js home.js joint.js calibrate.js raw.js …
+    templates/console/         base, home, joint, calibrate, calibrate_joint, imitation, hat, raw, info, advanced, trials
+    static/console/            app.css, js/core.js home.js joint.js calibrate.js imitate.js raw.js …
     hat.py                     gold USB captures for /hat/
   docs/
 ```
@@ -30,24 +30,29 @@ Root `index.html` / `console.js` are stale PWA leftovers.
 
 ## Pages
 
+Nav: **home · calibration · imitation**. More: trials, hat, hand, info, flash, advanced.
+
 | URL | |
 | --- | --- |
-| `/` | menu — calibration |
-| `/j/<slug>/` | one joint: sensors + actuate |
+| `/` | calibration + imitation. Jog table after walls exist |
 | `/calibration/` | six-joint table: now° / pos / un / home / min / max / test |
-| `/calibration/<slug>/` | click-to-set home/min/max, go, test, next. Shoulder rec/play |
-| `/calibrate/` `/motors/` | redirect → `/calibration/` |
+| `/calibration/<slug>/` | one joint. Buttons save this pose. Shoulder: pair, then test. Rec/play under details |
+| `/j/<slug>/` | jog one joint: sensors + actuate (after walls) |
+| `/imitation/` | teach-replay: rec limp path, play hops, \|load\| STOP slider |
+| `/raw/` | hand: open / close / hold / free, effort trip, live graphs |
+| `/hat/` | gold serial + bus timing, servo chip limits, unwrap vs wheel |
+| `/info/` | axes, servo vs wheel, PID, 12+13, walls |
 | `/flash/` | USB flash plan (Web Serial next) |
-| `/hat/` | gold serial + bus timing, servo chip limits, unwrap vs wheel, memory table |
-| `/raw/` | hand: open / close / hold / free, effort trip, live sensor graphs |
-| `/info/` | docs: axes, servo vs wheel, PID layers, 12+13, walls |
 | `/advanced/` | chip / bus / EEPROM `who` + full serial |
 | `/trials/` | sittings |
 | `/trials/<id>/` | recorded samples + commands |
+| `/calibrate/` `/motors/` | → `/calibration/` |
+| `/graphs/` | → `/raw/` |
+| `/act/` | → `/` |
 
-Header: **usb** / **ble**, **pack %** or **pack off**, **LOCK**, **STOP**. USB without pack is the flash path. Trial recording is not in the header.
+Header: **usb** / **ble**, **pack %** or **pack off**, **LOCK**, **STOP**. Pack % is the 3S rest table from servo VIN (12.6 V = 100%, 10.8 V = 20%, 10.5 V = 10%, 9.0 V = 0%). USB without pack is the flash path. Trial recording is not in the header.
 
-Slugs: `yaw`, `shoulder-pitch` (ids 12+13), `elbow`, `wrist-pitch`, `wrist-roll`, `hand`.
+Slugs: `hand`, `wrist-roll`, `wrist-pitch`, `elbow`, `shoulder-pitch` (ids 12+13), `yaw`. Calibrate in that order.
 
 ## API
 

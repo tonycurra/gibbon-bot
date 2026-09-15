@@ -16,6 +16,7 @@ urlpatterns = [
     path("advanced/", views.advanced, name="advanced"),
     path("graphs/", views.graphs, name="graphs"),
     path("act/", views.act, name="act"),
+    path("imitation/", views.imitation, name="imitation"),
     path("trials/", views.trials, name="trials"),
     path("trials/<int:pk>/", views.trial_detail, name="trial"),
     path("api/status", views.api_status),

@@ -3,39 +3,62 @@
 {% block main %}
 <p class="nowline">
   <b id="degNow">—</b>
+  {% if not joint.paired %}
   <span>pos <i id="posLive">—</i></span>
   <span>un <i id="unLive">—</i></span>
   <span>load <i id="loadLive">—</i></span>
   <span>mA <i id="curLive">—</i></span>
-  {% if joint.paired %}<span>12 <i id="load-12">—</i> / 13 <i id="load-13">—</i></span>{% endif %}
+  {% else %}
+  <span id="pairNow">pair <i id="pairState">unset</i></span>
+  <b id="fightEl">FIGHT</b>
+  {% endif %}
 </p>
 {% if joint.paired %}
-<p class="row act" id="pairBar">
-  <button type="button" id="btnPairMirror">mirror −</button>
-  <button type="button" id="btnPairSame">same +</button>
-  <b id="pairState">unset</b>
-  <button type="button" id="btnRec">rec</button>
-  <button type="button" id="btnPlay" disabled>play</button>
-  <b id="recN" class="mut">0 pts</b>
-</p>
+<div class="calLive" id="pairLive">
+  <article class="calMotor wizMeter" id="meter-12">
+    <h2>12 <i id="pos-12">—</i></h2>
+    <div class="calNums">
+      <span><b>now</b><i id="deg-12">—</i></span>
+      <span><b>load</b><i id="load-12">—</i></span>
+    </div>
+  </article>
+  <article class="calMotor wizMeter" id="meter-13">
+    <h2>13 <i id="pos-13">—</i></h2>
+    <div class="calNums">
+      <span><b>now</b><i id="deg-13">—</i></span>
+      <span><b>load</b><i id="load-13">—</i></span>
+    </div>
+  </article>
+</div>
 {% endif %}
-<p class="hint">{% if joint.slug == "hand" %}Click home when the jaws are closed = 0°. Open is +°.{% elif joint.paired %}STOP, rec, move the upper arm by hand (12 and 13). Stop rec, then play — both motors one <code>raise to</code> packet. Set pair first.{% else %}Click home = this pose is 0°. Click min/max = Enter to use now, or type.{% endif %} Test drives min → max → min. pos is raw; un keeps going through a wrap (4000→12 raw, un 4108).{% if joint.paired %} If they fight: STOP.{% endif %}</p>
+<p id="calMsg" class="hint next" role="status" aria-live="polite"></p>
 <div class="lims" id="calSet">
-  <label>home <span class="set home">{% if joint.slug == "hand" %}closed{% else %}set{% endif %}</span></label>
-  <label>{% if joint.slug == "hand" %}closed{% else %}min{% endif %} <span class="set min">set</span></label>
-  <label>{% if joint.slug == "hand" %}open{% else %}max{% endif %} <span class="set max">set</span></label>
-  <label>go
-    <span class="goRow">
-      <input id="inGo" type="number" step="0.5">
-      <button type="button" id="btnGo">go</button>
-    </span>
-  </label>
+  {% if joint.paired %}
+  <button type="button" id="btnPairMirror" aria-pressed="false">mirror −</button>
+  <button type="button" id="btnPairSame" aria-pressed="false">same +</button>
+  {% endif %}
+  <button type="button" class="set home" aria-label="{% if joint.slug == "hand" %}closed = 0°{% else %}set this pose as 0°{% endif %}">{% if joint.slug == "hand" %}closed{% else %}home{% endif %}</button>
+  <button type="button" class="set min" aria-label="set this pose as min">{% if joint.slug == "hand" %}closed{% else %}min{% endif %}</button>
+  <button type="button" class="set max" aria-label="set this pose as max">{% if joint.slug == "hand" %}open{% else %}max{% endif %}</button>
   <button type="button" class="go test" id="btnTest">test</button>
+  <span class="goRow">
+    <input id="inGo" type="number" step="0.5" aria-label="degrees">
+    <button type="button" id="btnGo">go</button>
+  </span>
   {% if next_joint %}
-  <a class="nextJ" href="/calibration/{{ next_joint.slug }}/">next {{ next_joint.name }}</a>
+  <a class="nextJ" href="/calibration/{{ next_joint.slug }}/">{{ next_joint.name }}</a>
   {% endif %}
 </div>
-<p id="calMsg" class="hint next"></p>
+{% if joint.paired %}
+<details class="more">
+  <summary>rec / play</summary>
+  <p class="row" id="pathBar">
+    <button type="button" id="btnRec">rec</button>
+    <button type="button" id="btnPlay" disabled>play</button>
+    <b id="recN" class="mut">0 pts</b>
+  </p>
+</details>
+{% endif %}
 {% endblock %}
 {% block js %}
 <script>window.JOINT_SLUG = "{{ joint.slug }}";</script>

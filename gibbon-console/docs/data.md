@@ -21,8 +21,8 @@ Index: `(trial, servo, t_ms)`. Cap read API 8000 samples.
 
 ## Graphs
 
-Live `/graphs/`: ring buffer in the browser from SSE `get` lines.  
-Recorded `/trials/<id>/`: `GET /api/trials/<id>/samples?servo=`.
+Live traces: `/raw/` (hand) and `/j/<slug>/` (that joint), ring buffer from SSE `get` lines.  
+Recorded `/trials/<id>/`: `GET /api/trials/<id>/samples?servo=`. `/graphs/` redirects to `/raw/`.
 
 Traces: pos@56, un, speed@58, load@60, cur@69, V@62, temp@63. Load is PWM effort, 0 if `tq=0`.
 

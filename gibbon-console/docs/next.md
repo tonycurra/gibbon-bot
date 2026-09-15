@@ -4,13 +4,13 @@ Do not start a new protocol. Parse the text the chip already prints (compact or 
 
 ## Do not invent
 
-HAT IMU, INA219, OLED, user LED, unique motor serials, BMS. `batt` is servo VIN + **linear 3S %** (10.0 V = 0, 12.6 V = 100). USB is not a charger. Navbar uses that math now; chip `est=` matches after the next flash.
+HAT IMU, INA219, OLED, user LED, unique motor serials, BMS. `batt` is servo VIN + **3S rest table** (12.6 V = 100%, 10.8 V = 20%, 10.5 V = 10%, 9.0 V = 0%). USB is not a charger. Navbar uses that math from volts (ignores old chip `est=`). Chip `est=` matches after the next flash.
 
 ## Firmware flash
 
 **2026-09-12 on the metal:** compact `stream`, move `ESTOP`, `raise to` / `hold` / `free`, solo 12/13 abort, `id N here`, `info fw=20260912 raise=1`. Console header should be cyan `fw 20260912` after hard-refresh.
 
-Still owed: BLE energy advertise + ghost terminate in `ble_nus.c`. Until then, `bluetoothctl disconnect` recovers a stuck radio. Optional: flash so `batt est=` uses the linear table already in `main.c`.
+Still owed: BLE energy advertise + ghost terminate in `ble_nus.c`. Until then, `bluetoothctl disconnect` recovers a stuck radio. Optional: flash so `batt est=` uses the 3S rest table already in `main.c`.
 
 Chip plan: `../roarm-fw/docs/plans/firmware-minimal.md`.
 
@@ -20,7 +20,7 @@ Chip plan: `../roarm-fw/docs/plans/firmware-minimal.md`.
 2. `/calibration/`: watch **pos** and **un**. Wrap (yaw / wrist roll): turn through 0/4095 — pos jumps, un and now° keep going after home is set.
 3. `/calibration/hand/`: close → click home (closed = 0°) → open → min/max → **test**. Then **next**.
 4. Wrap slack is this sitting (not Sep-5 4068). Wrist pitch stay short of ~3134.
-5. `/calibration/shoulder-pitch/`: set pair. STOP, **rec**, move by hand, stop rec, **play**. If they fight: STOP.
+5. `/calibration/shoulder-pitch/`: **mirror −** if 12 and 13 count opposite. Click home / min / max as this pose. **test**. Rec/play is optional under details. If they fight: STOP.
 
 ## Later
 

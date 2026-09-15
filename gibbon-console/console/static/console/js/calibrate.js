@@ -11,6 +11,7 @@ let lastSpd = null;
 let rec = null;
 let playOn = false;
 const PATH_KEY = "gibbon.shoulder.path";
+const RAISE_HOP = 80;
 
 function isHand(id) { return id === 17; }
 function isWrap(id) { return id === 11 || id === 16; }
@@ -46,6 +47,14 @@ function say(s) {
   const el = $("calMsg");
   if (el) el.textContent = s || "";
   if (s) log(s);
+}
+function hopToward(now, goal, hop) {
+  if (goal == null) return now;
+  if (now == null || !hop) return goal;
+  const d = goal - now;
+  if (d > hop) return now + hop;
+  if (d < -hop) return now - hop;
+  return goal;
 }
 function cmdHere(id) { return id === 16 ? "twist here" : ("id " + id + " here"); }
 function cmdTo(id, goal) {
@@ -95,8 +104,16 @@ function fillWalls(j) {
   const id = primary(j);
   const L = limits[id] || {};
   const put = (cls, on, text) => {
+    const val = $(cls + "Val");
+    if (val) val.textContent = on ? (cls === "home" ? "0°" : text + "°") : "—";
     const el = cell(j, cls);
     if (!el || el.querySelector("input")) return;
+    if (el.tagName === "BUTTON") {
+      el.classList.toggle("on", on);
+      if (cls === "home") el.textContent = on ? "0°" : (j.slug === "hand" ? "closed" : "home");
+      else el.textContent = on ? text + "°" : (j.slug === "hand" ? (cls === "min" ? "closed" : "open") : cls);
+      return;
+    }
     el.textContent = on ? text : (j.slug === "hand" && cls === "home" ? "closed" : "set");
     el.className = "set " + cls + (on ? " on" : "");
   };
@@ -105,13 +122,22 @@ function fillWalls(j) {
   put("max", L.amax != null, fmtDeg(L.amax));
   const btn = cell(j, "test");
   if (btn && (!test || test.j.slug !== j.slug)) {
-    btn.disabled = !wallsOk(j);
+    const why = whyTestBlocked(j);
+    btn.title = why || "min to max to min";
+    btn.disabled = false;
     if (btn.textContent === "ok" || btn.textContent === "stop" || btn.textContent === "min" || btn.textContent === "max") {
       /* keep */
     } else {
       btn.textContent = "test";
     }
   }
+}
+
+function whyTestBlocked(j) {
+  if (j.paired && pairSign() == null) return "pair first";
+  if (j.paired && !raiseReady()) return "flash first";
+  if (!wallsOk(j)) return "need min and max";
+  return "";
 }
 
 async function saveHome(j) {
@@ -131,11 +157,12 @@ async function saveHome(j) {
   limits = await fetchLimits();
   syncPairFromLimits(limits);
   fillWalls(j);
-  say(isHand(primary(j)) ? "closed = 0°" : "0°");
+  say(isHand(primary(j)) ? "0° closed" : "0°");
 }
 
 async function saveWall(j, key, deg) {
-  if (originOf(primary(j)) == null) { say("click home first"); return; }
+  if (originOf(primary(j)) == null) { say("set home first"); return; }
+  if (j.paired && pairSign() == null) { say("pair first"); return; }
   if (deg === "" || deg == null || !isFinite(+deg)) return;
   const d = cntOf(+deg);
   for (const id of j.ids) {
@@ -151,15 +178,30 @@ async function saveWall(j, key, deg) {
   say(j.name + " " + key + " " + (+deg) + "°");
 }
 
-function startEdit(j, field) {
+function startEdit(j, field, ev) {
   if (field === "home") {
     saveHome(j).catch(e => say(String(e)));
     return;
   }
-  if (originOf(primary(j)) == null) { say("click home first"); return; }
-  const td = cell(j, field);
-  if (!td || td.querySelector("input")) return;
+  if (j.paired && pairSign() == null) {
+    say("pair first");
+    return;
+  }
+  if (originOf(primary(j)) == null) {
+    say("home first");
+    return;
+  }
   const d = liveDelta(primary(j));
+  const typeIn = ev && (ev.shiftKey || ev.altKey);
+  if (d != null && !typeIn) {
+    saveWall(j, field, degOf(d).toFixed(1)).catch(e => say(String(e)));
+    return;
+  }
+  const td = cell(j, field);
+  if (!td || td.querySelector("input") || td.tagName === "BUTTON") {
+    if (d == null) say("no live pos — pack on, then click again");
+    return;
+  }
   const L = limits[primary(j)] || {};
   const saved = field === "min" ? L.amin : L.amax;
   const input = document.createElement("input");
@@ -179,10 +221,10 @@ function startEdit(j, field) {
   td.appendChild(input);
   input.focus();
   input.select();
-  input.onclick = ev => ev.stopPropagation();
-  input.onkeydown = ev => {
-    if (ev.key === "Enter") { ev.preventDefault(); done(true); }
-    if (ev.key === "Escape") { ev.stopPropagation(); done(false); }
+  input.onclick = e => e.stopPropagation();
+  input.onkeydown = e => {
+    if (e.key === "Enter") { e.preventDefault(); done(true); }
+    if (e.key === "Escape") { e.stopPropagation(); done(false); }
   };
   input.onblur = () => done(true);
 }
@@ -228,20 +270,45 @@ function bindJoint(j) {
   const min = r.querySelector(".min");
   const max = r.querySelector(".max");
   const btn = r.querySelector(".test");
-  if (home) home.onclick = () => startEdit(j, "home");
-  if (min) min.onclick = () => startEdit(j, "min");
-  if (max) max.onclick = () => startEdit(j, "max");
+  if (home) home.onclick = ev => startEdit(j, "home", ev);
+  if (min) min.onclick = ev => startEdit(j, "min", ev);
+  if (max) max.onclick = ev => startEdit(j, "max", ev);
   if (btn) btn.onclick = () => runTest(j).catch(e => say(String(e)));
 }
 
 async function goDeg(deg) {
   const j = JOINT;
   if (!j) return;
-  if (originOf(primary(j)) == null) { say("click home first"); return; }
+  if (originOf(primary(j)) == null) { say("home first"); return; }
+  if (j.paired && pairSign() == null) { say("pair first"); return; }
   const raw = rawFromDelta(primary(j), cntOf(deg));
   if (raw == null) { say("no origin"); return; }
   spd(120);
-  await sendGoal(j, raw);
+  await writeChipWalls(j);
+  const t0 = Date.now();
+  while (Date.now() - t0 < TEST_MS) {
+    const now = livePos(primary(j));
+    if (now != null && Math.abs(now - raw) <= NEAR) break;
+    await sendGoal(j, raw);
+    await new Promise(r => setTimeout(r, 200));
+  }
+}
+
+function wallRaw(id, key) {
+  let d = (limits[id] || {})[key];
+  if (d == null && id === 13) d = wallDelta(13, (limits[12] || {})[key]);
+  return rawFromDelta(id, d);
+}
+
+async function writeChipWalls(j) {
+  if (isWrap(primary(j))) return;
+  for (const id of j.ids) {
+    const lo = wallRaw(id, "amin");
+    const hi = wallRaw(id, "amax");
+    if (lo == null || hi == null) continue;
+    await send("lim " + id + " min " + Math.min(lo, hi));
+    await send("lim " + id + " max " + Math.max(lo, hi));
+  }
 }
 
 async function sendGoal(j, goal) {
@@ -251,12 +318,15 @@ async function sendGoal(j, goal) {
   let g = goal;
   if (hop && now != null && Math.abs(goal - now) > hop) g = now + (goal > now ? hop : -hop);
   if (id === 12) {
-    if (pairSign() == null) { say("set pair first"); return; }
-    if (!raiseReady()) { say("fw old — flash"); return; }
+    if (pairSign() == null) { say("pair first"); return; }
+    if (!raiseReady()) { say("flash first"); return; }
     const o12 = originOf(12);
     const d = o12 == null ? 0 : (g - o12);
-    const b = originOf(13) == null ? g : (originOf(13) + pairSign() * d);
-    await send(cmdRaiseTo(g, b));
+    const t13 = originOf(13) == null ? g : (originOf(13) + pairSign() * d);
+    const g12 = hopToward(livePos(12), g, RAISE_HOP);
+    const g13 = hopToward(livePos(13), t13, RAISE_HOP);
+    if (g12 == null || g13 == null) { say("no live pos"); return; }
+    await send(cmdRaiseTo(g12, g13));
     return;
   }
   await send(cmdTo(id, g));
@@ -267,22 +337,18 @@ async function runTest(j) {
     test = null;
     const btn = cell(j, "test");
     if (btn) btn.textContent = "test";
-    say("test stop");
+    say("stop");
     return;
   }
-  if (test) { say("stop the other test first, or STOP"); return; }
-  if (!wallsOk(j)) { say("set min and max first"); return; }
-  if (j.paired && pairSign() == null) { say("set pair first"); return; }
-  if (j.paired && !raiseReady()) { say("fw old — flash"); return; }
+  if (test) { say("stop the other test"); return; }
+  const why = whyTestBlocked(j);
+  if (why) { say(why); return; }
   const id = primary(j);
   const L = limits[id];
   const lo = rawFromDelta(id, L.amin);
   const hi = rawFromDelta(id, L.amax);
-  if (lo == null || hi == null) { say("need home"); return; }
-  if (!isWrap(id)) {
-    await send("lim " + id + " min " + Math.min(lo, hi));
-    await send("lim " + id + " max " + Math.max(lo, hi));
-  }
+  if (lo == null || hi == null) { say("home first"); return; }
+  await writeChipWalls(j);
   test = {
     j,
     phases: [{ name: "min", goal: lo }, { name: "max", goal: hi }, { name: "min", goal: lo }],
@@ -291,7 +357,7 @@ async function runTest(j) {
   const btn = cell(j, "test");
   if (btn) { btn.disabled = false; btn.textContent = "stop"; }
   spd(120);
-  say(j.name + " test " + fmtDeg(L.amin) + " → " + fmtDeg(L.amax));
+  say("test " + fmtDeg(L.amin) + " → " + fmtDeg(L.amax));
   await sendGoal(j, lo);
 }
 
@@ -355,6 +421,36 @@ function paintIndex() {
   });
 }
 
+function paintMotor(id) {
+  const r = G.rows[id];
+  const miss = !r || r.miss;
+  const d = liveDelta(id);
+  const put = (elId, text, cls) => {
+    const el = $(elId);
+    if (!el) return;
+    el.textContent = text;
+    if (cls != null) el.className = cls;
+  };
+  put("deg-" + id, d != null ? fmtDeg(d) + "°" : (miss ? "—" : String(r.pos)));
+  put("pos-" + id, miss ? "—" : String(r.pos));
+  put("load-" + id, miss ? "—" : String(r.load), !miss && Math.abs(r.load) > 400 ? "hot" : "");
+  put("cur-" + id, miss ? "—" : String(r.cur || 0), !miss && Math.abs(r.cur || 0) >= 5 ? "hot" : "");
+  const meter = $("meter-" + id);
+  if (meter) meter.classList.toggle("hotLoad", !miss && Math.abs(r.load) > 400);
+}
+
+function paintFight() {
+  const el = $("fightEl");
+  if (!el) return;
+  const a = G.rows[12], b = G.rows[13];
+  const fight = a && b && !a.miss && !b.miss
+    && Math.abs(a.load) > 80 && Math.abs(b.load) > 80
+    && (a.load * b.load < 0);
+  el.classList.toggle("on", !!fight);
+  const live = $("pairLive");
+  if (live) live.classList.toggle("fight", !!fight);
+}
+
 function paintJoint() {
   if (!JOINT) return;
   const id = primary(JOINT);
@@ -380,11 +476,8 @@ function paintJoint() {
     cur.textContent = miss ? "—" : (r.cur || 0);
     cur.className = !miss && Math.abs(r.cur || 0) >= 5 ? "hot" : "";
   }
-  JOINT.ids.forEach(i => {
-    const el = $("load-" + i);
-    const rr = G.rows[i];
-    if (el) el.textContent = !rr || rr.miss ? "—" : rr.load;
-  });
+  JOINT.ids.forEach(paintMotor);
+  paintFight();
   fillWalls(JOINT);
   recTick();
 }
@@ -401,8 +494,14 @@ function paintRec() {
   const btn = $("btnRec");
   const samples = rec ? rec.samples : (loadPath() || []);
   if (n) n.textContent = samples.length + " pts";
-  if (play) play.disabled = playOn || samples.length < 2;
-  if (btn) btn.textContent = rec ? "stop" : "rec";
+  if (play) {
+    play.textContent = playOn ? "stop" : "play";
+    play.disabled = playOn ? false : (samples.length < 2 || pairSign() == null);
+  }
+  if (btn) {
+    btn.textContent = rec ? "stop" : "rec";
+    btn.classList.toggle("on", !!rec);
+  }
 }
 function recTick() {
   if (!rec) return;
@@ -432,8 +531,9 @@ function toggleRec() {
     return;
   }
   rec = { t0: Date.now(), samples: [] };
+  sendRaiseTq(false);
   recTick();
-  say("rec shoulder — STOP, move by hand, click stop");
+  say("rec — both free, move by hand, click stop. if they fight: STOP");
   paintRec();
 }
 async function playPath() {
@@ -464,14 +564,36 @@ async function playPath() {
   paintRec();
 }
 
+function pairGuess() {
+  const a = liveDelta(12), b = liveDelta(13);
+  if (a == null || b == null) return null;
+  if (Math.abs(a) < 20 || Math.abs(b) < 20) return null;
+  const r = b / a;
+  if (r <= -0.5) return -1;
+  if (r >= 0.5) return 1;
+  return null;
+}
+
 function paintPair() {
   const s = pairSign();
+  const g = pairGuess();
   const st = $("pairState");
-  if (st) st.textContent = s == null ? "unset" : (s < 0 ? "mirror −" : "same +");
+  if (st) {
+    st.textContent = s == null ? "unset" : (s < 0 ? "mirror −" : "same +");
+    st.className = s == null ? "need" : "";
+  }
   const m = $("btnPairMirror");
   const a = $("btnPairSame");
-  if (m) m.classList.toggle("on", s === -1);
-  if (a) a.classList.toggle("on", s === 1);
+  if (m) {
+    m.classList.toggle("on", s === -1);
+    m.classList.toggle("guess", s == null && g === -1);
+    m.setAttribute("aria-pressed", s === -1 ? "true" : "false");
+  }
+  if (a) {
+    a.classList.toggle("on", s === 1);
+    a.classList.toggle("guess", s == null && g === 1);
+    a.setAttribute("aria-pressed", s === 1 ? "true" : "false");
+  }
 }
 
 function paint() {
@@ -492,8 +614,8 @@ if ($("btnGo")) $("btnGo").onclick = () => {
   if (v === "" || v == null) { say("type a degree"); return; }
   goDeg(+v).catch(e => say(String(e)));
 };
-if ($("btnPairMirror")) $("btnPairMirror").onclick = () => savePairSign(-1).then(paintPair);
-if ($("btnPairSame")) $("btnPairSame").onclick = () => savePairSign(1).then(paintPair);
+if ($("btnPairMirror")) $("btnPairMirror").onclick = () => savePairSign(-1).then(() => { paintPair(); fillWalls(JOINT); });
+if ($("btnPairSame")) $("btnPairSame").onclick = () => savePairSign(1).then(() => { paintPair(); fillWalls(JOINT); });
 if ($("btnRec")) $("btnRec").onclick = () => toggleRec();
 if ($("btnPlay")) $("btnPlay").onclick = () => playPath().catch(e => say(String(e)));
 
