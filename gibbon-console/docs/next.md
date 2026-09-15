@@ -16,12 +16,14 @@ Chip plan: `../roarm-fw/docs/plans/firmware-minimal.md`.
 
 ## Try next (this sitting)
 
-1. Hard-refresh. Header: usb, pack %, **LOCK**, **STOP**.
-2. `/calibration/`: watch **pos** and **un**. Wrap (yaw / wrist roll): turn through 0/4095 — pos jumps, un and now° keep going after home is set.
-3. `/calibration/hand/`: close → click home (closed = 0°) → open → min/max → **test**. Then **next**.
-4. Wrap slack is this sitting (not Sep-5 4068). Wrist pitch stay short of ~3134.
-5. `/calibration/shoulder-pitch/`: **mirror −** if 12 and 13 count opposite. Click home / min / max as this pose. **test**. Rec/play is optional under details. If they fight: STOP.
-6. Chromium `/monitor/`: flash `02-ble-monitor`, unplug USB, pack on. Connect. No commands. Confirm 7/7 VIN ~11 V.
+Last hours: **do not write firmware.** Four limbs are bolted; two 3S short. Teleop **one** powered limb from this console (phone on WiFi). LOCK / FREE / nudge / STOP. Trip ESTOP once on `/raw/`. Support the body. Arm-side: `../roarm-fw/docs/plans/now.md`.
+
+When that is boring:
+
+1. Hard-refresh. Header: usb, pack %, **LOCK**, **STOP**. Metal **fw 20260912** until you flash sitting `main/` (**20260915** in tree).
+2. `/j/<slug>/` or home jog: free → pose → hold → one hop. Wrist short of ~3134. Never 12 or 13 alone.
+3. `/calibration/` only if you have wall time: wrap slack is **this** sitting (not Sep-5 4068). Shoulder **mirror −** before any `raise`.
+4. Chromium `/monitor/`: flash `02-ble-monitor`, unplug USB, pack on. Connect. No commands. Confirm 7/7 VIN ~11 V. Reflash sitting firmware before any motion.
 
 ## Later
 
