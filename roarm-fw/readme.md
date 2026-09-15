@@ -12,6 +12,7 @@ Firmware: native **ESP-IDF**. No move on boot. READ `get` / `ping` / `batt` / `s
 | Install / flash / serial | `docs/framework/espidf.md` |
 | Naming | `docs/framework/naming.md` |
 | Pins, IDs, telemetry | `docs/hardware.md` |
+| Packs (3S only, storage, BEMF) | `docs/hardware/lipo.md` |
 | Motor raw data (`get`) | `docs/hardware/motors/sensors.md` |
 | ESP32 ↔ ST bus (signal, packets) | `docs/hardware/motors/esp32-bus.md` |
 | What to say (human names) | `docs/hardware/motors/names.md` |

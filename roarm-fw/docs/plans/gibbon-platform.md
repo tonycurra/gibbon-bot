@@ -112,7 +112,7 @@ phone / laptop  --WiFi-->  gibbon-console (one process)
 
 7. `digital-twin/`: **one arm** MuJoCo from `roarm_description` URDF (not Jade’s ape from `archive/`). Validate *counts → deg* against a sitting CSV. Collision **explore in sim** after walls exist (`digital-twin/readme.md`). Safe box goes back to chip NVS — planner cannot override.
 8. RL for energy/collision: **sim only**, after the twin matches. Do not PPO on metal. Archive `gibbon-rl-mujoco` / `olivabot-mujoco-cpu` are parked experiments, not this firmware.
-9. Four HATs on the torso, four packs, console overview. Navigate **top-down** (gibbon → limb → joint). Build **bottom-up** (motor → joint → limb → body).
+9. Four HATs on the torso, **four 3S packs**, console overview. Navigate **top-down** (gibbon → limb → joint). Build **bottom-up** (motor → joint → limb → body). One pack = one limb. **2S does not reach the HAT’s 9 V minimum.** 2026-09-15: two packs short — test two limbs supported, order 3S XT60, do not Y-split. `docs/hardware/lipo.md`.
 
 Do not wait for RL to walk. Do not wait for a web MuJoCo. A connected gibbon is four talking chips + ESTOP + walls.
 

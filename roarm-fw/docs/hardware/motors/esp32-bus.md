@@ -28,6 +28,8 @@ USB does **not** power the motors. A servo with no VIN cannot answer ping, canno
 
 Pack click with USB already up does **not** reset the ESP32 (2026-09-04). Unplug pack: chip stays, bus goes silent again.
 
+HAT XT60 has **no reverse-current block**. Pack unplugged + `tq=0` + backdrive can show **2–4 V** at the connector (open-circuit BEMF). That does **not** charge a healthy 11.1 V 3S. Pack choice / storage / 2S: `../lipo.md`.
+
 ---
 
 ## 2. Electrical signal (what is on the wire)
@@ -276,7 +278,7 @@ If step 5–6 fail: `get id=11 miss`. Three misses while a guarded move is runni
 
 ## 10. What this HAT is not
 
-No INA219, no IMU, no OLED, no user LED, no BMS. `batt` is the seven VIN bytes at addr 62, median, then linear 3S % (**10.0 V = 0%, 12.6 V = 100%**). Navbar uses the same math (host, no flash needed). Chip `est=` matches after the next flash. Pack cutoff for writes: **10.5 V** (`V_CUTOFF 105`).
+No INA219, no IMU, no OLED, no user LED, no BMS. `batt` is the seven VIN bytes at addr 62, median, then the 3S rest table (**12.6 V = 100%, 10.8 V = 20%, 10.5 V = 10%, 9.0 V = 0%**). Navbar uses the same math from volts (host, no flash needed). Chip `est=` matches after the next flash. Pack cutoff for writes: **10.5 V** (`V_CUTOFF 105`).
 
 TTL activity LEDs by USB-C are PHY blinks, not GPIO.
 

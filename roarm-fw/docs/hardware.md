@@ -8,13 +8,13 @@ Waveshare RoArm-M3 Pro, modified with XT60 battery for portable use, Bus Servo D
 
 **UART control switch = ESP32.** USB or Pi isolates the data pins; bus goes silent.
 
-Power: 9–25 V on the HAT (match the servos). ST3215s: 7–12.6 V typical (12 V 5 A or 3S LiPo). Battery / board switch ON for servos to answer.
+Power: 9–25 V on the HAT (match the servos). ST3215s: 7–12.6 V typical (12 V 5 A or **3S LiPo**). Battery / board switch ON for servos to answer. **2S max is 8.4 V — do not plug it in.** Pack rules, storage, back-EMF: `hardware/lipo.md`.
 
 USB debug: **115200**. This machine saw the board as `/dev/ttyACM0`. USB powers the **ESP32 only**. Servos need XT60.
 
 ## This HAT vs the old General Driver Board
 
-Tony swapped the kit’s General Driver Board for the Bus Servo Driver HAT (A) so a 3S LiPo can plug in on XT60 (`hardware/hardware.md`).
+Tony swapped the kit’s General Driver Board for the Bus Servo Driver HAT (A) so a 3S LiPo can plug in on XT60 (`hardware/hardware.md`). No BMS, no reverse-current diode. USB does not charge the pack.
 
 | On the old board | On this HAT |
 | --- | --- |
@@ -59,7 +59,7 @@ Raw fields from `get`: `hardware/motors/sensors.md`.
 | Position | `ReadPos` | 0–4095 (360°) | Command vs actual |
 | Speed | `ReadSpeed` | steps/s | Motion |
 | Load | `ReadLoad` | −1000–1000 | Stall / collision |
-| Voltage | `ReadVoltage` | ÷10 = volts | Pack at that servo (XT60 rail). Type `batt` for median + linear 3S % (10.0 V = 0, 12.6 V = 100). **No INA219 / charger on this HAT** |
+| Voltage | `ReadVoltage` | ÷10 = volts | Pack at that servo (XT60 rail). Type `batt` for median + 3S rest % (12.6 V = 100, 10.8 V = 20, 10.5 V = 10, 9.0 V = 0). **No INA219 / charger on this HAT** |
 | Temp | `ReadTemper` | °C | Overheat |
 | Current | `ReadCurrent` | mA | Draw |
 | Moving | `ReadMove` | 0/1 | Busy |
@@ -68,6 +68,7 @@ No IMU on the servos.
 
 ## Safety (keep in firmware)
 
+- Pack on the bench: `hardware/lipo.md`. Meter rest V before XT60 or a charger. Store 3S at ~11.4 V. Recycle puffy / &lt;9 V 3S / 2S.
 - Slow default speed.
 - Voltage &lt; 10.5 V → torque off IDs 11–17.
 - High \|load\| / `Δload` / `cur` / bus miss → cut that move. Move `ESTOP` is **on the chip** (`info fw=20260912 raise=1`). `docs/hardware/motors/sensors.md`.

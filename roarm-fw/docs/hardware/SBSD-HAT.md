@@ -4,6 +4,8 @@ https://www.waveshare.com/product/robotics/drivers-sensors/drivers/bus-servo-dri
 
 Wiki: www.waveshare.com/wiki/Bus_Servo_Driver_HAT_(A)
 
+Lab note (not Waveshare): input **9–25 V** → **3S** on XT60, never 2S. Packs / storage / BEMF: `lipo.md`.
+
 | | |
 | --- | --- |
 | SKU | 27577 |

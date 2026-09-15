@@ -49,13 +49,13 @@ Firmware in tree, **flashed 2026-09-12** (`info fw=20260912 raise=1`): `raise to
 
 ## 2026-09-12 later (console)
 
-Navbar pack % is **linear 3S**: 12.6 V = 100%, 10.0 V = 0% (9.9 V LVC + 0.1 V pad). 11.1 V → **42%**, not the old rest-curve 12%. Chip `batt est=` still the old table until the next flash; the header is JS from volts.
+Navbar pack % is the **3S rest table**: 12.6 V = 100%, 10.8 V = 20%, 10.5 V = 10%, 9.0 V = 0%. 11.1 V → **40%**. Chip `batt est=` matches after the next flash; the header is JS from volts.
 
 `/raw/` is a **hand** page: open / close / hold / free, effort trip in load counts (left = light touch), live sensor graphs. `who` / `raw 17` are under servo dump. Footer is one line until **log**; on that page it only shows ID 17. Connect no longer `who`s all seven.
 
 ## Next sitting — try this
 
-1. Hard-refresh. Confirm **fw 20260912** and pack **~42% at 11.1 V**.
+1. Hard-refresh. Confirm **fw 20260912** and pack **40% at 11.1 V**.
 2. `/raw/`: open and close. Watch pos / effort / mA. Trip STOP on purpose once (chip `ESTOP` should print).
 3. Wrap Δ on **16** then **11** from a slack **here** this sitting. Do not reuse Sep-5 `un` 1058…7046 against home **960**.
 4. Soft-band wrist pitch well inside 1126 … short of 3134. Then elbow (host 995…2997, hop ≤80).
@@ -63,6 +63,12 @@ Navbar pack % is **linear 3S**: 12.6 V = 100%, 10.0 V = 0% (9.9 V LVC + 0.1 V pa
 6. Deg/count → FK only after walls you trust. BLE after USB is boring. Optional flash so `batt est=` matches the navbar.
 
 Pack-off hand-move (silence) can wait. It does not protect cables.
+
+## 2026-09-15 — packs
+
+Four-limb robot assembled; **two 3S short**. Leftovers included 5 V, 8 V, and a **2S**. Storage/over-discharge, not 4 V regen into 11.1 V. Rules: `docs/hardware/lipo.md`. Log: `development-logs/2026-09-15-packs.md`.
+
+Until 3S replacements: two limbs at a time, body supported. Do not hang the chassis on two dead limbs. Do not put 2S on XT60 (HAT ≥9 V).
 
 Four limbs, ROS2 vs ours, BLE/guard rates, bus is serial: `docs/plans/gibbon-platform.md`. Business + operational evaluation (keep our firmware/console): `docs/plans/ros2-vs-our-stack.md`.
 
