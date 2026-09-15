@@ -104,7 +104,7 @@ phone / laptop  --WiFi-->  gibbon-console (one process)
 
 **Then one limb is “a gibbon part”:**
 
-4. Teach-replay (imitation **without** a net): `tq=0` you move; ESP32 ring-buffers `un,load,v,cur` at 25 Hz; BLE dump; play back as hops inside walls. That *is* the I/O translation: sensors = present block, actuators = `WritePos` + speed/acc.
+4. Teach-replay (imitation **without** a net): host path is live at `gibbon-console` `/imitation/` (browser rec/play, hop-walk, |load| slider). Chip ring-buffer dump is still later. That *is* the I/O translation: sensors = present block, actuators = `WritePos` + speed/acc.
 5. Console: limb picker **gibbon / right arm / left arm / right leg / left leg**. Today only `right arm` is live. Overview = four `found=7/7` + pack V. Click → same calibrate/raw pages with a limb prefix.
 6. Second physical arm: flash same FW, `ble=gibbon-XXXX` different MAC, console adds a second bridge. No ROS required to “connect” them.
 

@@ -2,7 +2,7 @@
 
 Two sides. Chip talks Feetech on UART1. Laptop talks the same text on USB (`/dev/ttyACM0` 115200) or BLE (`gibbon-XXXX`, Nordic UART). **One process owns ACM0** — do not run `idf.py monitor` and a Python script together.
 
-**Sitting UI:** `../gibbon-console` (Django: overview / joint / calibrate / info / trials). Docs: `../gibbon-console/docs/README.md`. Chip BLE: `docs/ble.md`. CLI: `scripts/live.py`.
+**Sitting UI:** `../gibbon-console` (Django: calibration / imitation / joint / info / trials). BLE listen-only matrix: `/monitor/` after flashing `bringup/02-ble-monitor`. Docs: `../gibbon-console/docs/README.md`. Chip BLE: `docs/ble.md`. CLI: `scripts/live.py`.
 
 Flash / stop monitor: `docs/framework/espidf.md`.
 
@@ -25,6 +25,7 @@ Stand behind the base. Words: `docs/hardware/motors/names.md`. Walls by hand, `t
 
 ```bash
 cd /home/t/code/gibbon-bot/roarm-fw
+./scripts/mon.sh
 python3 scripts/listen.py
 python3 scripts/live.py
 python3 scripts/live.py --check twist --out docs/baselines/data/twist-commanded.csv
@@ -40,16 +41,19 @@ Next test (no writer yet): wrist up / down (15) by hand in `live.py`.
 
 ## On the chip — `main/main.c`
 
-**No move on boot.** Writes only if you type them. **ID 17 (hand)** and **ID 16 (twist)** have named commands. Any ID: `id N free|hold|to G|nudge D`. IDs 11–15 hop ≤ **80** (no walls). Raise 12+13 is dual-drive `raise to` SyncWrite (`info fw=20260912 raise=1`). Never command 12 or 13 alone for motion.
+**No move on boot.** Writes only if you type them. **ID 17 (hand)** and **ID 16 (twist)** have named commands. Any ID: `id N free|hold|to G|nudge D`. IDs 11–15 hop ≤ **80** (no walls). Raise 12+13 is dual-drive `raise to` SyncWrite (`info fw=20260914 raise=1`). Never command 12 or 13 alone for motion. Serial sitting (no Django): `scripts/mon.sh`.
 
 | You type | What it does |
 | --- | --- |
 | `get` / `get N` | READ present. Omitted keys = default (speed/load/cur/moving/tq/turns/st/mode 0, `un=pos`). `get 16` while twist is moving |
-| `info` | chip / mac / idf. After flash: `info fw=20260912 raise=1 stream=compact guard=1`. Console uses that line to allow `raise` |
-| `stream` / `stream N` / `stream 0` | live `get` when an ID **changes** (pos Δ≥2, speed Δ≥80, load, cur, tq, v, temp). Default 180 ms poll. Compact on chip 2026-09-12 |
+| `info` | chip / mac / idf / `info board=gibbon-XXXX` (MAC last two bytes). After flash: `info fw=20260914 raise=1 stream=compact guard=1 mat=1`. Console uses `raise=1` to allow `raise` |
+| `stream` / `stream N` / `stream 0` | live `get` when an ID **changes** (pos Δ≥2, speed Δ≥80, load, cur, tq, v, temp). Default 180 ms poll. Compact on chip 2026-09-12. Turns off `mat` |
+| `mat` / `mat N` / `mat off` | ASCII 7×8 number dump every N ms (`vec` labels once, then `m t` + 7 rows). Default 50. Turns off `stream`. **Not** packed `g1` |
 | `who` / `who N` | EEPROM fw/mode/PID/angle limits/goal |
 | `id N free\|hold\|to G\|nudge D` | any 11–17. 11–15 hop ≤80. **12+13:** free/hold/here only; motion is `raise to` |
 | `id N here` | zero unwrap at current pos |
+| `lim ID min\|max\|home` | mark **live** pos into NVS (no number). `lim ID min N` still sets a count |
+| `sweep ID` | auto min→max→min, 80 inside walls. `sweep 12` = raise pair. `sweep stop` / `estop` |
 | `raise to G12 G13` | SyncWrite both. **On chip (`info raise=1`).** Solo 12/13 `to`/`nudge` abort |
 | `raise hold\|free` | both motors. Console sends these only after `info fw=… raise=1` |
 | `move speed N` / `move acc N` | next WritePos (default 300 / 20) |
@@ -63,7 +67,9 @@ Next test (no writer yet): wrist up / down (15) by hand in `live.py`.
 | `twist speed N` | wheel jog, signed. Abort if not wheel. 0 = stop |
 | `batt` `ping` `bench` `state` | read-only |
 
-Pack cutoff 10.5 V in `joint_to`. Hand walls: open **609**, close **2088**. Twist walls: CW **978**, CCW `un` **7126**. Generous cable-only: **1127** / **3798**. Never command the walls.
+Pack cutoff 10.5 V in `joint_to`. Hand walls: open **609**, close **2088**. Twist walls: CW **978**, CCW `un` **7126**. Generous cable-only: **1127** / **3798**. Never command the walls. `batt est=` is the 3S rest table (12.6 V = 100%, 10.8 V = 20%, 10.5 V = 10%, 9.0 V = 0%).
+
+Bring-up image `bringup/02-ble-monitor` is a **different** protocol: packed `g1` hex at 50 ms, `tq=0` once, no sitting commands. Console `/monitor/` paints that. Do not mix with sitting `mat`.
 
 Host parsers (`listen.py`, `live.py`, `watch-*.py`, gibbon-console) use `key=value` so compact and old fat `get` lines both work.
 
@@ -73,6 +79,7 @@ Chip `turns` starts at 0 each boot. Host `docs/baselines/data/twist-absolute.jso
 
 | Script | Why |
 | --- | --- |
+| `scripts/mon.sh` | Fast serial monitor. Frees ACM0, no IDF. Type chip commands |
 | `scripts/listen.py` | Live 7-row sensor table (overwrites in place). READ only |
 | `scripts/live.py` | Listen + control. `--check twist` for the commanded roll. `q` = servo, no free |
 | `scripts/watch-hand.py` | Backdrive only. You turn, it prints Δ |

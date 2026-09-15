@@ -32,7 +32,7 @@ Each board is a **peripheral**. The four-limb host is a **central** later (lapto
 
 Simple HTML is done and grew into Django: `../../gibbon-console/docs/README.md`. NimBLE details: `../ble.md`. Power-state matrix: `docs/plans/ble-html.md`.
 
-**NimBLE**, not Bluedroid. Advertise after USB `get` works once. Phone: that page or nRF Connect. Custom GATT only after the text pipe is boring.
+**NimBLE**, not Bluedroid. Advertise after USB `get` works once. Listen-only matrix first: `bringup/02-ble-monitor` + Chromium `/monitor/`. Phone: that page or nRF Connect. Custom GATT only after the text pipe is boring.
 
 Later (do not do this while walls are still hand-marked): see `firmware-minimal.md`.
 

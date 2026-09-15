@@ -53,6 +53,12 @@ Navbar pack % is the **3S rest table**: 12.6 V = 100%, 10.8 V = 20%, 10.5 V = 10
 
 `/raw/` is a **hand** page: open / close / hold / free, effort trip in load counts (left = light touch), live sensor graphs. `who` / `raw 17` are under servo dump. Footer is one line until **log**; on that page it only shows ID 17. Connect no longer `who`s all seven.
 
+## 2026-09-15 (packs + BLE listen)
+
+Two 3S short on the assembled four-limb. Leftovers included 5 V, 8 V, and a **2S**. Storage/over-discharge, not 4 V regen into 11.1 V. Rules: `docs/hardware/lipo.md`. Sitting log: `development-logs/2026-09-15-packs.md`. Test two limbs supported; do not Y-split; 2S stays off this HAT. Do not hang the chassis on two dead limbs.
+
+Bring-up `bringup/02-ble-monitor`: flash USB, **unplug USB**, pack on. Console Chromium `/monitor/` paints packed `g1`. Listen-only (`tq=0` once). Sitting chip is still `main/main.c` (`mat` is ASCII, not `g1`).
+
 ## Next sitting — try this
 
 1. Hard-refresh. Confirm **fw 20260912** and pack **40% at 11.1 V**.
@@ -63,12 +69,6 @@ Navbar pack % is the **3S rest table**: 12.6 V = 100%, 10.8 V = 20%, 10.5 V = 10
 6. Deg/count → FK only after walls you trust. BLE after USB is boring. Optional flash so `batt est=` matches the navbar.
 
 Pack-off hand-move (silence) can wait. It does not protect cables.
-
-## 2026-09-15 — packs
-
-Four-limb robot assembled; **two 3S short**. Leftovers included 5 V, 8 V, and a **2S**. Storage/over-discharge, not 4 V regen into 11.1 V. Rules: `docs/hardware/lipo.md`. Log: `development-logs/2026-09-15-packs.md`.
-
-Until 3S replacements: two limbs at a time, body supported. Do not hang the chassis on two dead limbs. Do not put 2S on XT60 (HAT ≥9 V).
 
 Four limbs, ROS2 vs ours, BLE/guard rates, bus is serial: `docs/plans/gibbon-platform.md`. Business + operational evaluation (keep our firmware/console): `docs/plans/ros2-vs-our-stack.md`.
 

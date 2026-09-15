@@ -18,7 +18,7 @@
 #include "nvs.h"
 #include "nvs_flash.h"
 
-#define GIBBON_FW "20260912"
+#define GIBBON_FW "20260915"
 #define USB_UART UART_NUM_0
 #define BUS_UART UART_NUM_1
 #define S_TXD GPIO_NUM_19
@@ -58,6 +58,12 @@
 #define TWIST_CENTER 4050 /* wrap-seam home; 4050 and ~50 are the same neighborhood */
 #define TWIST_STEP_MAX 900 /* host walks a full turn in small hops; refuse a long hop */
 #define NUDGE_MAX 80 /* unwalled IDs 11–15: no long WritePos */
+#define SWEEP_PAD 80 /* commanded band inside marked walls */
+#define SWEEP_NEAR 50
+#define SWEEP_PHASE_MS 25000
+#define SWEEP_SPEED 120
+#define SWEEP_ACC 16
+#define SWEEP_RETRY_MS 250
 #define V_CUTOFF 105 /* 10.5 V, 0.1 V LSB */
 #define GUARD_DLOAD 100 /* |load| above moving cruise — cable tighten */
 #define HAND_DLOAD 400 /* free close cruise ~800, peak ~1080 → need Δ≳300 */
@@ -106,6 +112,9 @@ static int g_abs = GUARD_LOAD;
 static int g_curv = GUARD_CUR;
 static int stream_ms;
 static TickType_t stream_last;
+static int mat_ms;
+static TickType_t mat_last;
+static uint8_t mat_hdr;
 static int cached_mode[ID_LAST + 1];
 static uint8_t mode_ok[ID_LAST + 1];
 static int pub_pos[ID_LAST + 1];
@@ -131,6 +140,32 @@ typedef struct __attribute__((packed)) {
     uint8_t has;
 } wall_t;
 static wall_t wall[ID_LAST + 1];
+
+/* Chip sweep: min → max → min inside NVS walls. estop cuts it. */
+static struct {
+    uint8_t on;
+    uint8_t raise;
+    uint8_t phase;
+    int id;
+    int tmin[2];
+    int tmax[2];
+    int goal[2];
+    int hop;
+    int saved_speed;
+    int saved_acc;
+    TickType_t t0;
+    TickType_t send_at;
+} swp;
+
+static void sweep_off(void)
+{
+    if (!swp.on) {
+        return;
+    }
+    swp.on = 0;
+    move_speed = swp.saved_speed;
+    move_acc = swp.saved_acc;
+}
 
 static unsigned long now_ms(void)
 {
@@ -235,12 +270,16 @@ static void print_help(void)
     printf("  get      full present @56 (zeros included) + tq + un/turns/st/mode + hex\n");
     printf("  get N    same, one ID (15=wrist 16=twist 17=hand). faster while moving\n");
     printf("  stream   compact live get, skip still IDs. stream 0/off. stream N = period ms\n");
+    printf("  mat N    labels once, then a 7x8 number matrix every N ms. mat 0=off\n");
     printf("  who      EEPROM: fw/mode/PID/angle-limit/goal per ID\n");
     printf("  who N    same, one ID\n");
-    printf("  lim      chip walls (NVS). lim ID / lim ID min|max|home N / lim ID clear\n");
+    printf("  lim      chip walls (NVS). lim ID / lim ID min|max|home [N] / lim ID clear\n");
+    printf("  lim ID min|max|home   mark live pos (free, pose by hand, then this)\n");
+    printf("  sweep ID   min→max→min inside walls. sweep 12 = raise pair. estop cuts\n");
+    printf("  sweep      list who can run. sweep stop = hold / cancel\n");
     printf("  guard    trip: guard / guard hand N / dload N / load N / cur N. 0 = that check off\n");
     printf("  estop    ALL ids tq=0 + twist speed 0 + servo. also cuts a guarded move\n");
-    printf("  batt     pack V from servo VIN + 3S rest-%% guess (not a fuel gauge)\n");
+    printf("  batt     pack V from servo VIN + 3S rest-%% table (not a fuel gauge)\n");
     printf("  bench    chip + ping 11-17\n");
     printf("  move speed N / acc N   next WritePos (default %d / %d)\n",
            HAND_SPEED, HAND_ACC);
@@ -490,6 +529,10 @@ static void joint_free(int id, const char *name)
         move_guard_on = 0;
         printf("guard idle id=%d\n", id);
     }
+    if (swp.on && (id == swp.id || (swp.raise && (id == RAISE_A || id == RAISE_B)))) {
+        sweep_off();
+        printf("sweep stop free\n");
+    }
 }
 
 static int read_pos(int id)
@@ -502,6 +545,7 @@ static int read_pos(int id)
 }
 
 static int twist_set_mode(uint8_t mode);
+static int twist_read_mode(void);
 
 static int read_present(int id, present_t *p)
 {
@@ -813,8 +857,32 @@ static void cmd_lim(const char *what)
         print_lim_id(id, wall_save(id) ? "ok" : "fail");
         return;
     }
+    if (strcmp(rest, "min") == 0 || strcmp(rest, "max") == 0 ||
+        strcmp(rest, "home") == 0 || strcmp(rest, "here") == 0) {
+        int pos = read_pos(id);
+        int un;
+
+        if (pos < 0) {
+            printf("err lim no pos id=%d — pack on, free, pose by hand\n", id);
+            return;
+        }
+        un = unwrap_pos(id, pos);
+        if (strcmp(rest, "min") == 0) {
+            wall[id].amin = un;
+            wall[id].has |= WALL_MIN;
+        } else if (strcmp(rest, "max") == 0) {
+            wall[id].amax = un;
+            wall[id].has |= WALL_MAX;
+        } else {
+            wall[id].home = un;
+            wall[id].has |= WALL_HOME;
+        }
+        print_lim_id(id, wall_save(id) ? "ok" : "fail");
+        printf("lim mark id=%d %s pos=%d un=%d\n", id, rest, pos, un);
+        return;
+    }
     if (sscanf(rest, "%7s %d", field, &val) != 2) {
-        printf("err lim ID min|max|home N | clear\n");
+        printf("err lim ID min|max|home [N] | clear\n");
         return;
     }
     if (val < -20000 || val > 20000) {
@@ -859,6 +927,10 @@ static void move_cut(const char *why, int load, int cur, int pos)
     uint8_t tq0 = 0;
     int id = move_guard_id;
     int b = move_guard_b;
+    if (swp.on) {
+        sweep_off();
+        printf("sweep stop estop\n");
+    }
     bus_write(id, REG_TORQUE_EN, &tq0, 1);
     if (b) {
         bus_write(b, REG_TORQUE_EN, &tq0, 1);
@@ -1171,6 +1243,371 @@ static void cmd_raise(const char *what)
     printf("err raise to G12 G13|hold|free\n");
 }
 
+static int enc_wrap(int un)
+{
+    int r = un % 4096;
+    if (r < 0) {
+        r += 4096;
+    }
+    return r;
+}
+
+static int hop_toward(int un, int goal, int hop)
+{
+    int d = goal - un;
+
+    if (hop > 0) {
+        if (d > hop) {
+            d = hop;
+        } else if (d < -hop) {
+            d = -hop;
+        }
+    }
+    return un + d;
+}
+
+static int sweep_band(int id, int *lo, int *hi)
+{
+    if ((wall[id].has & (WALL_MIN | WALL_MAX)) == (WALL_MIN | WALL_MAX)) {
+        *lo = (int)wall[id].amin;
+        *hi = (int)wall[id].amax;
+        if (*lo > *hi) {
+            int t = *lo;
+            *lo = *hi;
+            *hi = t;
+        }
+        if (*hi - *lo < 80) {
+            return 0;
+        }
+        if (*hi - *lo > 2 * SWEEP_PAD) {
+            *lo += SWEEP_PAD;
+            *hi -= SWEEP_PAD;
+        }
+        return 1;
+    }
+    if (id == HAND_ID) {
+        *lo = HAND_OPEN;
+        *hi = HAND_CLOSE;
+        return 1;
+    }
+    return 0;
+}
+
+static const char *sweep_phase_name(int phase)
+{
+    if (phase == 1) {
+        return "max";
+    }
+    return "min";
+}
+
+static void sweep_set_goal(void)
+{
+    if (swp.phase == 1) {
+        swp.goal[0] = swp.tmax[0];
+        swp.goal[1] = swp.tmax[1];
+    } else {
+        swp.goal[0] = swp.tmin[0];
+        swp.goal[1] = swp.tmin[1];
+    }
+}
+
+static int sweep_write_one(int id, int target_un, int hop, int start_guard)
+{
+    int cur, un, next, raw;
+    uint8_t v = 0;
+    uint8_t tq = 1;
+    uint8_t buf[7];
+
+    cur = read_pos(id);
+    if (cur < 0) {
+        printf("sweep abort no pos id=%d\n", id);
+        return 0;
+    }
+    un = unwrap_pos(id, cur);
+    next = hop_toward(un, target_un, hop);
+    raw = enc_wrap(next);
+    if (!bus_read(id, REG_VOLTAGE, 1, &v) || v < V_CUTOFF) {
+        printf("sweep abort pack v_raw=%d need>=%d\n", v, V_CUTOFF);
+        return 0;
+    }
+    if (!bus_write(id, REG_TORQUE_EN, &tq, 1)) {
+        printf("sweep torque miss id=%d\n", id);
+        return 0;
+    }
+    fill_pos_ex(buf, raw);
+    if (!bus_write(id, REG_ACC, buf, 7)) {
+        printf("sweep write miss id=%d raw=%d\n", id, raw);
+        return 0;
+    }
+    printf("sweep id=%d phase=%s pos=%d un=%d hop=%d raw=%d goal=%d\n",
+           id, sweep_phase_name(swp.phase), cur, un, next - un, raw, target_un);
+    if (start_guard && next != un) {
+        move_guard_start(id);
+    }
+    return 1;
+}
+
+static int sweep_write_raise(void)
+{
+    int c12, c13, u12, u13, n12, n13, r12, r13;
+    uint8_t v = 0;
+    uint8_t tq = 1;
+    uint8_t ids[2] = { RAISE_A, RAISE_B };
+    uint8_t dat[14];
+
+    c12 = read_pos(RAISE_A);
+    c13 = read_pos(RAISE_B);
+    if (c12 < 0 || c13 < 0) {
+        printf("sweep abort no pos raise\n");
+        return 0;
+    }
+    u12 = unwrap_pos(RAISE_A, c12);
+    u13 = unwrap_pos(RAISE_B, c13);
+    n12 = hop_toward(u12, swp.goal[0], swp.hop);
+    n13 = hop_toward(u13, swp.goal[1], swp.hop);
+    r12 = enc_wrap(n12);
+    r13 = enc_wrap(n13);
+    if (!bus_read(RAISE_A, REG_VOLTAGE, 1, &v) || v < V_CUTOFF) {
+        printf("sweep abort pack v_raw=%d need>=%d\n", v, V_CUTOFF);
+        return 0;
+    }
+    if (!bus_write(RAISE_A, REG_TORQUE_EN, &tq, 1) ||
+        !bus_write(RAISE_B, REG_TORQUE_EN, &tq, 1)) {
+        printf("sweep torque miss raise\n");
+        return 0;
+    }
+    fill_pos_ex(dat, r12);
+    fill_pos_ex(dat + 7, r13);
+    if (!bus_sync_write(REG_ACC, 7, ids, 2, dat)) {
+        printf("sweep sync miss raise\n");
+        return 0;
+    }
+    printf("sweep raise phase=%s 12 un=%d→%d 13 un=%d→%d goal=%d %d\n",
+           sweep_phase_name(swp.phase), u12, n12, u13, n13,
+           swp.goal[0], swp.goal[1]);
+    if (n12 != u12 || n13 != u13) {
+        raise_guard_start();
+    }
+    return 1;
+}
+
+static int sweep_drive(void)
+{
+    swp.send_at = xTaskGetTickCount();
+    if (swp.raise) {
+        return sweep_write_raise();
+    }
+    return sweep_write_one(swp.id, swp.goal[0], swp.hop, 1);
+}
+
+static int sweep_close_enough(void)
+{
+    int pos, un, d;
+
+    pos = read_pos(swp.id);
+    if (pos < 0) {
+        return 0;
+    }
+    un = unwrap_pos(swp.id, pos);
+    d = swp.goal[0] - un;
+    if (d < 0) {
+        d = -d;
+    }
+    if (d > SWEEP_NEAR) {
+        return 0;
+    }
+    if (swp.raise) {
+        pos = read_pos(RAISE_B);
+        if (pos < 0) {
+            return 0;
+        }
+        un = unwrap_pos(RAISE_B, pos);
+        d = swp.goal[1] - un;
+        if (d < 0) {
+            d = -d;
+        }
+        if (d > SWEEP_NEAR) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+static void sweep_tick(void)
+{
+    TickType_t now;
+
+    if (!swp.on) {
+        return;
+    }
+    now = xTaskGetTickCount();
+    if ((now - swp.t0) > pdMS_TO_TICKS(SWEEP_PHASE_MS)) {
+        printf("sweep timeout id=%d phase=%s — estop if it fights\n",
+               swp.id, sweep_phase_name(swp.phase));
+        sweep_off();
+        return;
+    }
+    if (sweep_close_enough()) {
+        swp.phase++;
+        if (swp.phase > 2) {
+            int pos = read_pos(swp.id);
+            if (swp.raise) {
+                int p13 = read_pos(RAISE_B);
+                if (pos >= 0 && p13 >= 0) {
+                    raise_to(pos, p13);
+                }
+            } else if (pos >= 0) {
+                int lo, hi, hop;
+                clamps_for(swp.id, &lo, &hi, &hop);
+                joint_to(swp.id, pos, pos, pos, 0, id_name(swp.id));
+            }
+            printf("sweep ok id=%d\n", swp.id);
+            sweep_off();
+            return;
+        }
+        swp.t0 = now;
+        sweep_set_goal();
+        printf("sweep id=%d → %s\n", swp.id, sweep_phase_name(swp.phase));
+        if (!sweep_drive()) {
+            sweep_off();
+        }
+        return;
+    }
+    if (swp.send_at != 0 &&
+        (now - swp.send_at) < pdMS_TO_TICKS(SWEEP_RETRY_MS)) {
+        return;
+    }
+    if (!sweep_drive()) {
+        sweep_off();
+    }
+}
+
+static void sweep_list(void)
+{
+    int n = 0;
+
+    if (swp.on) {
+        printf("sweep busy id=%d phase=%s raise=%d — sweep stop or estop\n",
+               swp.id, sweep_phase_name(swp.phase), swp.raise);
+    }
+    for (int id = ID_FIRST; id <= ID_LAST; id++) {
+        int lo, hi, lo13, hi13;
+        if (id == RAISE_B) {
+            continue;
+        }
+        if (id == RAISE_A) {
+            if (sweep_band(RAISE_A, &lo, &hi) &&
+                sweep_band(RAISE_B, &lo13, &hi13)) {
+                printf("sweep ready raise 12=%d..%d 13=%d..%d\n",
+                       lo, hi, lo13, hi13);
+                n++;
+            } else {
+                printf("sweep need min+max id=12 and id=13 (mark both at the same pose)\n");
+            }
+            continue;
+        }
+        if (sweep_band(id, &lo, &hi)) {
+            printf("sweep ready id=%d name=%s min=%d max=%d\n",
+                   id, id_name(id), lo, hi);
+            n++;
+        } else {
+            printf("sweep need min+max id=%d name=%s — free, pose, lim %d min|max\n",
+                   id, id_name(id), id);
+        }
+    }
+    if (!n) {
+        printf("sweep none — mark walls first (hand 17 can use built-in soft band)\n");
+    }
+}
+
+static void cmd_sweep(const char *what)
+{
+    int id;
+    int lo, hi, lo13, hi13;
+
+    while (*what && isspace((unsigned char)*what)) {
+        what++;
+    }
+    if (*what == '\0') {
+        sweep_list();
+        return;
+    }
+    if (strcmp(what, "stop") == 0) {
+        if (!swp.on) {
+            printf("sweep idle\n");
+            return;
+        }
+        printf("sweep stop id=%d\n", swp.id);
+        sweep_off();
+        return;
+    }
+    if (swp.on) {
+        printf("err sweep busy id=%d — sweep stop or estop\n", swp.id);
+        return;
+    }
+    if (strcmp(what, "raise") == 0 || strcmp(what, "12") == 0 ||
+        strcmp(what, "13") == 0) {
+        id = RAISE_A;
+        if (!sweep_band(RAISE_A, &lo, &hi) ||
+            !sweep_band(RAISE_B, &lo13, &hi13)) {
+            printf("err sweep raise needs lim 12 min+max and lim 13 min+max\n");
+            return;
+        }
+        swp.raise = 1;
+        swp.id = RAISE_A;
+        swp.tmin[0] = lo;
+        swp.tmax[0] = hi;
+        swp.tmin[1] = lo13;
+        swp.tmax[1] = hi13;
+        swp.hop = 0;
+    } else {
+        id = atoi(what);
+        if (id < ID_FIRST || id > ID_LAST) {
+            printf("err sweep 11-17|raise|stop\n");
+            return;
+        }
+        if (id == RAISE_A || id == RAISE_B) {
+            cmd_sweep("raise");
+            return;
+        }
+        if (!sweep_band(id, &lo, &hi)) {
+            printf("err sweep id=%d need lim %d min and lim %d max (span>=80)\n",
+                   id, id, id);
+            return;
+        }
+        if (id == TWIST_ID && twist_read_mode() != 0) {
+            printf("sweep abort not servo — twist servo first\n");
+            return;
+        }
+        swp.raise = 0;
+        swp.id = id;
+        swp.tmin[0] = lo;
+        swp.tmax[0] = hi;
+        swp.hop = (id == 11 || id == TWIST_ID) ? TWIST_STEP_MAX : 0;
+    }
+    swp.saved_speed = move_speed;
+    swp.saved_acc = move_acc;
+    move_speed = SWEEP_SPEED;
+    move_acc = SWEEP_ACC;
+    swp.phase = 0;
+    swp.on = 1;
+    swp.t0 = xTaskGetTickCount();
+    swp.send_at = 0;
+    sweep_set_goal();
+    if (swp.raise) {
+        printf("sweep start raise min=%d/%d max=%d/%d speed=%d — estop cuts\n",
+               swp.tmin[0], swp.tmin[1], swp.tmax[0], swp.tmax[1], move_speed);
+    } else {
+        printf("sweep start id=%d name=%s min=%d max=%d hop=%d speed=%d — estop cuts\n",
+               swp.id, id_name(swp.id), swp.tmin[0], swp.tmax[0],
+               swp.hop, move_speed);
+    }
+    if (!sweep_drive()) {
+        sweep_off();
+    }
+}
+
 static void cmd_hand(const char *what)
 {
     if (strcmp(what, "free") == 0) {
@@ -1336,6 +1773,10 @@ static void cmd_estop_all(void)
     }
     printf("ESTOP all tq=0 twist servo\n");
     move_guard_stop();
+    if (swp.on) {
+        sweep_off();
+        printf("sweep stop estop\n");
+    }
 }
 
 static void cmd_id(const char *what)
@@ -1537,6 +1978,7 @@ static void cmd_stream(const char *what)
         stream_ms = ms;
     }
     if (stream_ms) {
+        mat_ms = 0;
         listen_dump = 0;
         for (int id = ID_FIRST; id <= ID_LAST; id++) {
             pub_ok[id] = 0;
@@ -1544,6 +1986,41 @@ static void cmd_stream(const char *what)
     }
     stream_last = 0;
     printf("stream ms=%d dump=%d\n", stream_ms, listen_dump);
+}
+
+static int period_ms(int ms)
+{
+    if (ms < 0) {
+        return 0;
+    }
+    if (ms > 0 && ms < 40) {
+        return 40;
+    }
+    if (ms > 2000) {
+        return 2000;
+    }
+    return ms;
+}
+
+static void cmd_mat(const char *what)
+{
+    while (*what && isspace((unsigned char)*what)) {
+        what++;
+    }
+    if (*what == '\0' || strcmp(what, "on") == 0) {
+        mat_ms = 50;
+    } else if (strcmp(what, "off") == 0) {
+        mat_ms = 0;
+    } else {
+        mat_ms = period_ms(atoi(what));
+    }
+    if (mat_ms) {
+        stream_ms = 0;
+        listen_dump = 0;
+        mat_hdr = 1;
+    }
+    mat_last = 0;
+    printf("mat ms=%d dump=%d\n", mat_ms, listen_dump);
 }
 
 static void cmd_info(void)
@@ -1564,21 +2041,22 @@ static void cmd_info(void)
            (unsigned)esp_get_free_heap_size(), now_ms());
     printf("info idf=%s usb=115200 bus=gpio18/19@1Mbps ids=11-17 ble=%s\n",
            esp_get_idf_version(), ble_nus_name());
-    printf("info fw=%s raise=1 stream=compact guard=1\n", GIBBON_FW);
-    printf("info note=no auto-move. same text on USB and BLE. servos need XT60\n");
+    printf("info fw=%s raise=1 stream=compact guard=1 mat=1\n", GIBBON_FW);
+    printf("info board=gibbon-%02x%02x\n", mac[4], mac[5]);
+    printf("info note=no auto-move. sweep after walls. same text USB/BLE. servos need XT60\n");
 }
 
 static void cmd_state(void)
 {
     uint8_t mac[6];
     esp_read_mac(mac, ESP_MAC_WIFI_STA);
-    printf("state t=%lu heap=%u reset=%s tasks=%u bus_rx=%lu dump=%d stream=%d ble=%d\n",
+    printf("state t=%lu heap=%u reset=%s tasks=%u bus_rx=%lu dump=%d stream=%d mat=%d ble=%d\n",
            now_ms(),
            (unsigned)esp_get_free_heap_size(),
            reset_str(esp_reset_reason()),
            (unsigned)uxTaskGetNumberOfTasks(),
            (unsigned long)bus_rx_total,
-           listen_dump, stream_ms, ble_nus_connected());
+           listen_dump, stream_ms, mat_ms, ble_nus_connected());
     printf("state mac=%02x:%02x:%02x:%02x:%02x:%02x name=%s\n",
            mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], ble_nus_name());
     printf("state bus=uart1 gpio18/19 1Mbps rx-only until ping\n");
@@ -1841,19 +2319,72 @@ static void stream_tick(void)
     }
 }
 
-/* Linear 3S pack % from millivolts. 12.6 V = 100%, 10.0 V = 0%. Not a BMS.
- * Navbar uses the same numbers. Writes still cut at 10.5 V. */
+static void mat_tick(void)
+{
+    present_t p;
+    uint8_t tq;
+    TickType_t t;
+    int id;
+
+    if (mat_ms <= 0) {
+        return;
+    }
+    t = xTaskGetTickCount();
+    if (mat_last != 0 && (t - mat_last) < pdMS_TO_TICKS(mat_ms)) {
+        return;
+    }
+    mat_last = t;
+    if (mat_hdr) {
+        printf("vec row=");
+        for (id = ID_FIRST; id <= ID_LAST; id++) {
+            printf("%d%s", id, id < ID_LAST ? "," : "\n");
+        }
+        printf("vec col=pos,spd,load,cur,mv,tq,v10,temp\n");
+        mat_hdr = 0;
+    }
+    printf("m %lu\n", now_ms());
+    twist_guard_tick();
+    for (id = ID_FIRST; id <= ID_LAST; id++) {
+        if (!read_present(id, &p)) {
+            printf("-\n");
+        } else {
+            tq = 0;
+            bus_read(id, REG_TORQUE_EN, 1, &tq);
+            printf("%d %d %d %d %d %d %d %d\n",
+                   p.pos, p.speed, p.load, p.cur, p.moving,
+                   tq ? 1 : 0, p.v_raw, p.temp);
+        }
+        twist_guard_tick();
+    }
+}
+
+/* 3S rest table from millivolts. Not a BMS. Writes still cut at 10.5 V. */
+static const int LIPO3S_MV[] = {
+    12600, 12300, 12000, 11700, 11400, 11250, 11100, 10950, 10800, 10500, 9000,
+};
+static const int LIPO3S_PCT[] = {
+    100, 90, 80, 70, 60, 50, 40, 30, 20, 10, 0,
+};
+#define LIPO3S_N 11
+
 static int lipo3s_pct(int mv)
 {
-    const int full = 12600;
-    const int empty = 10000;
-    if (mv >= full) {
+    int i, dv, dp;
+
+    if (mv >= LIPO3S_MV[0]) {
         return 100;
     }
-    if (mv <= empty) {
+    if (mv <= LIPO3S_MV[LIPO3S_N - 1]) {
         return 0;
     }
-    return (mv - empty) * 100 / (full - empty);
+    for (i = 0; i < LIPO3S_N - 1; i++) {
+        if (mv <= LIPO3S_MV[i] && mv >= LIPO3S_MV[i + 1]) {
+            dv = LIPO3S_MV[i] - LIPO3S_MV[i + 1];
+            dp = LIPO3S_PCT[i] - LIPO3S_PCT[i + 1];
+            return LIPO3S_PCT[i] - (LIPO3S_MV[i] - mv) * dp / dv;
+        }
+    }
+    return 0;
 }
 
 static void cmd_batt(void)
@@ -1887,12 +2418,12 @@ static void cmd_batt(void)
     int mv = v_raw * 100;
     int pct = lipo3s_pct(mv);
     const char *lvl = (mv < 10500) ? "cutoff"
-        : (pct <= 20) ? "low"
-        : (pct <= 30) ? "recharge"
+        : (pct <= 10) ? "low"
+        : (pct <= 20) ? "recharge"
         : "ok";
     printf("batt pack=%.1fV est=%d%% cells=3 n=%d %s\n",
            v_raw / 10.0, pct, n, lvl);
-    printf("batt note=3S linear 10.0V=0 12.6V=100. servo VIN, not a BMS. writes cut at 10.5V.\n");
+    printf("batt note=3S rest 12.6V=100 10.8V=20 10.5V=10 9.0V=0. servo VIN, not a BMS. writes cut at 10.5V.\n");
 }
 
 static void print_banner(void)
@@ -1906,12 +2437,15 @@ static void print_banner(void)
     printf("tasks=%u\n", (unsigned)uxTaskGetNumberOfTasks());
     printf("bus=uart1 gpio18/19 1Mbps rx-only until ping\n");
     printf("ble=%s nordic-uart. same text as USB.\n", ble_nus_name());
-    printf("note=no auto-move. hand 689-2075. twist hop<=900. raise 12+13 SyncWrite.\n");
+    printf("note=no auto-move. sweep ID after lim min+max. raise 12+13 SyncWrite.\n");
 }
 
 static void heartbeat(void)
 {
     TickType_t t = xTaskGetTickCount();
+    if (mat_ms > 0) {
+        return;
+    }
     if ((t - last_beat) < pdMS_TO_TICKS(2000)) {
         return;
     }
@@ -2009,6 +2543,14 @@ static void handle_line(char *line)
         cmd_stream(line + 7);
         return;
     }
+    if (strcmp(line, "mat") == 0) {
+        cmd_mat("");
+        return;
+    }
+    if (strncmp(line, "mat ", 4) == 0) {
+        cmd_mat(line + 4);
+        return;
+    }
     if (strncmp(line, "move ", 5) == 0) {
         cmd_move(line + 5);
         return;
@@ -2039,6 +2581,14 @@ static void handle_line(char *line)
     }
     if (strncmp(line, "twist ", 6) == 0) {
         cmd_twist(line + 6);
+        return;
+    }
+    if (strcmp(line, "sweep") == 0) {
+        cmd_sweep("");
+        return;
+    }
+    if (strncmp(line, "sweep ", 6) == 0) {
+        cmd_sweep(line + 6);
         return;
     }
 
@@ -2077,7 +2627,9 @@ void app_main(void)
         heartbeat();
         twist_guard_tick();
         move_guard_tick();
+        sweep_tick();
         stream_tick();
+        mat_tick();
         ble_nus_tick();
         if (ble_nus_subscribed() && listen_dump) {
             listen_dump = 0;

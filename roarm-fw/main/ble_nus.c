@@ -182,6 +182,17 @@ static int gap_event(struct ble_gap_event *event, void *arg)
             subscribed = 0;
             conn_since = xTaskGetTickCount();
             {
+#ifdef GIBBON_MONITOR
+                /* 15–30 ms, no slave latency — one 50 ms matrix notify must not wait. */
+                struct ble_gap_upd_params p = {
+                    .itvl_min = 12,
+                    .itvl_max = 24,
+                    .latency = 0,
+                    .supervision_timeout = 200,
+                    .min_ce_len = 0,
+                    .max_ce_len = 0,
+                };
+#else
                 struct ble_gap_upd_params p = {
                     .itvl_min = 24,
                     .itvl_max = 40,
@@ -190,6 +201,7 @@ static int gap_event(struct ble_gap_event *event, void *arg)
                     .min_ce_len = 0,
                     .max_ce_len = 0,
                 };
+#endif
                 ble_gap_update_params(conn_handle, &p);
             }
             printf("ble connected handle=%d\n", conn_handle);

@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
-"""Live sensor table. All registers, overwrites in place. READ only.
+"""Motor matrix from the chip. Labels once, numbers every --ms.
 
   python3 scripts/listen.py
 
-pos = magnet 0-4095 (wraps). un = pos + turns×4096 (cable).
-Do not run another ACM0 process at the same time.
+Wire (after `mat 50`):
+  vec row=11,12,13,14,15,16,17
+  vec col=pos,spd,load,cur,mv,tq,v10,temp
+  m <uptime_ms>
+  <8 ints>   × 7   or  -  if that ID missed
 """
-import re
+import argparse
+import os
 import sys
 import time
 
@@ -14,9 +18,8 @@ import serial
 
 PORT = "/dev/ttyACM0"
 BAUD = 115200
-HOME = {16: 4068}  # slack twist; others blank
-GET_KV = re.compile(r"(\w+)=(\S+)")
-JOINT = {
+PERIOD_MS = 50
+NAME = {
     11: "turn",
     12: "raise-A",
     13: "raise-B",
@@ -28,13 +31,14 @@ JOINT = {
 
 HIDE = "\033[?25l"
 SHOW = "\033[?25h"
-HOME_CUR = "\033[H"
+CUR_HOME = "\033[H"
 CLEAR_TAIL = "\033[J"
 RST = "\033[0m"
 DIM = "\033[90m"
 GRN = "\033[32m"
 YEL = "\033[33m"
 RED = "\033[31m"
+CYAN = "\033[36m"
 
 
 def send(ser, cmd):
@@ -42,176 +46,210 @@ def send(ser, cmd):
     ser.flush()
 
 
-def drain(ser, seconds):
-    end = time.time() + seconds
-    buf, lines = b"", []
-    while time.time() < end:
-        chunk = ser.read(ser.in_waiting or 1)
-        if not chunk:
-            continue
-        buf += chunk
-        while b"\n" in buf:
-            raw, buf = buf.split(b"\n", 1)
-            ln = raw.decode("utf-8", "replace").strip()
-            if ln:
-                lines.append(ln)
-    return lines
-
-
-def parse(lines):
-    rows = {}
-    dump = None
-    for ln in lines:
-        if ln.startswith("listen dump="):
-            dump = ln.endswith("=1")
-        if not ln.startswith("get id=") or " miss" in ln:
-            continue
-        kv = dict(GET_KV.findall(ln))
-        if "pos" not in kv:
-            continue
-        id_ = int(kv["id"])
-        pos = int(kv["pos"])
-        rows[id_] = {
-            "pos": pos,
-            "speed": int(kv.get("speed", 0)),
-            "load": int(kv.get("load", 0)),
-            "v": kv.get("v", ""),
-            "temp": int(kv["temp"]) if "temp" in kv else 0,
-            "cur": int(kv.get("cur", 0)),
-            "moving": int(kv.get("moving", 0)),
-            "tq": kv.get("tq", "0"),
-            "un": int(kv.get("un", pos)),
-            "turns": int(kv.get("turns", 0)),
-            "st": kv.get("st", "0"),
-            "mode": kv.get("mode", "0"),
-        }
-    return rows, dump
-
-
-class Unwrap:
-    def __init__(self):
-        self.last = {}
-        self.turns = {i: 0 for i in range(11, 18)}
-
-    def apply(self, rows):
-        for id_, r in rows.items():
-            p = r["pos"]
-            prev = self.last.get(id_)
-            if prev is not None:
-                d = p - prev
-                if d > 2048:
-                    self.turns[id_] -= 1
-                elif d < -2048:
-                    self.turns[id_] += 1
-            self.last[id_] = p
-            if r["un"] == r["pos"]:
-                r["un"] = p + self.turns[id_] * 4096
-                r["turns"] = self.turns[id_]
-            else:
-                self.turns[id_] = r["turns"]
-
-
-def deg_of(id_, un):
-    if id_ not in HOME:
-        return ""
-    return "%+6.1f" % ((un - HOME[id_]) * 360.0 / 4096.0)
-
-
-def color_row(r, prev):
-    if r["tq"] == "1":
+def color(vals, prev):
+    if not vals:
+        return DIM
+    pos, spd, load, cur, _mv, tq = vals[:6]
+    if tq:
         return RED
-    if abs(r["load"]) >= 400 or abs(r["cur"]) >= 80:
+    if abs(load) >= 400 or abs(cur) >= 80:
         return YEL
-    if prev and abs(r["pos"] - prev["pos"]) >= 2:
+    if prev and abs(pos - prev[0]) >= 2:
         return GRN
-    if r["speed"] != 0:
+    if spd:
         return GRN
     return RST
 
 
-def draw(t_s, rows, prev, miss):
-    vs = [rows[i]["v"] for i in range(11, 18) if i in rows]
-    pack = vs[0] if vs else "?"
-    tq_on = [i for i in range(11, 18) if i in rows and rows[i]["tq"] == "1"]
-    tq_s = ("tq ON " + ",".join(str(i) for i in tq_on)) if tq_on else "tq all 0"
-    miss_s = ("  MISS " + ",".join(str(i) for i in miss)) if miss else ""
+def draw(t_s, ms, rows, cols, frame, prev, chip_t, note):
+    n_ok = sum(1 for r in frame if r)
+    vs = [r[6] / 10.0 for r in frame if r]
+    if n_ok == 0:
+        pack_s = CYAN + "pack off — plug XT60" + RST
+    else:
+        pack_s = "pack=%.1fV  found=%d/%d" % (vs[len(vs) // 2], n_ok, len(rows) or 7)
+    labels = [("V" if c == "v10" else c) for c in (cols or [])]
+    hdr = "  ID  joint      " + "  ".join("%4s" % c for c in labels)
     lines = [
-        "  listen  t=%5.1fs  pack=%sV  %s%s" % (t_s, pack, tq_s, miss_s),
-        DIM
-        + "  pos 0–4095 magnet.  un = pos + turns×4096.  same bytes as get."
-        + RST,
-        "  ID  joint      pos     un  tn      °   spd  load  cur mv tq     V  °C  st mode",
+        "  mat  %s  loop=%dms  t=%5.1fs  chip=%s" % (pack_s, ms, t_s, chip_t),
+        DIM + "  labels once on the wire. matrix every %d ms. v10 = tenths of a volt." % ms + RST,
+        hdr if cols else "  (waiting vec col=)",
     ]
-    for id_ in range(11, 18):
-        r = rows.get(id_)
-        if not r:
-            lines.append("  %2d  %-8s   —" % (id_, JOINT[id_]))
+    for i, id_ in enumerate(rows or range(11, 18)):
+        name = NAME.get(id_, str(id_))
+        vals = frame[i] if i < len(frame) else None
+        if not vals:
+            lines.append(DIM + "  %2s  %-8s   —" % (id_, name) + RST)
             continue
-        c = color_row(r, prev.get(id_) if prev else None)
+        prev_i = prev[i] if i < len(prev) else None
+        cells = []
+        for j, v in enumerate(vals):
+            if cols and j < len(cols) and cols[j] == "v10":
+                cells.append("%4.1f" % (v / 10.0))
+            else:
+                cells.append("%4d" % v)
         lines.append(
-            "%s  %2d  %-8s  %4d  %5d %+3d %7s  %4d  %4d  %3d  %d  %s  %4s  %3d  %2s %4s%s"
-            % (
-                c,
-                id_,
-                JOINT[id_],
-                r["pos"],
-                r["un"],
-                r["turns"],
-                deg_of(id_, r["un"]),
-                r["speed"],
-                r["load"],
-                r["cur"],
-                r["moving"],
-                r["tq"],
-                r["v"],
-                r["temp"],
-                r["st"],
-                r["mode"],
-                RST,
-            )
+            "%s  %2s  %-8s  %s%s"
+            % (color(vals, prev_i), id_, name, "  ".join(cells), RST)
         )
     lines.append("")
-    lines.append(DIM + "  green = pos/speed   yellow = load/cur   red = torque on" + RST)
-    lines.append(DIM + "  backdrive ok.  Ctrl+C stop." + RST)
-    sys.stdout.write(HOME_CUR + "\n".join(lines) + "\n" + CLEAR_TAIL)
+    lines.append(DIM + "  " + note + "  Ctrl+C stop." + RST)
+    sys.stdout.write(CUR_HOME + "\n".join(lines) + "\n" + CLEAR_TAIL)
     sys.stdout.flush()
+
+
+def parse_line(ln, st):
+    if ln.startswith("vec row="):
+        st["rows"] = [int(x) for x in ln[8:].split(",") if x]
+        return "hdr"
+    if ln.startswith("vec col="):
+        st["cols"] = ln[8:].split(",")
+        return "hdr"
+    if ln.startswith("m "):
+        st["chip_t"] = ln[2:].strip()
+        st["pending"] = []
+        st["need"] = len(st["rows"]) if st["rows"] else 7
+        return "m"
+    if ln.startswith("mat ms="):
+        st["mat_ack"] = True
+        return "ack"
+    if st.get("need", 0) > 0:
+        if ln == "-":
+            st["pending"].append(None)
+        else:
+            try:
+                nums = [int(x) for x in ln.split()]
+            except ValueError:
+                return None
+            st["pending"].append(nums)
+        st["need"] -= 1
+        if st["need"] == 0:
+            st["frame"] = st["pending"]
+            st["pending"] = []
+            return "frame"
+        return "row"
+    return None
 
 
 def main():
-    ser = serial.Serial(PORT, BAUD, timeout=0.05)
-    time.sleep(0.25)
-    ser.reset_input_buffer()
-    send(ser, "")
-    drain(ser, 0.4)
-    send(ser, "listen")
-    extra = drain(ser, 0.35)
-    _, dump = parse(extra)
-    if dump is True:
-        send(ser, "listen")
-        drain(ser, 0.25)
+    ap = argparse.ArgumentParser()
+    ap.add_argument("-p", "--port", default=PORT)
+    ap.add_argument("--ms", type=int, default=PERIOD_MS)
+    args = ap.parse_args()
+    ms = args.ms
+    if ms < 40:
+        ms = 40
+    if ms > 2000:
+        ms = 2000
+    period = ms / 1000.0
 
-    track = Unwrap()
-    prev = {}
+    ser = None
     t0 = time.time()
-    sys.stdout.write(HIDE + "\033[2J")
+    st = {
+        "rows": [],
+        "cols": [],
+        "frame": [],
+        "pending": [],
+        "need": 0,
+        "chip_t": "-",
+        "mat_ack": False,
+    }
+    prev = []
+    last_draw = last_cmd = 0.0
+    note = "waiting"
+
+    sys.stdout.write(HIDE + "\033[2J" + CUR_HOME)
     sys.stdout.flush()
     try:
         while True:
-            send(ser, "get")
-            raw = drain(ser, 1.5)
-            rows, _ = parse(raw)
-            track.apply(rows)
-            miss = [i for i in range(11, 18) if i not in rows]
-            draw(time.time() - t0, rows, prev, miss)
-            if rows:
-                prev = {i: dict(rows[i]) for i in rows}
-            time.sleep(0.05)
+            if ser is None:
+                if not os.path.exists(args.port):
+                    draw(time.time() - t0, ms, st["rows"], st["cols"],
+                         st["frame"], prev, st["chip_t"],
+                         "USB gone — plug ESP32 debug USB-C")
+                    time.sleep(period)
+                    continue
+                try:
+                    ser = serial.Serial(args.port, BAUD, timeout=period)
+                    time.sleep(0.2)
+                    ser.reset_input_buffer()
+                except serial.SerialException:
+                    ser = None
+                    time.sleep(period)
+                    continue
+                st = {
+                    "rows": [],
+                    "cols": [],
+                    "frame": [],
+                    "pending": [],
+                    "need": 0,
+                    "chip_t": "-",
+                    "mat_ack": False,
+                }
+                prev, buf = [], b""
+                last_cmd = 0.0
+                note = "waiting for chip"
+            try:
+                chunk = ser.read(ser.in_waiting or 1)
+            except serial.SerialException:
+                try:
+                    ser.close()
+                except Exception:
+                    pass
+                ser = None
+                continue
+            if chunk:
+                buf += chunk
+                while b"\n" in buf:
+                    raw, buf = buf.split(b"\n", 1)
+                    ln = raw.decode("utf-8", "replace").strip()
+                    if not ln:
+                        continue
+                    kind = parse_line(ln, st)
+                    if kind == "hdr":
+                        note = "labels ok"
+                    elif kind == "ack":
+                        note = ln
+                    elif kind == "frame":
+                        note = "matrix"
+                    elif ln.startswith("err unknown") and "mat" in ln:
+                        note = "chip has no mat — flash this tree"
+            now = time.time()
+            if (not st["mat_ack"]) and (now - last_cmd) >= 1.0:
+                try:
+                    send(ser, "mat %d" % ms)
+                except serial.SerialException:
+                    try:
+                        ser.close()
+                    except Exception:
+                        pass
+                    ser = None
+                    continue
+                last_cmd = now
+                note = "sent mat %d" % ms
+            if now - last_draw >= period:
+                if st["frame"] and any(st["frame"]):
+                    note = "backdrive ok, tq=0"
+                elif st["frame"]:
+                    note = "servos silent — plug XT60"
+                draw(now - t0, ms, st["rows"], st["cols"],
+                     st["frame"], prev, st["chip_t"], note)
+                prev = [r[:] if r else None for r in st["frame"]]
+                last_draw = now
     except KeyboardInterrupt:
         pass
     finally:
-        sys.stdout.write(SHOW + "\n")
+        if ser is not None:
+            try:
+                send(ser, "mat 0")
+            except Exception:
+                pass
+            try:
+                ser.close()
+            except Exception:
+                pass
+        sys.stdout.write(SHOW + CUR_HOME + CLEAR_TAIL)
         sys.stdout.flush()
-        ser.close()
 
 
 if __name__ == "__main__":
