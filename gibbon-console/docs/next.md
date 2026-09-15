@@ -16,7 +16,7 @@ Chip plan: `../roarm-fw/docs/plans/firmware-minimal.md`.
 
 ## Try next (this sitting)
 
-Last hours: **do not write firmware.** Four limbs are bolted; two 3S short. Teleop **one** powered limb from this console (phone on WiFi). LOCK / FREE / nudge / STOP. Trip ESTOP once on `/raw/`. Support the body. Arm-side: `../roarm-fw/docs/plans/now.md`.
+Last hours: **do not write firmware.** Four limbs are bolted; **two** healthy 3S. Teleop two limbs (one then the other, or two if both packs are on), body supported. LOCK / FREE / nudge / STOP. Trip ESTOP once on `/raw/`. **Do not order the other two packs until that is good.** Then four-limb tests in southern Italy. Arm-side: `../roarm-fw/docs/plans/now.md`.
 
 When that is boring:
 
