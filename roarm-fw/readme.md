@@ -1,8 +1,9 @@
 This is a modified Waveshare RoArm-M3 Pro (Tony: XT60 battery for portable use) plus Bus Servo Driver HAT (A), ESP32-WROOM-32.
 
-**Every flash / serial:** `docs/framework/espidf.md`  
+**Every flash / serial:** `docs/framework/espidf.md` (`./scripts/mon.sh` after flash)  
 **Every USB start (pack off):** `docs/baselines/usb-start.md`  
-Stop monitor: second terminal `pkill -f esp_idf_monitor`
+**Tiny bring-up images (USB listen, BLE `g1`):** `bringup/`  
+Stop IDF monitor: second terminal `pkill -f esp_idf_monitor`
 
 Firmware: native **ESP-IDF**. No move on boot. READ `get` / `ping` / `batt` / `stream` / `mat` / `who`. Writes: any ID via `id N` (11–15 hop ≤80), **hand** (17) and **twist** (16) clamped. Same text on USB and **BLE** (`gibbon-XXXX`, Nordic UART). Sitting: `../gibbon-console` (Django), `./scripts/mon.sh` (serial), or `scripts/live.py`. Tests: `docs/software.md`.
 
@@ -23,6 +24,7 @@ Firmware: native **ESP-IDF**. No move on boot. READ `get` / `ping` / `batt` / `s
 | 2026-09-11 calibrate / wrap Δ | `development-logs/2026-09-11-calibrate.md` |
 | Minimal firmware (chip vs host) | `docs/plans/firmware-minimal.md` |
 | USB start (healthy, pack off) | `docs/baselines/usb-start.md` |
+| Bring-up series (tiny `.c` + BLE `/monitor/`) | `bringup/` |
 | USB + battery gold | `docs/baselines/usb-battery-on.md` |
 | USB no-battery ping gold | `docs/baselines/usb-no-battery.md` |
 | Hand-move (USB + pack, `tq=0`) | `docs/baselines/hand-move-usb-battery-on.md` |
