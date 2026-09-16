@@ -1,3 +1,5 @@
+Workspace status: [`../STATUS.md`](../STATUS.md). Sitting: [`docs/plans/now.md`](docs/plans/now.md).
+
 This is a modified Waveshare RoArm-M3 Pro (Tony: XT60 battery for portable use) plus Bus Servo Driver HAT (A), ESP32-WROOM-32.
 
 **Every flash / serial:** `docs/framework/espidf.md` (`./scripts/mon.sh` after flash)  

@@ -1,4 +1,5 @@
 build/
+bringup/build/
 managed_components/
 sdkconfig
 sdkconfig.old
