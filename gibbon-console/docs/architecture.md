@@ -24,9 +24,10 @@ gibbon-console/
     static/console/            app.css, js/core.js home.js joint.js calibrate.js imitate.js raw.js …
     hat.py                     gold USB captures for /hat/
   docs/
+  legacy-pwa/                  old Chromium PWA (not served)
 ```
 
-Root `index.html` / `console.js` are stale PWA leftovers.
+Old Chromium PWA lives in `legacy-pwa/` (not served). Django is this repo (`config/` + `console/`). `/act/` and `/graphs/` still redirect; `act.html` / `graphs.html` are leftovers.
 
 ## Pages
 

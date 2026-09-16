@@ -30,7 +30,7 @@ When that is boring:
 - Push host `Limit` rows into chip clamps for **non-wrap** IDs (today only hand/twist are hardcoded on chip).
 - Wrap-walk so test/sweep can cross 0/4095. Until then wrap test stays off.
 - MySQL when mariadb is installed (`docs/run.md`).
-- Delete stale root `index.html` / `console.js` / `console.css` / `sw.js` once nobody uses the old PWA.
+- Old PWA is in `legacy-pwa/` (not served). Delete `console/templates/console/act.html` and `graphs.html` (and `js/act.js` / `js/graphs.js`) when the redirect aliases are unused.
 - Trial graphs: overlay Command marks on Sample traces.
 - Phone Chromium can Web Bluetooth later; Firefox stays on this WiFi bridge. Laptop Chromium `/monitor/` is the listen-only path today (`02-ble-monitor`, USB unplugged).
 

@@ -1,4 +1,4 @@
-Laptop UI + USB/BLE bridge + trial log. Chip: `../roarm-fw`.
+Laptop UI + USB/BLE bridge + trial log. Chip: `../roarm-fw`. Workspace: [`../STATUS.md`](../STATUS.md).
 
 **Docs:** [`docs/README.md`](docs/README.md) (run, architecture, link, data, UI, calibrate, next).
 
