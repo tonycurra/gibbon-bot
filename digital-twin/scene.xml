@@ -1,0 +1,98 @@
+<!-- One RoArm-M3 on a table plane. CPU MuJoCo.
+     Body quats from compiling urdf/roarm_m3.urdf (Waveshare kinematics, MIT).
+     Joint names = sitting words (turn / raise / bend / wrist / twist / hand). -->
+<mujoco model="roarm_m3">
+  <compiler angle="radian" meshdir="meshes" autolimits="true"/>
+  <option timestep="0.002" gravity="0 0 -9.81"/>
+
+  <asset>
+    <mesh name="base_link"    file="base_link.stl"    scale="0.001 0.001 0.001"/>
+    <mesh name="link1"        file="link1.stl"        scale="0.001 0.001 0.001"/>
+    <mesh name="link2"        file="link2.stl"        scale="0.001 0.001 0.001"/>
+    <mesh name="link3"        file="link3.stl"        scale="0.001 0.001 0.001"/>
+    <mesh name="link4"        file="link4.stl"        scale="0.001 0.001 0.001"/>
+    <mesh name="link5"        file="link5.stl"        scale="0.001 0.001 0.001"/>
+    <mesh name="gripper_link" file="gripper_link.stl" scale="0.001 0.001 0.001"/>
+  </asset>
+
+  <default>
+    <geom rgba="0.75 0.75 0.78 1" friction="1 0.01 0.001"/>
+    <default class="st3235">
+      <joint damping="0.62" armature="0.01"/>
+      <position kp="40" kv="4" forcerange="-2.94 2.94"/>
+    </default>
+    <default class="st3235x2">
+      <joint damping="1.24" armature="0.02"/>
+      <position kp="40" kv="4" forcerange="-5.88 5.88"/>
+    </default>
+    <default class="st3215">
+      <joint damping="0.62" armature="0.01"/>
+      <position kp="40" kv="4" forcerange="-2.94 2.94"/>
+    </default>
+    <default class="st3215hs">
+      <joint damping="0.18" armature="0.005"/>
+      <position kp="40" kv="4" forcerange="-1.96 1.96"/>
+    </default>
+  </default>
+
+  <visual>
+    <headlight ambient="0.4 0.4 0.4" diffuse="0.6 0.6 0.6"/>
+  </visual>
+
+  <worldbody>
+    <light name="top" pos="0 0 2" dir="0 0 -1" directional="true"/>
+    <geom name="floor" type="plane" size="1 1 0.05" rgba="0.35 0.38 0.40 1"/>
+
+    <!-- Official world_to_base_link: sit on z=0. -->
+    <body name="base_link" pos="0 0 0.0701">
+      <inertial pos="-0.0068 0 -0.03" mass="0.2562183" diaginertia="0.00029211 0.00035719 0.000349421"/>
+      <geom type="mesh" mesh="base_link" contype="0" conaffinity="0"/>
+      <body name="link1">
+        <inertial pos="0 0 0.037" quat="0.5 0.5 -0.5 0.5" mass="0.0729177" diaginertia="5.01023e-05 4.68465e-05 3.32107e-05"/>
+        <joint name="turn" type="hinge" axis="0 0 1" range="-3.1416 3.1416" class="st3235"/>
+        <geom type="mesh" mesh="link1"/>
+        <body name="link2" pos="0 0 0.051959" quat="0.499998 -0.5 -0.5 -0.500002">
+          <inertial pos="0.119 0.012247 -0.0001" quat="0.5 0.5 0.5 0.5" mass="0.0703216" diaginertia="0.000423091 0.000404557 5.46501e-05"/>
+          <joint name="raise" type="hinge" axis="0 0 1" range="-1.5708 1.5708" class="st3235x2"/>
+          <geom type="mesh" mesh="link2"/>
+          <body name="link3" pos="0.236815 0.030002 0" quat="0.707105 0 0 0.707108">
+            <inertial pos="-0.0015 -0.0765 0.00505" quat="0.707107 0.707107 0 0" mass="0.021608" diaginertia="6.37699e-05 6.28965e-05 3.67026e-06"/>
+            <joint name="bend" type="hinge" axis="0 0 1" range="-1 2.95" class="st3235"/>
+            <geom type="mesh" mesh="link3"/>
+            <body name="link4" pos="0 -0.144586 0">
+              <inertial pos="-0.0015 -0.022 -0.00075" quat="0.5 0.5 -0.5 0.5" mass="0.0099933" diaginertia="5.60238e-06 4.53979e-06 3.78103e-06"/>
+              <joint name="wrist" type="hinge" axis="0 0 1" range="-1.5708 1.5708" class="st3235"/>
+              <geom type="mesh" mesh="link4"/>
+              <body name="link5" pos="0.015147 -0.053653 0" quat="0.499998 0.5 0.5 -0.500002">
+                <inertial pos="-0.0078 0 0.0595" quat="0.707107 0 0 0.707107" mass="0.0153928" diaginertia="2.14427e-05 2.02869e-05 4.39495e-06"/>
+                <joint name="twist" type="hinge" axis="0 0 1" range="-3.1416 3.1416" class="st3215"/>
+                <geom type="mesh" mesh="link5"/>
+                <site name="tcp" pos="0 0 0.115428" size="0.01" rgba="0.9 0.2 0.2 1"/>
+                <body name="gripper_link" pos="0 0.018821 0.052035" quat="0.499998 -0.5 -0.5 -0.500002">
+                  <inertial pos="0.027 0.0027 -0.018935" quat="0.5 0.5 0.5 0.5" mass="0.0028708" diaginertia="1.82071e-06 1.60231e-06 5.23216e-07"/>
+                  <joint name="hand" type="hinge" axis="0 0 1" range="0 1.5" class="st3215hs"/>
+                  <geom type="mesh" mesh="gripper_link"/>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+
+  <actuator>
+    <position name="turn"  joint="turn"  class="st3235"   ctrlrange="-3.1416 3.1416"/>
+    <position name="raise" joint="raise" class="st3235x2" ctrlrange="-1.5708 1.5708"/>
+    <position name="bend"  joint="bend"  class="st3235"   ctrlrange="-1 2.95"/>
+    <position name="wrist" joint="wrist" class="st3235"   ctrlrange="-1.5708 1.5708"/>
+    <position name="twist" joint="twist" class="st3215"   ctrlrange="-3.1416 3.1416"/>
+    <position name="hand"  joint="hand"  class="st3215hs" ctrlrange="0 1.5"/>
+  </actuator>
+
+  <!-- zero = URDF zeros (arm up). home = stock power-on (elbow ~90°, hand closed). -->
+  <keyframe>
+    <key name="zero" qpos="0 0 0 0 0 0" ctrl="0 0 0 0 0 0"/>
+    <key name="home" qpos="0 0 1.5708 0 0 0" ctrl="0 0 1.5708 0 0 0"/>
+  </keyframe>
+</mujoco>
