@@ -24,7 +24,7 @@ Stand behind the base. Words: `docs/hardware/motors/names.md`. Walls by hand, `t
 | Twist sitting (live) | `python3 scripts/live.py` then `here` / `twist …` / `q` | `data/twist-absolute.json` | `baselines/twist.md` |
 
 ```bash
-cd /home/t/code/gibbon-bot/roarm-fw
+# from this repo (roarm-fw/). IDF build/ stays on the machine that flashes.
 ./scripts/mon.sh
 python3 scripts/listen.py
 python3 scripts/live.py
