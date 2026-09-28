@@ -22,6 +22,8 @@ dist/
 .env
 *.env
 *.env.local
+*.pem
+*.key
 
 # Logs and runtime data
 logs/
