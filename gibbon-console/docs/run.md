@@ -1,7 +1,8 @@
 # Run
 
 ```bash
-cd /home/t/code/gibbon-bot/gibbon-console
+# from this repo (gibbon-console/). .venv is local and gitignored.
+python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 .venv/bin/python manage.py migrate
 .venv/bin/python manage.py runserver 0.0.0.0:8080

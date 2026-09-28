@@ -3,7 +3,9 @@ Laptop UI + USB/BLE bridge + trial log. Chip: `../roarm-fw`. Workspace: [`../STA
 **Docs:** [`docs/README.md`](docs/README.md) (run, architecture, link, data, UI, calibrate, next).
 
 ```bash
-cd /home/t/code/gibbon-bot/gibbon-console
+# from this repo (gibbon-console/)
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
 .venv/bin/python manage.py migrate
 .venv/bin/python manage.py runserver 0.0.0.0:8080
 ```

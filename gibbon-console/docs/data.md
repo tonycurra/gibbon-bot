@@ -28,8 +28,8 @@ Traces: pos@56, un, speed@58, load@60, cur@69, V@62, temp@63. Load is PWM effort
 
 ## Files
 
-- SQLite: `db.sqlite3` (gitignored)
-- Old line dumps: `sittings/*.jsonl` (pre-Django)
-- BLE addr cache: `.ble-addr`
+- SQLite: `db.sqlite3` (gitignored; the VPS starts empty and migrates)
+- Old line dumps: `sittings/*.jsonl` (pre-Django, gitignored)
+- BLE addr cache: `.ble-addr` (this machine, gitignored)
 
 Django admin can browse rows after `createsuperuser`.
