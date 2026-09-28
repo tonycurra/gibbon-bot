@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mujoco model="torso_inspect">
+  <!-- Minimal scene for inspecting the new gibbon_torso_mk2 mesh.
+       Torso is welded (no joint, no gravity) at the origin so you can
+       see its native orientation against the world axes.
+
+       Raw mesh bounds (mm):  X=[-50,50]  Y=[-45,245]  Z=[-245,45]
+       → 100×290×290, centered at (0, +100, -100).
+
+       Robot frame convention (scene.xml): X=forward, Y=left, Z=up.
+       If the body looks wrong, rotate via the <geom euler=...> attr below.
+
+       Coloured markers show the current limb attachment points
+       (front: x=+0.034, back: x=-0.034, side: y=±0.038, z=0). -->
+
+  <compiler angle="degree"/>
+
+  <option gravity="0 0 0"/>
+
+  <asset>
+    <mesh name="gibbon_torso_mk2" content_type="model/obj"
+          file="meshes/gibbon_torso_mk2.obj" scale="0.001 0.001 0.001"/>
+    <mesh name="base_link" content_type="model/stl" file="meshes/base_link.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="link1" content_type="model/stl" file="meshes/link1.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="link2" content_type="model/stl" file="meshes/link2.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="link3" content_type="model/stl" file="meshes/link3.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="link4" content_type="model/stl" file="meshes/link4.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="link5" content_type="model/stl" file="meshes/link5.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="gripper_link" content_type="model/stl" file="meshes/gripper_link.stl" scale="0.001 0.001 0.001"/>
+    <texture name="skybox" type="skybox" builtin="gradient"
+             rgb1="0.350 0.550 0.850" rgb2="0.700 0.833 0.960"
+             width="256" height="256"/>
+    <texture name="grid" type="2d" builtin="checker" rgb1="0.3 0.3 0.3"
+             rgb2="0.4 0.4 0.4" width="256" height="256"/>
+    <material name="grid" texture="grid" texrepeat="10 10" reflectance="0.1"/>
+  </asset>
+
+  <visual>
+    <headlight ambient="0.5 0.5 0.5" diffuse="0.6 0.6 0.6" specular="0 0 0"/>
+    <map znear="0.01" zfar="20"/>
+  </visual>
+
+  <worldbody>
+    <light name="sun" directional="true" pos="0 0 3" dir="0 0 -1"
+           diffuse="0.8 0.8 0.8"/>
+
+    <!-- Floor + grid (z=-0.4 to stay below mesh which extends to z=-0.245) -->
+    <geom name="floor" type="plane" size="1 1 0.05" pos="0 0 -0.4"
+          material="grid" rgba="0.5 0.5 0.5 1"/>
+
+    <!-- World axes at origin: X=red, Y=green, Z=blue. -->
+    <geom type="cylinder" fromto="0 0 0  0.15 0 0" size="0.003"
+          rgba="1 0 0 1" contype="0" conaffinity="0"/>
+    <geom type="cylinder" fromto="0 0 0  0 0.15 0" size="0.003"
+          rgba="0 1 0 1" contype="0" conaffinity="0"/>
+    <geom type="cylinder" fromto="0 0 0  0 0 0.15" size="0.003"
+          rgba="0 0 1 1" contype="0" conaffinity="0"/>
+
+    <!-- Torso mesh, welded to world. Tweak euler= here to re-orient. -->
+    <body name="torso" pos="0 0 0">
+      <!-- Try: euler="90 0 0" to rotate +Y body axis up to +Z, etc. -->
+      <geom type="mesh" mesh="gibbon_torso_mk2"
+            rgba="0.75 0.75 0.80 1"
+            euler="270 0 0"
+            contype="0" conaffinity="0"/>
+
+      <!-- Robot base (source mesh, no transforms beyond a 90° rotation around
+           Z/blue axis). Positioned so its mount face sits on the +X side
+           face of the torso, centered on the front hole rectangle. -->
+      <geom type="mesh" mesh="base_link" pos="0.050 -0.190 0.000"
+            quat="0.707107 0 0 0.707107"
+            rgba="0.85 0.4 0.4 1" contype="0" conaffinity="0"/>
+    </body>
+
+    <camera name="iso" pos="0.6 -0.6 0.4" xyaxes="1 1 0 -0.3 0.3 1"/>
+  </worldbody>
+</mujoco>

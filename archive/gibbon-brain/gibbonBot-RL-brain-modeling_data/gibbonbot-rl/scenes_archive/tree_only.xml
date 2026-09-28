@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mujoco model="tree_only">
+  <compiler angle="degree"/>
+
+  <asset>
+    <hfield name="terrain" file="terrain.png" size="5.0 5.0 0.1000 0.05" />
+    <mesh name="terrain_surface" file="terrain_surface.obj"/>
+    <texture name="skybox" type="skybox" builtin="gradient" rgb1="0.350 0.550 0.850" rgb2="0.700 0.833 0.960" width="256" height="256" />
+
+    <mesh name="tree_0_wood" file="trees/tree_0_wood.obj"/>
+    <mesh name="tree_0_leaves" file="trees/tree_0_leaves.obj"/>
+  </asset>
+
+  <visual>
+    <headlight ambient="0.400 0.420 0.450" diffuse="0.6 0.6 0.6" specular="0 0 0" />
+    <quality shadowsize="4096" offsamples="8" />
+    <map fogstart="20" fogend="60" znear="0.05" zfar="200" />
+    <rgba haze="0.65 0.74 0.82 1" />
+    <global offwidth="1920" offheight="1920" />
+  </visual>
+
+  <worldbody>
+    <light name="sun" directional="true" castshadow="true" pos="-3.536 3.536 8.660" dir="0.354 -0.354 -0.866" diffuse="0.950 0.920 0.850" specular="0.2 0.2 0.2" />
+    <geom name="floor" type="hfield" hfield="terrain" pos="0 0 0" rgba="0 0 0 0" condim="4"/>
+    <geom name="terrain_visual" type="mesh" mesh="terrain_surface" rgba="0.45 0.32 0.18 1" contype="0" conaffinity="0"/>
+
+    <!-- tree at origin for easy framing -->
+    <geom name="tree_0_wood_visual" type="mesh" mesh="tree_0_wood" pos="0 0 0.002" rgba="0.50 0.47 0.43 1" contype="0" conaffinity="0"/>
+    <geom name="tree_0_leaves_visual" type="mesh" mesh="tree_0_leaves" pos="0 0 0.002" rgba="0.58 0.62 0.50 1" contype="0" conaffinity="0"/>
+
+    <camera name="orbit" pos="6 6 3" xyaxes="-1 1 0 -0.3 -0.3 0.9"/>
+  </worldbody>
+</mujoco>

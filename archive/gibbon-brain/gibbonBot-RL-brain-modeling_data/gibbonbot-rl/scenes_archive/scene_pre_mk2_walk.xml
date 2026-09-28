@@ -1,0 +1,231 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mujoco model="ape_robot">
+  <compiler angle="degree"/>
+
+  <asset>
+    <!-- ROBOT-ASSETS (hand-edited) -->
+    <mesh name="base_link" content_type="model/stl" file="meshes/base_link.stl" scale="0.001 0.001 0.001" />
+    <mesh name="link1" content_type="model/stl" file="meshes/link1.stl" scale="0.001 0.001 0.001" />
+    <mesh name="link2" content_type="model/stl" file="meshes/link2.stl" scale="0.001 0.001 0.001" />
+    <mesh name="link3" content_type="model/stl" file="meshes/link3.stl" scale="0.001 0.001 0.001" />
+    <mesh name="link4" content_type="model/stl" file="meshes/link4.stl" scale="0.001 0.001 0.001" />
+    <mesh name="link5" content_type="model/stl" file="meshes/link5.stl" scale="0.001 0.001 0.001" />
+    <mesh name="gripper_link" content_type="model/stl" file="meshes/gripper_link.stl" scale="0.001 0.001 0.001" />
+
+
+    <!-- TERRAIN-ASSETS-BEGIN (flat-only for fast compile; hfield/terrain mesh disabled) -->
+    <texture name="skybox" type="skybox" builtin="gradient" rgb1="0.350 0.550 0.850" rgb2="0.700 0.833 0.960" width="256" height="256" />
+    <!-- TERRAIN-ASSETS-END -->
+
+    <!-- TREE-ASSETS-BEGIN (disabled for fast compile — re-enable for grove/climb) -->
+    <!-- TREE-ASSETS-END -->
+  </asset>
+
+  <visual>
+    <headlight ambient="0.400 0.420 0.450" diffuse="0.6 0.6 0.6" specular="0 0 0" />
+    <quality shadowsize="4096" offsamples="8" />
+    <map fogstart="20" fogend="60" znear="0.05" zfar="200" />
+    <rgba haze="0.65 0.74 0.82 1" />
+    <global offwidth="1920" offheight="1920" />
+
+  </visual>
+
+  <default>
+    <default class="robot">
+      <geom friction="2.0 0.01 0.001" condim="4" />
+    </default>
+    <!-- Motor damping derived from spec (τ_stall / ω_no_load), see data/motors.md -->
+    <default class="st3235">     <!-- 2.94 N·m, 45 RPM (4.71 rad/s) → 0.62 -->
+      <joint damping="0.62"/>
+    </default>
+    <default class="st3215_hs">  <!-- 1.96 N·m, 106 RPM (11.10 rad/s) → 0.18 -->
+      <joint damping="0.18"/>
+    </default>
+  </default>
+
+  <worldbody>
+    <!-- TERRAIN-WORLDBODY-BEGIN -->
+    <light name="sun" directional="true" castshadow="true" pos="-3.536 3.536 8.660" dir="0.354 -0.354 -0.866" diffuse="0.950 0.920 0.850" specular="0.2 0.2 0.2" />
+    <!-- Collision: flat plane at z=0 (cheap). Heightfield asset retained for
+         visual reference + future terrain training; collision disabled. -->
+    <!-- Agricultural-soft ground: solref time constant 35 ms (slower spring),
+         solimp capped at 0.92 (not fully rigid), bumped rolling friction so
+         feet don't slide on the soft surface. Tune by editing solref's first
+         number (larger = softer, slower bounce-back). -->
+    <geom name="floor" type="plane" size="5 5 100" pos="0 0 0" condim="3" />
+
+    <!-- TERRAIN-WORLDBODY-END -->
+
+    <!-- ROBOT (hand-edited; spawn z on torso body patched by gen_terrain.py) -->
+    <body name="torso" pos="0 0 0.5310">
+      <inertial pos="-0.0192447 0 -0.0101645" quat="0.439032 0.439032 -0.554303 0.554303" mass="1.02487" diaginertia="0.0402837 0.0351039 0.0308832" />
+      <joint name="world_to_torso" type="free" />
+      <geom size="0.15 0.15 0.05" type="box" rgba="0.3 0.3 0.3 1" class="robot" />
+      <geom pos="0.12 0.15 -0.05" quat="0.5 -0.5 0.5 0.5" type="mesh" rgba="0.75 0.75 0.75 1" mesh="base_link" class="robot" />
+      <geom pos="0.12 -0.15 -0.05" quat="0.5 0.5 0.5 -0.5" type="mesh" rgba="0.75 0.75 0.75 1" mesh="base_link" class="robot" />
+      <geom pos="-0.12 0.1 -0.05" quat="0.7071068 0 -0.7071068 0" type="mesh" rgba="0.75 0.75 0.75 1" mesh="base_link" class="robot" />
+      <geom pos="-0.12 -0.1 -0.05" quat="0.7071068 0 -0.7071068 0" type="mesh" rgba="0.75 0.75 0.75 1" mesh="base_link" class="robot" />
+      <body name="fl_link1" pos="0.12 0.15 -0.05" quat="0.5 -0.5 0.5 0.5">
+        <inertial pos="0 0 0.037" quat="0.5 0.5 0.5 -0.5" mass="0.0729177" diaginertia="5.01023e-05 4.68465e-05 3.32107e-05" />
+        <joint name="fl_shoulder_yaw" pos="0 0 0" axis="0 0 1" range="-180 180" actuatorfrcrange="-2.94 2.94" class="st3235" />
+        <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link1" class="robot" contype="1" conaffinity="31" />
+        <body name="fl_link2" pos="0 0 0.051959" quat="0.499998 -0.5 -0.5 -0.500002">
+          <inertial pos="0.119 0.012247 -0.0001" quat="0.5 0.5 0.5 0.5" mass="0.0703216" diaginertia="0.000423091 0.000404557 5.46501e-05" />
+          <joint name="fl_shoulder_pitch" pos="0 0 0" axis="0 0 1" range="-90 90" actuatorfrcrange="-2.94 2.94" class="st3235" />
+          <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link2" class="robot" contype="1" conaffinity="31" />
+          <body name="fl_link3" pos="0.236815 0.030002 0" quat="0.707105 0 0 0.707108">
+            <inertial pos="-0.0015 -0.0765 0.00505" quat="0.707107 0.707107 0 0" mass="0.021608" diaginertia="6.37699e-05 6.28965e-05 3.67026e-06" />
+            <joint name="fl_elbow" pos="0 0 0" axis="0 0 1" range="-57.2958 169.0254" actuatorfrcrange="-2.94 2.94" class="st3235" />
+            <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link3" class="robot" contype="1" conaffinity="31" />
+            <geom type="capsule" size="0.010" fromto="0 -0.02 0 0 -0.14 0" rgba="0 0 0 0" contype="1" conaffinity="31" />
+            <body name="fl_link4" pos="0 -0.144586 0">
+              <inertial pos="-0.0015 -0.022 -0.00075" quat="0.5 0.5 0.5 -0.5" mass="0.0099933" diaginertia="5.60238e-06 4.53979e-06 3.78103e-06" />
+              <joint name="fl_forearm_roll" pos="0 0 0" axis="0 0 1" range="-90 90" actuatorfrcrange="-2.94 2.94" class="st3235" />
+              <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link4" class="robot" contype="1" conaffinity="31" />
+              <body name="fl_link5" pos="0.015147 -0.053653 0" quat="0.499998 0.5 0.5 -0.500002">
+                <inertial pos="-0.0078 0 0.0595" quat="0.707107 0 0 0.707107" mass="0.0153928" diaginertia="2.14427e-05 2.02869e-05 4.39495e-06" />
+                <joint name="fl_wrist" pos="0 0 0" axis="0 0 1" range="-180 180" actuatorfrcrange="-2.94 2.94" class="st3235" />
+                <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link5" class="robot" contype="1" conaffinity="31" />
+                <body name="fl_gripper_link" pos="0 0.018821 0.052035" quat="0.499998 -0.5 -0.5 -0.500002">
+                  <inertial pos="0.027 0.0027 -0.018935" quat="0.5 0.5 0.5 0.5" mass="0.0028708" diaginertia="1.82071e-06 1.60231e-06 5.23216e-07" />
+                  <joint name="fl_gripper" pos="0 0 0" axis="0 0 1" range="0 85.9437" actuatorfrcrange="-1.96 1.96" class="st3215_hs" />
+                  <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="gripper_link" class="robot" contype="1" conaffinity="31" />
+                  <geom type="sphere" size="0.012" pos="0.027 0.0027 -0.018935" rgba="0 0 0 0" contype="1" conaffinity="31" />
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+      <body name="fr_link1" pos="0.12 -0.15 -0.05" quat="0.5 0.5 0.5 -0.5">
+        <inertial pos="0 0 0.037" quat="0.5 0.5 0.5 -0.5" mass="0.0729177" diaginertia="5.01023e-05 4.68465e-05 3.32107e-05" />
+        <joint name="fr_shoulder_yaw" pos="0 0 0" axis="0 0 1" range="-180 180" actuatorfrcrange="-2.94 2.94" class="st3235" />
+        <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link1" class="robot" contype="1" conaffinity="31" />
+        <body name="fr_link2" pos="0 0 0.051959" quat="0.499998 -0.5 -0.5 -0.500002">
+          <inertial pos="0.119 0.012247 -0.0001" quat="0.5 0.5 0.5 0.5" mass="0.0703216" diaginertia="0.000423091 0.000404557 5.46501e-05" />
+          <joint name="fr_shoulder_pitch" pos="0 0 0" axis="0 0 1" range="-90 90" actuatorfrcrange="-2.94 2.94" class="st3235" />
+          <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link2" class="robot" contype="1" conaffinity="31" />
+          <body name="fr_link3" pos="0.236815 0.030002 0" quat="0.707105 0 0 0.707108">
+            <inertial pos="-0.0015 -0.0765 0.00505" quat="0.707107 0.707107 0 0" mass="0.021608" diaginertia="6.37699e-05 6.28965e-05 3.67026e-06" />
+            <joint name="fr_elbow" pos="0 0 0" axis="0 0 1" range="-57.2958 169.0254" actuatorfrcrange="-2.94 2.94" class="st3235" />
+            <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link3" class="robot" contype="1" conaffinity="31" />
+            <geom type="capsule" size="0.010" fromto="0 -0.02 0 0 -0.14 0" rgba="0 0 0 0" contype="1" conaffinity="31" />
+            <body name="fr_link4" pos="0 -0.144586 0">
+              <inertial pos="-0.0015 -0.022 -0.00075" quat="0.5 0.5 0.5 -0.5" mass="0.0099933" diaginertia="5.60238e-06 4.53979e-06 3.78103e-06" />
+              <joint name="fr_forearm_roll" pos="0 0 0" axis="0 0 1" range="-90 90" actuatorfrcrange="-2.94 2.94" class="st3235" />
+              <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link4" class="robot" contype="1" conaffinity="31" />
+              <body name="fr_link5" pos="0.015147 -0.053653 0" quat="0.499998 0.5 0.5 -0.500002">
+                <inertial pos="-0.0078 0 0.0595" quat="0.707107 0 0 0.707107" mass="0.0153928" diaginertia="2.14427e-05 2.02869e-05 4.39495e-06" />
+                <joint name="fr_wrist" pos="0 0 0" axis="0 0 1" range="-180 180" actuatorfrcrange="-2.94 2.94" class="st3235" />
+                <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link5" class="robot" contype="1" conaffinity="31" />
+                <body name="fr_gripper_link" pos="0 0.018821 0.052035" quat="0.499998 -0.5 -0.5 -0.500002">
+                  <inertial pos="0.027 0.0027 -0.018935" quat="0.5 0.5 0.5 0.5" mass="0.0028708" diaginertia="1.82071e-06 1.60231e-06 5.23216e-07" />
+                  <joint name="fr_gripper" pos="0 0 0" axis="0 0 1" range="0 85.9437" actuatorfrcrange="-1.96 1.96" class="st3215_hs" />
+                  <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="gripper_link" class="robot" contype="1" conaffinity="31" />
+                  <geom type="sphere" size="0.012" pos="0.027 0.0027 -0.018935" rgba="0 0 0 0" contype="1" conaffinity="31" />
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+      <body name="bl_link1" pos="-0.12 0.1 -0.05" quat="0.7071068 0 -0.7071068 0">
+        <inertial pos="0 0 0.037" quat="0.5 0.5 0.5 -0.5" mass="0.0729177" diaginertia="5.01023e-05 4.68465e-05 3.32107e-05" />
+        <joint name="bl_hip_yaw" pos="0 0 0" axis="0 0 1" range="-180 180" actuatorfrcrange="-2.94 2.94" class="st3235" />
+        <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link1" class="robot" contype="1" conaffinity="31" />
+        <body name="bl_link2" pos="0 0 0.051959" quat="0.499998 -0.5 -0.5 -0.500002">
+          <inertial pos="0.119 0.012247 -0.0001" quat="0.5 0.5 0.5 0.5" mass="0.0703216" diaginertia="0.000423091 0.000404557 5.46501e-05" />
+          <joint name="bl_hip_pitch" pos="0 0 0" axis="0 0 1" range="-90 90" actuatorfrcrange="-2.94 2.94" class="st3235" />
+          <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link2" class="robot" contype="1" conaffinity="31" />
+          <body name="bl_link3" pos="0.236815 0.030002 0" quat="0.707105 0 0 0.707108">
+            <inertial pos="-0.0015 -0.0765 0.00505" quat="0.707107 0.707107 0 0" mass="0.021608" diaginertia="6.37699e-05 6.28965e-05 3.67026e-06" />
+            <joint name="bl_knee" pos="0 0 0" axis="0 0 1" range="-57.2958 169.0254" actuatorfrcrange="-2.94 2.94" class="st3235" />
+            <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link3" class="robot" contype="1" conaffinity="31" />
+            <geom type="capsule" size="0.010" fromto="0 -0.02 0 0 -0.14 0" rgba="0 0 0 0" contype="1" conaffinity="31" />
+            <body name="bl_link4" pos="0 -0.144586 0">
+              <inertial pos="-0.0015 -0.022 -0.00075" quat="0.5 0.5 0.5 -0.5" mass="0.0099933" diaginertia="5.60238e-06 4.53979e-06 3.78103e-06" />
+              <joint name="bl_shin_roll" pos="0 0 0" axis="0 0 1" range="-90 90" actuatorfrcrange="-2.94 2.94" class="st3235" />
+              <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link4" class="robot" contype="1" conaffinity="31" />
+              <body name="bl_link5" pos="0.015147 -0.053653 0" quat="0.499998 0.5 0.5 -0.500002">
+                <inertial pos="-0.0078 0 0.0595" quat="0.707107 0 0 0.707107" mass="0.0153928" diaginertia="2.14427e-05 2.02869e-05 4.39495e-06" />
+                <joint name="bl_ankle" pos="0 0 0" axis="0 0 1" range="-180 180" actuatorfrcrange="-2.94 2.94" class="st3235" />
+                <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link5" class="robot" contype="1" conaffinity="31" />
+                <body name="bl_gripper_link" pos="0 0.018821 0.052035" quat="0.499998 -0.5 -0.5 -0.500002">
+                  <inertial pos="0.027 0.0027 -0.018935" quat="0.5 0.5 0.5 0.5" mass="0.0028708" diaginertia="1.82071e-06 1.60231e-06 5.23216e-07" />
+                  <joint name="bl_foot" pos="0 0 0" axis="0 0 1" range="0 85.9437" actuatorfrcrange="-1.96 1.96" class="st3215_hs" />
+                  <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="gripper_link" class="robot" contype="1" conaffinity="31" />
+                  <geom type="sphere" size="0.012" pos="0.027 0.0027 -0.018935" rgba="0 0 0 0" contype="1" conaffinity="31" />
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+      <body name="br_link1" pos="-0.12 -0.1 -0.05" quat="0.7071068 0 -0.7071068 0">
+        <inertial pos="0 0 0.037" quat="0.5 0.5 0.5 -0.5" mass="0.0729177" diaginertia="5.01023e-05 4.68465e-05 3.32107e-05" />
+        <joint name="br_hip_yaw" pos="0 0 0" axis="0 0 1" range="-180 180" actuatorfrcrange="-2.94 2.94" class="st3235" />
+        <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link1" class="robot" contype="1" conaffinity="31" />
+        <body name="br_link2" pos="0 0 0.051959" quat="0.499998 -0.5 -0.5 -0.500002">
+          <inertial pos="0.119 0.012247 -0.0001" quat="0.5 0.5 0.5 0.5" mass="0.0703216" diaginertia="0.000423091 0.000404557 5.46501e-05" />
+          <joint name="br_hip_pitch" pos="0 0 0" axis="0 0 1" range="-90 90" actuatorfrcrange="-2.94 2.94" class="st3235" />
+          <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link2" class="robot" contype="1" conaffinity="31" />
+          <body name="br_link3" pos="0.236815 0.030002 0" quat="0.707105 0 0 0.707108">
+            <inertial pos="-0.0015 -0.0765 0.00505" quat="0.707107 0.707107 0 0" mass="0.021608" diaginertia="6.37699e-05 6.28965e-05 3.67026e-06" />
+            <joint name="br_knee" pos="0 0 0" axis="0 0 1" range="-57.2958 169.0254" actuatorfrcrange="-2.94 2.94" class="st3235" />
+            <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link3" class="robot" contype="1" conaffinity="31" />
+            <geom type="capsule" size="0.010" fromto="0 -0.02 0 0 -0.14 0" rgba="0 0 0 0" contype="1" conaffinity="31" />
+            <body name="br_link4" pos="0 -0.144586 0">
+              <inertial pos="-0.0015 -0.022 -0.00075" quat="0.5 0.5 0.5 -0.5" mass="0.0099933" diaginertia="5.60238e-06 4.53979e-06 3.78103e-06" />
+              <joint name="br_shin_roll" pos="0 0 0" axis="0 0 1" range="-90 90" actuatorfrcrange="-2.94 2.94" class="st3235" />
+              <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link4" class="robot" contype="1" conaffinity="31" />
+              <body name="br_link5" pos="0.015147 -0.053653 0" quat="0.499998 0.5 0.5 -0.500002">
+                <inertial pos="-0.0078 0 0.0595" quat="0.707107 0 0 0.707107" mass="0.0153928" diaginertia="2.14427e-05 2.02869e-05 4.39495e-06" />
+                <joint name="br_ankle" pos="0 0 0" axis="0 0 1" range="-180 180" actuatorfrcrange="-2.94 2.94" class="st3235" />
+                <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="link5" class="robot" contype="1" conaffinity="31" />
+                <body name="br_gripper_link" pos="0 0.018821 0.052035" quat="0.499998 -0.5 -0.5 -0.500002">
+                  <inertial pos="0.027 0.0027 -0.018935" quat="0.5 0.5 0.5 0.5" mass="0.0028708" diaginertia="1.82071e-06 1.60231e-06 5.23216e-07" />
+                  <joint name="br_foot" pos="0 0 0" axis="0 0 1" range="0 85.9437" actuatorfrcrange="-1.96 1.96" class="st3215_hs" />
+                  <geom type="mesh" rgba="0.75 0.75 0.75 1" mesh="gripper_link" class="robot" contype="1" conaffinity="31" />
+                  <geom type="sphere" size="0.012" pos="0.027 0.0027 -0.018935" rgba="0 0 0 0" contype="1" conaffinity="31" />
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+    <camera name="fixed" pos="1.5 0 0.3" xyaxes="1 0 0 0 0.8 0.2"/>
+
+
+    <!-- TREE-WORLDBODY-BEGIN (disabled for minimal inspect scene) -->
+    <!-- TREE-WORLDBODY-END -->
+  </worldbody>
+
+  <actuator>
+    <position name="act_fl_shoulder_yaw"     joint="fl_shoulder_yaw"     kp="8" ctrlrange="-180 180"        forcelimited="true" forcerange="-2.94 2.94" />
+    <position name="act_fl_shoulder_pitch"   joint="fl_shoulder_pitch"   kp="8" ctrlrange="-90 90"          forcelimited="true" forcerange="-2.94 2.94" />
+    <position name="act_fl_elbow"            joint="fl_elbow"            kp="8" ctrlrange="-57.2958 169.0254" forcelimited="true" forcerange="-2.94 2.94" />
+    <position name="act_fl_forearm_roll"     joint="fl_forearm_roll"     kp="8" ctrlrange="-90 90"          forcelimited="true" forcerange="-2.94 2.94" />
+    <position name="act_fl_wrist"            joint="fl_wrist"            kp="8" ctrlrange="-180 180"        forcelimited="true" forcerange="-2.94 2.94" />
+    <position name="act_fl_gripper"          joint="fl_gripper"          kp="8" ctrlrange="0 85.9437"       forcelimited="true" forcerange="-1.96 1.96" />
+    <position name="act_fr_shoulder_yaw"     joint="fr_shoulder_yaw"     kp="8" ctrlrange="-180 180"        forcelimited="true" forcerange="-2.94 2.94" />
+    <position name="act_fr_shoulder_pitch"   joint="fr_shoulder_pitch"   kp="8" ctrlrange="-90 90"          forcelimited="true" forcerange="-2.94 2.94" />
+    <position name="act_fr_elbow"            joint="fr_elbow"            kp="8" ctrlrange="-57.2958 169.0254" forcelimited="true" forcerange="-2.94 2.94" />
+    <position name="act_fr_forearm_roll"     joint="fr_forearm_roll"     kp="8" ctrlrange="-90 90"          forcelimited="true" forcerange="-2.94 2.94" />
+    <position name="act_fr_wrist"            joint="fr_wrist"            kp="8" ctrlrange="-180 180"        forcelimited="true" forcerange="-2.94 2.94" />
+    <position name="act_fr_gripper"          joint="fr_gripper"          kp="8" ctrlrange="0 85.9437"       forcelimited="true" forcerange="-1.96 1.96" />
+    <position name="act_bl_hip_yaw"          joint="bl_hip_yaw"          kp="8" ctrlrange="-180 180"        forcelimited="true" forcerange="-2.94 2.94" />
+    <position name="act_bl_hip_pitch"        joint="bl_hip_pitch"        kp="8" ctrlrange="-90 90"          forcelimited="true" forcerange="-2.94 2.94" />
+    <position name="act_bl_knee"             joint="bl_knee"             kp="8" ctrlrange="-57.2958 169.0254" forcelimited="true" forcerange="-2.94 2.94" />
+    <position name="act_bl_shin_roll"        joint="bl_shin_roll"        kp="8" ctrlrange="-90 90"          forcelimited="true" forcerange="-2.94 2.94" />
+    <position name="act_bl_ankle"            joint="bl_ankle"            kp="8" ctrlrange="-180 180"        forcelimited="true" forcerange="-2.94 2.94" />
+    <position name="act_bl_foot"             joint="bl_foot"             kp="8" ctrlrange="0 85.9437"       forcelimited="true" forcerange="-1.96 1.96" />
+    <position name="act_br_hip_yaw"          joint="br_hip_yaw"          kp="8" ctrlrange="-180 180"        forcelimited="true" forcerange="-2.94 2.94" />
+    <position name="act_br_hip_pitch"        joint="br_hip_pitch"        kp="8" ctrlrange="-90 90"          forcelimited="true" forcerange="-2.94 2.94" />
+    <position name="act_br_knee"             joint="br_knee"             kp="8" ctrlrange="-57.2958 169.0254" forcelimited="true" forcerange="-2.94 2.94" />
+    <position name="act_br_shin_roll"        joint="br_shin_roll"        kp="8" ctrlrange="-90 90"          forcelimited="true" forcerange="-2.94 2.94" />
+    <position name="act_br_ankle"            joint="br_ankle"            kp="8" ctrlrange="-180 180"        forcelimited="true" forcerange="-2.94 2.94" />
+    <position name="act_br_foot"             joint="br_foot"             kp="8" ctrlrange="0 85.9437"       forcelimited="true" forcerange="-1.96 1.96" />
+
+  </actuator>
+</mujoco>

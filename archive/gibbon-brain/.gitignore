@@ -1,0 +1,19 @@
+# gibbon-brain is not a project git. mujoco/ is an upstream clone.
+
+.venv/
+venv/
+logs/
+mujoco/
+
+__pycache__/
+*.pyc
+*.log
+MUJOCO_LOG.TXT
+.env
+.env.*
+
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
