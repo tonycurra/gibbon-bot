@@ -1,11 +1,21 @@
 .venv/
+venv/
 __pycache__/
 *.pyc
 *.pyo
 .DS_Store
+Thumbs.db
 *.egg-info/
 dist/
 build/
+.env
+.env.*
+*.pem
+*.key
+*.log
+.vscode/
+.idea/
+*.swp
 # Windows download metadata
 *:Zone.Identifier
 # MuJoCo runtime log
