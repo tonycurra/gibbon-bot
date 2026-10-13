@@ -1,8 +1,20 @@
-# One-arm digital twin (CPU MuJoCo)
+# gibbon-digital-twin
 
-One Waveshare **RoArm-M3** bolted to a **table plane**. No torso, no four limbs, no RL. Not a git repo yet; `.gitignore` is ready (`.venv` stays local, meshes stay in the tree). Workspace: [`../STATUS.md`](../STATUS.md). Live robot: `../roarm-fw`. Parked four-limb RL: `../archive/`.
+One Waveshare RoArm-M3 in CPU MuJoCo, bolted to a table. Part of [Gibbon Bot](https://olivabot.com/en/projects/gibbon-bot.html). There is no torso, no second limb, and no policy in this repository.
 
-Meshes + kinematics from official [`roarm_description`](https://github.com/waveshareteam/roarm_ws) (`src/roarm_main/roarm_description`, **MIT**). CAD STLs live in `meshes/`.
+The mesh and the joint names come from Waveshare [`roarm_description`](https://github.com/waveshareteam/roarm_ws) (`src/roarm_main/roarm_description`, MIT). The scene file that welds the arm to the floor is Olivabot’s. Damping is datasheet damping. Homes and signs are not matched to a sitting CSV yet, so this is not a digital twin of the metal until that identification is done.
+
+Live firmware: [gibbon-roarm-fw](https://github.com/tonycurra/gibbon-roarm-fw). Sitting UI: [gibbon-console](https://github.com/tonycurra/gibbon-console). The earlier four-limb simulation is parked: [gibbon-rl](https://github.com/tonycurra/gibbon-rl), with the result written in [gibbon-archive](https://github.com/tonycurra/gibbon-archive).
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+.venv/bin/python look.py --check   # headless, exits 0
+.venv/bin/python look.py           # viewer, arm up
+.venv/bin/python look.py --home    # stock elbow about 90°
+```
+
+Code glue is [Apache-2.0](LICENSE). Meshes and the URDF kinematics stay MIT; see [NOTICE](NOTICE).
 
 ## Files
 
@@ -30,17 +42,6 @@ Raise is **one DOF** (dual-drive). Factory home in the XML: bend ≈ 1.57, hand 
 
 This is **not** identified on our sitting yet (homes, signs, loom walls). Counts → rad comes later.
 
-## Run
+CPU only. Keep this model off the phone page.
 
-```bash
-cd digital-twin
-python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
-.venv/bin/python look.py --check   # headless
-.venv/bin/python look.py           # viewer, arm up (URDF zeros)
-.venv/bin/python look.py --home    # stock elbow ~90°
-```
-
-CPU only. Do not put this in the phone page.
-
-Next: match a sitting CSV, then random-explore collisions so the safe box can go back to chip NVS.
+Next: match a sitting CSV, then explore collisions so a safe box can go back to chip NVS.

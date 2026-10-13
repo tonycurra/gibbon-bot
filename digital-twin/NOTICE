@@ -1,0 +1,15 @@
+gibbon-digital-twin
+Copyright 2026 Olivabot
+
+scene.xml, look.py, and this repository's glue are Olivabot's.
+
+Meshes in meshes/ and the kinematic chain in urdf/roarm_m3.urdf
+come from Waveshare roarm_description (MIT):
+
+  https://github.com/waveshareteam/roarm_ws
+  src/roarm_main/roarm_description
+
+Those files stay under the MIT license. This repository does not
+relicense them. Copyright remains with Waveshare.
+
+Damping and ranges here are datasheet values, not a measured plant.
