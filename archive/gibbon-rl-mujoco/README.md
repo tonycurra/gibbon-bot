@@ -1,6 +1,10 @@
 # Gibbon RL MuJoCo
 
-A reinforcement learning project for MuJoCo environments, featuring a unique "gibbon-like" robotic ape structure.
+**Parked, April 2026.** Early four-arm URDF / xacro and a Gymnasium simulation. This is not the live robot. The walk-to-tree attempt that followed is recorded in [gibbon-archive](https://github.com/tonycurra/gibbon-archive). The laboratory that replaced it is [gibbon-bot](https://github.com/tonycurra/gibbon-bot).
+
+---
+
+A reinforcement learning project for MuJoCo environments, featuring a four-RoArm ape structure.
 
 ## Setup
 
