@@ -29,15 +29,15 @@ April–July 2026 tried to learn a walk on four RoArm arms and a torso. The walk
 | Folder | What it was |
 | --- | --- |
 | [`archive/gibbonBot-RL/`](archive/gibbonBot-RL/README.md) | MJX / PPO / CPG / LIANA dashboard |
-| [`archive/gibbon-rl-mujoco/`](archive/gibbon-rl-mujoco/README.md) | Early four-arm model, added by Tony on 26 April 2026 |
+| [`archive/gibbon-rl-mujoco/`](archive/gibbon-rl-mujoco/README.md) | Early four-arm URDF and xacro, 26 April 2026 |
 | [`archive/olivabot-mujoco-cpu/`](archive/olivabot-mujoco-cpu/README.md) | CPU PPO stand-up on `main` |
 | [`archive/gibbon-brain/`](archive/gibbon-brain/README.md) | July Cartesian experiments, no inverse kinematics |
 
-## Credit
+## People
 
-Tony designed most of it, including the scene: the torso and the four arms in [`archive/gibbonBot-RL/data/scene.xml`](archive/gibbonBot-RL/data/scene.xml) and in [`archive/gibbon-rl-mujoco/simulation_code_jade/`](archive/gibbon-rl-mujoco/simulation_code_jade/). He also wrote the simulation on `main`, the firmware, the console, and the one-arm model. On the April–July simulation the lab atlas counts 389 commits by Tony and 10 by Jade Leurs.
+Tony — scene geometry, a torso and four arms, in [`archive/gibbonBot-RL/data/scene.xml`](archive/gibbonBot-RL/data/scene.xml) and [`archive/gibbon-rl-mujoco/simulation_code_jade/`](archive/gibbon-rl-mujoco/simulation_code_jade/). Simulation on `main`. Firmware, console, and the one-arm model.
 
-Jade Leurs was on that simulation from April through July 2026. Her 10 commits are pose priors (21 May–17 June), a quadruped environment (26–28 June), a Unitree Go2 setup (13 July), and telemetry on the CPU trainer (1 May). The list is [`CONTRIBUTORS.md`](CONTRIBUTORS.md). Those branches are not in this snapshot.
+Jade Leurs — simulation, April through July 2026. Pose priors from OpenApePose keypoints (21 May–17 June), a quadruped environment (26–28 June), a Unitree Go2 training setup (13 July), and telemetry on the CPU trainer (1 May). The commits are in [`CONTRIBUTORS.md`](CONTRIBUTORS.md). Those branches are not in this tree.
 
 ## Left out on purpose
 

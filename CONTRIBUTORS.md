@@ -1,18 +1,16 @@
-# Credit
+# Contributors
 
-Tony designed most of this and wrote the commits in the checkouts this repository was built from. Jade Leurs was on the simulation from April through July 2026. Her credit is the commits recorded under her name.
-
-The local history of `roarm-fw`, `gibbon-console`, `digital-twin`, and the archive checkouts has one human author: Tony. Her commits are written down in [`archive/WORK_OVERVIEW.md`](archive/WORK_OVERVIEW.md), from the Codeberg history of that season. Those branches were not in the checkout exported here, so the files from her commits are not in this snapshot. The dates and messages below are copied from that atlas.
+Authorship below follows the commits. Dates and messages for branches that are not in this tree are copied from the lab atlas, [`archive/WORK_OVERVIEW.md`](archive/WORK_OVERVIEW.md).
 
 ## Tony
 
-- The scene. Torso and four arms in [`archive/gibbonBot-RL/data/scene.xml`](archive/gibbonBot-RL/data/scene.xml), and the earlier xacro/URDF in [`archive/gibbon-rl-mujoco/simulation_code_jade/`](archive/gibbon-rl-mujoco/simulation_code_jade/). That folder was added 26 April 2026 by Tony, commit `62b599e`. The directory name is `simulation_code_jade`. The geometry is his.
-- The simulation on the lines in this snapshot. On `gibbonBot-RL` the atlas counts 389 commits by Tony and 10 by Jade Leurs, across 23 April 2026 to 13 July 2026. The `main` line here is his.
-- Sitting firmware (`roarm-fw`), the laptop console (`gibbon-console`), and the one-arm model (`digital-twin`).
+- Scene geometry: torso and four arms in [`archive/gibbonBot-RL/data/scene.xml`](archive/gibbonBot-RL/data/scene.xml), and the xacro/URDF in [`archive/gibbon-rl-mujoco/simulation_code_jade/`](archive/gibbon-rl-mujoco/simulation_code_jade/), added 26 April 2026, commit `62b599e`. The directory keeps the name `simulation_code_jade`.
+- Simulation on `gibbonBot-RL` `main`, 23 April 2026 to 13 July 2026. The atlas for that repository records 389 commits by Tony and 10 by Jade Leurs.
+- Firmware (`roarm-fw`), console (`gibbon-console`), and the one-arm model (`digital-twin`).
 
 ## Jade Leurs
 
-Ten commits on `gibbonBot-RL`, off `main`, and one on the CPU trainer.
+Simulation, April through July 2026. Ten commits on `gibbonBot-RL`, off `main`, and one on the CPU trainer. The branches were not in the checkout this tree was built from.
 
 Pose priors, branch `apenapepose_integration`:
 
@@ -48,7 +46,7 @@ CPU trainer, branch `jade` on `olivabot-mujoco-cpu`. The `main` line in this sna
 
 The atlas names the tip of that branch as Jade Leurs. The tensorboard commit is recorded as `jajayumei`. Both names are left as written.
 
-No commits of hers are on the firmware, the console, or the one-arm twin.
+Firmware, the console, and the one-arm model have no commits under these names.
 
 ## Waveshare
 

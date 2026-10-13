@@ -1,6 +1,6 @@
 # Gibbon-like robotic ape simulation
 
-Four ROARM M3 arms on one torso. Tony built this scene and added the folder on 26 April 2026, commit `62b599e`. The directory name is from that season. Jade Leurs’s commits are listed in the repository `CONTRIBUTORS.md`. They are not the history of these files.
+Four ROARM M3 arms on one torso. Added 26 April 2026, commit `62b599e`. The directory name is `simulation_code_jade`.
 
 ## Structure Overview
 

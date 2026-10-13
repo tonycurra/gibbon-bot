@@ -50,7 +50,7 @@ This will open a visualizer window showing a red ball falling onto a plane. For 
 The `/roarm_ws` folder contains the official content from the [Waveshare ROARM repository](https://github.com/waveshareteam/roarm_ws/tree/ros2-humble). This includes the robot description and characteristics used for simulation. While the original repository uses ROS and MoveIt, this project focuses on using the robot description for MuJoCo simulations without ROS dependencies. So we dont need all the files in this folder roarmws
 
 ### Gibbon-like robotic ape
-`/simulation_code_jade` is Tony’s scene: a torso and four ROARM arms, added 26 April 2026 (`62b599e`). The folder name is from that season. Jade Leurs’s own commits are on the repository credit page, not in this folder’s history:
+`/simulation_code_jade` is a torso and four ROARM arms, added 26 April 2026 (`62b599e`). The directory keeps that name.
 
 - **Structure**: Four ROARM M3 arms attached to a central torso
 - **Configuration**: 
