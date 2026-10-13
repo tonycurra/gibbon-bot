@@ -3,7 +3,6 @@
 ## 1. Run the Agent
 
 ```bash
-cd /home/t/code/gibbon-brain
 python3 agent_control.py
 ```
 

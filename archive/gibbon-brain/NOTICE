@@ -1,0 +1,8 @@
+gibbon-brain
+Copyright 2026 Olivabot
+
+Parked Cartesian PD experiments.
+
+RoArm meshes under gibbonBot-RL-brain-modeling_data that originate in
+Waveshare roarm_description remain under the MIT license.
+https://github.com/waveshareteam/roarm_ws
