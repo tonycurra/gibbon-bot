@@ -1,0 +1,65 @@
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+Thumbs.db
+*.egg-info/
+dist/
+build/
+.env
+.env.*
+.claude/
+*.pem
+*.key
+*.log
+.vscode/
+.idea/
+*.swp
+# Windows download metadata
+*:Zone.Identifier
+# MuJoCo runtime log
+MUJOCO_LOG.TXT
+
+# ===== Project-Specific Ignores =====
+# Evaluation results
+*.npy
+*.pkl
+
+# ROS build artifacts
+build/
+devel/
+install/
+.catkin_workspace
+
+# Large dataset files
+*.h5
+*.hdf5
+*.tar
+*.gz
+
+# Model weights
+*.ckpt
+*.pt
+*.pth
+
+# Test output
+test_*.py
+*.log
+coverage.xml
+.htmlcov/
+
+# Documentation build
+docs/_build/
+docs/*.aux
+docs/*.log
+docs/*.out
+docs/*.toc
+
+# Specific to this project
+/data/*
+!/data/scene.xml
+!/data/*.xml
+output/
+results/
