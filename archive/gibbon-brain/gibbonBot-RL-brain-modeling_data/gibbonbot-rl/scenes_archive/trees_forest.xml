@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mujoco model="trees_forest">
+  <compiler angle="degree"/>
+
+  <asset>
+    <hfield name="terrain" file="terrain.png" size="5.0 5.0 0.1000 0.05" />
+    <mesh name="terrain_surface" file="terrain_surface.obj"/>
+    <texture name="skybox" type="skybox" builtin="gradient" rgb1="0.350 0.550 0.850" rgb2="0.700 0.833 0.960" width="256" height="256" />
+  </asset>
+
+  <visual>
+    <headlight ambient="0.400 0.420 0.450" diffuse="0.6 0.6 0.6" specular="0 0 0" />
+    <quality shadowsize="4096" offsamples="8" />
+    <map fogstart="20" fogend="60" znear="0.05" zfar="200" />
+    <rgba haze="0.65 0.74 0.82 1" />
+    <global offwidth="1920" offheight="1920" />
+  </visual>
+
+  <worldbody>
+    <light name="sun" directional="true" castshadow="true" pos="-3.536 3.536 8.660" dir="0.354 -0.354 -0.866" diffuse="0.950 0.920 0.850" specular="0.2 0.2 0.2" />
+    <geom name="floor" type="hfield" hfield="terrain" pos="0 0 0" rgba="0 0 0 0" condim="4"/>
+    <geom name="terrain_visual" type="mesh" mesh="terrain_surface" rgba="0.45 0.32 0.18 1" contype="0" conaffinity="0"/>
+    <!-- tree 0: r=0.071 h=2.29 ground_z=0.060 -->
+    <geom name="t0_trunk" type="capsule" fromto="1.115 -3.800 0.025 1.115 -3.800 2.351" size="0.071" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31"/>
+    <geom name="t0_b0" type="capsule" fromto="1.128 -3.833 1.692 1.380 -4.504 1.943" size="0.039" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31"/>
+    <geom name="t0_b1" type="capsule" fromto="1.082 -3.811 1.382 0.366 -4.054 1.700" size="0.036" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31"/>
+    <geom name="t0_b2" type="capsule" fromto="1.105 -3.834 1.655 0.956 -4.345 1.617" size="0.024" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31"/>
+    <geom name="t0_b3" type="capsule" fromto="1.119 -3.765 0.972 1.181 -3.198 0.949" size="0.031" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31"/>
+    <geom name="t0_b4" type="capsule" fromto="1.091 -3.774 1.363 0.706 -3.365 1.378" size="0.038" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31"/>
+    <!-- tree 1: r=0.138 h=3.83 ground_z=0.057 -->
+    <geom name="t1_trunk" type="capsule" fromto="-1.800 -2.214 -0.012 -1.800 -2.214 3.885" size="0.138" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31"/>
+    <geom name="t1_b0" type="capsule" fromto="-1.798 -2.145 2.623 -1.767 -1.218 2.790" size="0.073" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31"/>
+    <geom name="t1_b1" type="capsule" fromto="-1.787 -2.147 2.977 -1.493 -0.628 3.124" size="0.037" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31"/>
+    <geom name="t1_b2" type="capsule" fromto="-1.776 -2.279 3.284 -1.544 -2.925 3.381" size="0.072" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31"/>
+    <geom name="t1_b3" type="capsule" fromto="-1.814 -2.282 2.699 -2.059 -3.480 2.733" size="0.071" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31"/>
+    <!-- tree 2: r=0.137 h=2.43 ground_z=0.047 -->
+    <geom name="t2_trunk" type="capsule" fromto="1.892 1.414 -0.022 1.892 1.414 2.475" size="0.137" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31"/>
+    <geom name="t2_b0" type="capsule" fromto="1.828 1.388 1.256 1.049 1.071 1.305" size="0.071" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31"/>
+    <geom name="t2_b1" type="capsule" fromto="1.905 1.481 1.479 2.037 2.157 1.854" size="0.038" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31"/>
+    <geom name="t2_b2" type="capsule" fromto="1.945 1.457 0.965 2.690 2.071 1.239" size="0.052" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31"/>
+    <geom name="t2_b3" type="capsule" fromto="1.841 1.460 0.989 1.324 1.936 1.371" size="0.074" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31"/>
+    <!-- tree 3: r=0.163 h=2.03 ground_z=0.032 -->
+    <geom name="t3_trunk" type="capsule" fromto="3.137 -3.304 -0.049 3.137 -3.304 2.067" size="0.163" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31"/>
+    <geom name="t3_b0" type="capsule" fromto="3.199 -3.359 0.884 3.780 -3.872 1.168" size="0.057" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31"/>
+    <geom name="t3_b1" type="capsule" fromto="3.182 -3.236 1.102 3.614 -2.572 1.025" size="0.076" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31"/>
+    <geom name="t3_b2" type="capsule" fromto="3.144 -3.386 1.931 3.173 -3.771 2.011" size="0.071" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31"/>
+    <geom name="t3_b3" type="capsule" fromto="3.056 -3.308 1.772 2.488 -3.336 1.783" size="0.049" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31"/>
+    <geom name="t3_b4" type="capsule" fromto="3.210 -3.343 1.908 3.778 -3.644 2.220" size="0.065" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31"/>
+    <geom name="t3_b5" type="capsule" fromto="3.084 -3.243 0.881 2.595 -2.674 1.282" size="0.053" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31"/>
+    <geom name="t3_b6" type="capsule" fromto="3.063 -3.338 1.038 2.333 -3.667 0.996" size="0.081" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31"/>
+    <geom name="t3_b7" type="capsule" fromto="3.058 -3.321 1.938 2.319 -3.475 1.919" size="0.087" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31"/>
+    <!-- tree 4: r=0.080 h=3.58 ground_z=0.058 -->
+    <geom name="t4_trunk" type="capsule" fromto="-0.625 -3.762 0.018 -0.625 -3.762 3.641" size="0.080" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31"/>
+    <geom name="t4_b0" type="capsule" fromto="-0.615 -3.723 2.222 -0.288 -2.387 2.534" size="0.025" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31"/>
+    <geom name="t4_b1" type="capsule" fromto="-0.585 -3.763 1.982 0.445 -3.794 2.290" size="0.032" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31"/>
+    <geom name="t4_b2" type="capsule" fromto="-0.618 -3.722 1.572 -0.422 -2.497 1.700" size="0.025" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31"/>
+    <geom name="t4_b3" type="capsule" fromto="-0.589 -3.744 1.786 0.136 -3.398 2.015" size="0.042" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31"/>
+    <geom name="t4_b4" type="capsule" fromto="-0.589 -3.744 3.160 0.620 -3.168 3.218" size="0.025" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31"/>
+    <geom name="t4_b5" type="capsule" fromto="-0.588 -3.777 1.597 0.407 -4.204 1.864" size="0.039" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31"/>
+    <geom name="t4_b6" type="capsule" fromto="-0.610 -3.724 3.048 -0.220 -2.732 3.003" size="0.030" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31"/>
+    <!-- tree 5: r=0.116 h=4.19 ground_z=0.047 -->
+    <geom name="t5_trunk" type="capsule" fromto="-2.251 0.043 -0.011 -2.251 0.043 4.235" size="0.116" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31"/>
+    <geom name="t5_b0" type="capsule" fromto="-2.286 -0.003 3.155 -3.283 -1.308 3.050" size="0.057" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31"/>
+    <geom name="t5_b1" type="capsule" fromto="-2.230 0.097 1.788 -1.930 0.878 1.976" size="0.035" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31"/>
+    <geom name="t5_b2" type="capsule" fromto="-2.210 0.002 2.675 -0.977 -1.240 2.579" size="0.059" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31"/>
+    <geom name="t5_b3" type="capsule" fromto="-2.284 -0.005 1.759 -2.672 -0.554 1.912" size="0.032" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31"/>
+    <geom name="t5_b4" type="capsule" fromto="-2.246 0.101 3.406 -2.135 1.397 3.595" size="0.059" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31"/>
+    <geom name="t5_b5" type="capsule" fromto="-2.221 0.093 3.780 -1.615 1.113 3.663" size="0.061" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31"/>
+    <geom name="t5_b6" type="capsule" fromto="-2.264 0.099 3.485 -2.608 1.627 4.001" size="0.056" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31"/>
+    <geom name="t5_b7" type="capsule" fromto="-2.309 0.048 3.176 -3.267 0.128 3.189" size="0.031" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31"/>
+    <!-- tree 6: r=0.148 h=2.18 ground_z=0.062 -->
+    <geom name="t6_trunk" type="capsule" fromto="-3.788 -2.409 -0.012 -3.788 -2.409 2.245" size="0.148" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31"/>
+    <geom name="t6_b0" type="capsule" fromto="-3.852 -2.447 0.901 -4.651 -2.914 1.090" size="0.044" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31"/>
+    <geom name="t6_b1" type="capsule" fromto="-3.723 -2.374 2.084 -3.053 -2.005 2.093" size="0.067" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31"/>
+    <geom name="t6_b2" type="capsule" fromto="-3.734 -2.359 1.134 -3.389 -2.035 1.353" size="0.064" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31"/>
+    <geom name="t6_b3" type="capsule" fromto="-3.853 -2.373 1.637 -4.457 -2.037 1.814" size="0.079" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31"/>
+    <geom name="t6_b4" type="capsule" fromto="-3.803 -2.482 1.093 -3.935 -3.093 1.121" size="0.067" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31"/>
+    <!-- tree 7: r=0.096 h=2.95 ground_z=0.056 -->
+    <geom name="t7_trunk" type="capsule" fromto="3.658 -1.307 0.008 3.658 -1.307 3.004" size="0.096" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31"/>
+    <geom name="t7_b0" type="capsule" fromto="3.623 -1.340 1.104 3.225 -1.720 1.238" size="0.039" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31"/>
+    <geom name="t7_b1" type="capsule" fromto="3.690 -1.272 1.983 4.049 -0.877 2.041" size="0.031" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31"/>
+    <geom name="t7_b2" type="capsule" fromto="3.613 -1.289 1.592 2.930 -1.010 1.761" size="0.052" rgba="0.50 0.47 0.43 1" contype="1" conaffinity="31"/>
+  </worldbody>
+</mujoco>
