@@ -1,26 +1,20 @@
-# archive — parked RL / sim (April–July 2026)
+# Archive — parked simulation, April–July 2026
 
-Not the live robot. Do not train from here. Do not copy this stack onto the HAT.
+This is the record of an attempt to learn a walk on a four-limb RoArm ape. The walk was not achieved. There is no keeper policy. The live laboratory is the sitting firmware and the laptop console: [gibbon-bot](https://github.com/tonycurra/gibbon-bot).
 
-Workspace status: [`../STATUS.md`](../STATUS.md). Live path: `../roarm-fw` + `../gibbon-console`. One-arm twin (if you need meshes later): `../digital-twin`.
+Read in this order:
 
-Each project below that has a `.git` is its own repo (most already have a Codeberg remote). `gibbon-brain/` is loose files plus an upstream MuJoCo clone. A push of these repos leaves out virtualenvs, training weights, `gibbon-bot-code-only.zip`, and `gibbon-brain/mujoco/`.
+1. [EVALUATION.md](EVALUATION.md) — what was tried, and what the artefacts actually show
+2. [NEXT_STEPS.md](NEXT_STEPS.md) — why the next work was firmware, limits, then a twin that matches metal
+3. [WORK_OVERVIEW.md](WORK_OVERVIEW.md) — branch atlas of that season
 
-**Read first**
-
-1. [`EVALUATION.md`](EVALUATION.md) — walk-to-tree was not achieved; no keeper weights
-2. [`NEXT_STEPS.md`](NEXT_STEPS.md) — why the live path is firmware + limits, then a twin that matches metal
-3. [`WORK_OVERVIEW.md`](WORK_OVERVIEW.md) — git atlas of the nested repos
-
-| Folder | |
+| Repository | What it was |
 | --- | --- |
-| `gibbonBot-RL/` | MJX/PPO/CPG/LIANA. 4× RoArm-M3 on a torso |
-| `gibbon-rl-mujoco/` | early four-arm URDF/xacro |
-| `olivabot-mujoco-cpu/` | CPU PPO stand-up (Jade) |
-| `gibbon-brain/` | July Cartesian PD (no project git; includes a local MuJoCo clone) |
-| `Roarm-m3pro-busServoDriverHAT_A-battery/` | hardware PDF |
-| `gibbon-bot-code-only.zip` | old snapshot |
+| [gibbon-rl](https://github.com/tonycurra/gibbon-rl) | MJX / PPO / CPG / LIANA. Four RoArm-M3 arms on a torso |
+| [gibbon-rl-mujoco](https://github.com/tonycurra/gibbon-rl-mujoco) | Early four-arm URDF |
+| [gibbon-mujoco-cpu](https://github.com/tonycurra/gibbon-mujoco-cpu) | CPU PPO stand-up |
+| [gibbon-brain](https://github.com/tonycurra/gibbon-brain) | July Cartesian PD, no inverse kinematics |
 
-**Keep:** MJCF/meshes as a *starting* twin; `gibbonBot-RL/data/controls.md` / motor notes.
+The one-arm table model that continues from the meshes is [gibbon-digital-twin](https://github.com/tonycurra/gibbon-digital-twin).
 
-**Park:** LIANA growth, reward soup, treating the scripted walk as a policy, PPO on metal.
+These notes are CC BY 4.0. https://creativecommons.org/licenses/by/4.0/
