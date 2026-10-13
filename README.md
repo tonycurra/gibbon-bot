@@ -35,9 +35,13 @@ April–July 2026 tried to learn a walk on four RoArm arms and a torso. The walk
 
 ## People
 
-Tony — scene geometry, a torso and four arms, in [`archive/gibbonBot-RL/data/scene.xml`](archive/gibbonBot-RL/data/scene.xml) and [`archive/gibbon-rl-mujoco/simulation_code_jade/`](archive/gibbon-rl-mujoco/simulation_code_jade/). Simulation on `main`. Firmware, console, and the one-arm model.
+Commit list: [`CONTRIBUTORS.md`](CONTRIBUTORS.md).
 
-Jade Leurs — simulation, April through July 2026. Pose priors from OpenApePose keypoints (21 May–17 June), a quadruped environment (26–28 June), a Unitree Go2 training setup (13 July), and telemetry on the CPU trainer (1 May). The commits are in [`CONTRIBUTORS.md`](CONTRIBUTORS.md). Those branches are not in this tree.
+**Tony** — 22 April to 28 September 2026. [`archive/gibbonBot-RL`](archive/gibbonBot-RL/) (22 April–15 May), the four-arm URDF in [`archive/gibbon-rl-mujoco`](archive/gibbon-rl-mujoco/) (26 April), [`archive/olivabot-mujoco-cpu`](archive/olivabot-mujoco-cpu/) `first commit` (27 April), then [`roarm-fw`](roarm-fw/), [`gibbon-console`](gibbon-console/), and [`digital-twin`](digital-twin/).
+
+**Jade Leurs** — 1 May to 13 July 2026, eleven commits. `add telemetry logs`. OpenApePose commits in [`branches/apenapepose_integration`](archive/gibbonBot-RL/branches/apenapepose_integration/). `Initial commit`, `added custom (Ant-v5 based) environment`, and `unitree_go2 training setup` in [`branches/unigree-go2`](archive/gibbonBot-RL/branches/unigree-go2/).
+
+**jajayumei** — 1 May 2026. `update requirements.txt to include tensorboard`.
 
 ## Left out on purpose
 
