@@ -1,0 +1,20 @@
+# Recreate with: python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.pyc
+
+# MuJoCo / local
+MUJOCO_LOG.TXT
+*.log
+.env
+.env.*
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
