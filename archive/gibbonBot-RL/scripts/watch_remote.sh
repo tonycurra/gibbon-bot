@@ -10,7 +10,7 @@
 #        mlflow.db (so local mlflow ui shows live metrics)
 set -euo pipefail
 
-HOST="${HOST:-root@51.159.140.202}"
+HOST="${HOST:?Set HOST=user@host to the GPU box you rented}"
 REMOTE_DIR="${REMOTE_DIR:-/root/gibbonBot-RL}"
 TASK="${TASK:-walk}"
 INTERVAL="${INTERVAL:-10}"

@@ -51,13 +51,13 @@ python train_mjx.py --resume     # Continue from latest checkpoint
 ### Remote Training (H100 Example)
 ```bash
 # Start training
-ssh root@51.159.147.155 "cd /root/gb2.1 && source .venv/bin/activate && nohup python3 train_mjx.py --envs 4096 > train_mjx.log 2>&1 &"
+ssh root@<GPU_HOST> "cd /root/gb2.1 && source .venv/bin/activate && nohup python3 train_mjx.py --envs 4096 > train_mjx.log 2>&1 &"
 
 # Monitor logs
-ssh root@51.159.147.155 "tail -30 /root/gb2.1/train_mjx.log && nvidia-smi --query-gpu=utilization.gpu,memory.used --format=csv,noheader"
+ssh root@<GPU_HOST> "tail -30 /root/gb2.1/train_mjx.log && nvidia-smi --query-gpu=utilization.gpu,memory.used --format=csv,noheader"
 
 # Kill training
-ssh root@51.159.147.155 "pkill -f train_mjx"
+ssh root@<GPU_HOST> "pkill -f train_mjx"
 ```
 
 ## Architecture

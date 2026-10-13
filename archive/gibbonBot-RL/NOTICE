@@ -1,0 +1,13 @@
+gibbon-rl
+Copyright 2026 Olivabot
+
+Parked simulation. The walk this stack was aimed at was not achieved.
+See the evaluation in the gibbon-archive repository.
+
+RoArm-M3 meshes under data/meshes that originate in Waveshare
+roarm_description remain under the MIT license. This repository
+does not relicense them.
+https://github.com/waveshareteam/roarm_ws
+
+Some experiments in this season were committed by more than one person.
+The branch atlas is in gibbon-archive, WORK_OVERVIEW.md.

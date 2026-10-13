@@ -11,7 +11,7 @@
 #   scripts/remote.sh sync     # one-shot pull of checkpoints + mlruns + rollouts
 set -euo pipefail
 
-REMOTE=root@51.159.159.202
+REMOTE="${REMOTE:?Set REMOTE=user@host to the GPU box you rented}"
 REPO=gibbonBot-RL
 SESSION=train
 RUN_DIR="$REPO/runs/ape_walk_mjx"

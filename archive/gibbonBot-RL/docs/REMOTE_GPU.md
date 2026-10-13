@@ -38,7 +38,7 @@ You'll be training within 10 minutes. Two terminals: one ssh'd into the remote, 
 git push origin mjx-gpu
 
 # === SSH in (replace IP with yours) ===
-ssh root@51.159.187.87
+ssh root@<GPU_HOST>
 
 # === On remote, one-time setup (~5 min) ===
 apt update && apt install -y python3-pip python3-venv git tmux rsync

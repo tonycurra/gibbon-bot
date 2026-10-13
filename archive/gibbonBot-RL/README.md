@@ -1,7 +1,12 @@
 # GibbonBot-RL
 
-> **Demo north star:** Robot walks to the olive tree on command, reliably.
-> Locked 2026-05-15. Anything that doesn't move this forward is a tangent.
+**Parked, April–July 2026.** A four-limb MuJoCo / MJX simulation: four Waveshare RoArm-M3 arms on one torso, PPO, a CPG, and the LIANA dashboard. The goal was a walk to an olive tree on command. That walk was not achieved. There is no keeper policy in this tree. The “demo walk” is scripted kinematics. The plant was not identified on the hardware. Read the result first: [gibbon-archive](https://github.com/tonycurra/gibbon-archive).
+
+The live laboratory is the sitting firmware and console, not this stack: [gibbon-bot](https://github.com/tonycurra/gibbon-bot). Do not train a gait from these weights. There are no weights here.
+
+Code is Apache-2.0. Waveshare meshes stay MIT. See [NOTICE](NOTICE). Rented GPU hosts are not stored in the scripts; set `REMOTE` or `HOST` yourself.
+
+> **Demo north star (historical, 2026-05-15):** Robot walks to the olive tree on command, reliably. That target was not met. The notes below are the training stack as it stood, kept so the attempt can be read.
 >
 > **LIANA** = *Live Interactive Ape Neural Architecture* — the user-facing
 > dashboard + control layer over the training stack.
