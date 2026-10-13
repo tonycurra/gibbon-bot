@@ -10,6 +10,7 @@ dist/
 build/
 .env
 .env.*
+.claude/
 *.pem
 *.key
 *.log

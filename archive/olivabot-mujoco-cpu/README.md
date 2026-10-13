@@ -1,6 +1,12 @@
+# olivabot-mujoco-cpu
+
+**Parked, April–May 2026.** CPU PPO (Stable Baselines 3) aimed at lifting a four-limb torso and holding it level. No retained success metric. The result of this season is in [gibbon-archive](https://github.com/tonycurra/gibbon-archive). The live path is [gibbon-bot](https://github.com/tonycurra/gibbon-bot).
+
+---
+
 # gibbonBot-RL
 
-Reinforcement learning for a 4-limbed robotic ape. PPO (Stable Baselines 3) + MuJoCo. Goal: lift the torso to a target height and keep it level.
+Reinforcement learning for a 4-limbed robotic ape. PPO (Stable Baselines 3) + MuJoCo. Goal at the time: lift the torso to a target height and keep it level.
 
 ## Setup
 
