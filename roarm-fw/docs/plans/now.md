@@ -80,9 +80,9 @@ Bring-up `bringup/02-ble-monitor`: flash USB, **unplug USB**, pack on. Chromium 
 
 **After two-pack tests are good:** buy **two** more 3S XT60 (plus keep storing the working pair at ~11.4 V). Four-limb metal in **southern Italy**. Wrap Δ on 16 then 11 from *this* slack (not Sep-5 4068). Elbow host 995…2997. One `raise to` nudge. Chip `lock` / `free` / `rec` / `play` as five words. Limb picker when four HATs talk. Tree is operator-present taught replay, not harvest MVP.
 
-WBSO calendar is Phase 4 (31-10). Metal is late Phase 1 + a physical four-limb prototype. Count S&O on motion/guard, not console chrome. Plan text: `../../business/wbso-plan.md`.
+Metal is still one-limb teleop on a physical prototype. A second limb is the same image again, after two packs look boring.
 
-Four limbs, ROS2 vs ours, BLE/guard rates, bus is serial: `docs/plans/gibbon-platform.md`. Business + operational evaluation (keep our firmware/console): `docs/plans/ros2-vs-our-stack.md`.
+Four limbs, rates, and why this stack stays on the chip: `docs/plans/gibbon-platform.md` and `docs/plans/ros2-vs-our-stack.md`.
 
 ## How we save as we go
 

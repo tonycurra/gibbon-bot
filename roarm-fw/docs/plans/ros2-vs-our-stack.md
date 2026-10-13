@@ -22,7 +22,7 @@ That is not “ROS is bad.” MoveIt, URDF, and later a thin ROS 2 bridge are us
 | **LeRobot / Jetson AI-Kit** | Imitation on GPU in the lab | Field cost, four-limb edge, radio-death safety |
 | **micro-ROS on the ESP32** | DDS topics if an agent is up | A simpler protocol, a smaller safety loop, grove autonomy |
 
-The product is a **gibbon** (two arms + two legs) for **traditional / steep / mixed-canopy groves**, operated from a **phone**, with **edge compute on the limb**. First paid work, if any, is a hosted mill/coop trial — not a farmer buying a ROS workstation. See `../../../business/path-to-revenue.md`.
+The product is a **gibbon** (two arms + two legs) for **traditional / steep / mixed-canopy groves**, operated from a **phone**, with **edge compute on the limb**.
 
 ---
 
@@ -419,8 +419,6 @@ Spend: sittings we already scheduled. **Not** Humble.
 - `docs/hardware.md`, `docs/hardware/motors/esp32-bus.md`
 - `gibbon-console/docs/architecture.md`, `link.md`
 - `digital-twin/readme.md`
-- `../../../business/path-to-revenue.md`
-- Workspace `README.md`
 
 ### Official Waveshare / ROS / agriculture (fetched 2026-09-12)
 

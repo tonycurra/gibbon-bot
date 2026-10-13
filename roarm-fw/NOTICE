@@ -1,0 +1,14 @@
+roarm-fw
+Copyright 2025-2026 Olivabot
+
+Sitting firmware for the Gibbon Bot laboratory arm.
+
+ESP-IDF, FreeRTOS, and NimBLE are used under their own licenses
+(Apache-2.0 and others). This repository does not vendor them.
+
+Feetech bus servos are devices this firmware speaks to. Their firmware
+is not included.
+
+Documentation, sitting notes, and baseline tables under docs/ are
+CC BY 4.0 unless a file says otherwise.
+https://creativecommons.org/licenses/by/4.0/
