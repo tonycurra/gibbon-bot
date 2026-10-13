@@ -1,0 +1,20 @@
+# archive/ is not one repo. Nested projects keep their own .git.
+# If this folder is ever inited, do not absorb those checkouts or the local bulk.
+
+gibbon-bot-code-only.zip
+
+gibbonBot-RL/
+gibbon-rl-mujoco/
+olivabot-mujoco-cpu/
+Roarm-m3pro-busServoDriverHAT_A-battery/
+gibbon-brain/
+
+gibbon-brain/.venv/
+gibbon-brain/logs/
+gibbon-brain/mujoco/
+
+.DS_Store
+Thumbs.db
+*.log
+.env
+.env.*
