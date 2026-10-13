@@ -1,0 +1,8 @@
+gibbon-rl-mujoco
+Copyright 2026 Olivabot
+
+Parked early four-arm URDF experiments.
+
+Third-party URDF and xacro fragments keep the license stated in those files.
+Waveshare RoArm description material remains under the MIT license when it
+comes from https://github.com/waveshareteam/roarm_ws

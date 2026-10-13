@@ -1,0 +1,40 @@
+# Virtual environment
+.venv/
+
+# Python cache and compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Build and distribution files
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Environment variables and secrets
+.env
+*.env
+*.env.local
+*.pem
+*.key
+
+# Logs and runtime data
+logs/
+*.log
+*.out
+
+# System files
+.DS_Store
+Thumbs.db
+
+# ROS-specific build files (from roarm_ws)
+roarm_ws/build/
+roarm_ws/install/
+roarm_ws/log/

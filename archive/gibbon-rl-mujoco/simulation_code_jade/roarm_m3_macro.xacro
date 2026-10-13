@@ -1,0 +1,164 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:macro name="roarm_m3" params="prefix parent mesh_path *origin">
+  
+    <joint name="${prefix}mount_joint" type="fixed">
+      <parent link="${parent}"/>
+      <child link="${prefix}base_link"/>
+      <xacro:insert_block name="origin"/>
+    </joint>
+
+    <link name="${prefix}base_link">
+      <inertial>
+        <origin xyz="-0.0068 0 -0.03" rpy="0 0 0" />
+        <mass value="0.2562183" />
+        <inertia ixx="0.00029211" ixy="0" ixz="0" iyy="0.00035719" iyz="0" izz="0.000349421" />
+      </inertial>
+      <visual>
+        <geometry><mesh filename="${mesh_path}/base_link.stl" scale="0.001 0.001 0.001"/></geometry>
+      </visual>
+      <collision>
+        <geometry><mesh filename="${mesh_path}/base_link.stl" scale="0.001 0.001 0.001"/></geometry>
+      </collision>
+    </link>
+
+    <joint name="${prefix}base_link_to_link1" type="revolute">
+      <origin xyz="0.0 0.0 0.0" rpy="0 0 0"/>
+      <parent link="${prefix}base_link"/>
+      <child link="${prefix}link1"/>
+      <axis xyz="0.0 0.0 1.0"/>
+      <limit lower="-3.1416" upper="3.1416" effort="10" velocity="3.14" />
+      <dynamics damping="0.1" friction="0.05"/>
+    </joint>
+
+    <link name="${prefix}link1">
+      <inertial>
+        <origin xyz="0 0 0.037" rpy="0 0 0" />
+        <mass value="0.0729177" />
+        <inertia ixx="4.68465E-05" ixy="0" ixz="0" iyy="3.32107E-05" iyz="0" izz="5.01023E-05" />
+      </inertial>
+      <visual>
+        <geometry><mesh filename="${mesh_path}/link1.stl" scale="0.001 0.001 0.001"/></geometry>
+      </visual>
+      <collision>
+        <geometry><mesh filename="${mesh_path}/link1.stl" scale="0.001 0.001 0.001"/></geometry>
+      </collision>
+    </link>
+
+    <joint name="${prefix}link1_to_link2" type="revolute">
+      <origin xyz="0.0 0.0 0.051959" rpy="-1.5708 -1.5708 0"/>
+      <parent link="${prefix}link1"/>
+      <child link="${prefix}link2"/>
+      <axis xyz="0 0 1"/>
+      <limit lower="-1.5708" upper="1.5708" effort="10" velocity="3.14" />
+      <dynamics damping="0.1" friction="0.05"/>
+    </joint>
+
+    <link name="${prefix}link2">
+      <inertial>
+        <origin xyz="0.119 0.012247 -0.0001 " rpy="0 0 0"/>
+        <mass value="0.0703216" />
+        <inertia ixx="5.46501E-05" ixy="0" ixz="0" iyy="0.000423091" iyz="0" izz="0.000404557" />
+      </inertial>
+      <visual>
+        <geometry><mesh filename="${mesh_path}/link2.stl" scale="0.001 0.001 0.001"/></geometry>
+      </visual>
+      <collision>
+        <geometry><mesh filename="${mesh_path}/link2.stl" scale="0.001 0.001 0.001"/></geometry>
+      </collision>
+    </link>
+
+    <joint name="${prefix}link2_to_link3" type="revolute">
+      <origin xyz="0.236815 0.030002 0" rpy="0 0 1.5708"/>
+      <parent link="${prefix}link2"/>
+      <child link="${prefix}link3"/>
+      <axis xyz="0 0 1"/>
+      <limit lower="-1" upper="2.95" effort="10" velocity="3.14" />
+      <dynamics damping="0.1" friction="0.05"/>
+    </joint>
+
+    <link name="${prefix}link3">
+      <inertial>
+        <origin xyz="-0.0015 -0.0765 0.00505" rpy="0 0 0"/>
+        <mass value="0.021608"/>
+        <inertia ixx="6.37699E-05" iyy="3.67026E-06" izz="6.28965E-05" ixy="0" iyz="0" ixz="0"/>
+      </inertial>
+      <visual>
+        <geometry><mesh filename="${mesh_path}/link3.stl" scale="0.001 0.001 0.001"/></geometry>
+      </visual>
+      <collision>
+        <geometry><mesh filename="${mesh_path}/link3.stl" scale="0.001 0.001 0.001"/></geometry>
+      </collision>
+    </link>
+
+    <joint name="${prefix}link3_to_link4" type="revolute">
+      <origin xyz="0.0 -0.144586 0" rpy="0 0 0"/>
+      <parent link="${prefix}link3"/>
+      <child link="${prefix}link4"/>
+      <axis xyz="0 0 1"/>
+      <limit lower="-1.5708" upper="1.5708" effort="10" velocity="3.14" />
+      <dynamics damping="0.1" friction="0.05"/>
+    </joint>
+
+    <link name="${prefix}link4">
+      <inertial>
+        <origin xyz="-0.0015 -0.022 -0.00075" rpy="0 0 0"/>
+        <mass value="0.0099933"/>
+        <inertia ixx="4.53979E-06" iyy="3.78103E-06" izz="5.60238E-06" ixy="0" iyz="0" ixz="0"/>
+      </inertial>
+      <visual>
+        <geometry><mesh filename="${mesh_path}/link4.stl" scale="0.001 0.001 0.001"/></geometry>
+      </visual>
+      <collision>
+        <geometry><mesh filename="${mesh_path}/link4.stl" scale="0.001 0.001 0.001"/></geometry>
+      </collision>
+    </link>
+
+    <joint name="${prefix}link4_to_link5" type="revolute">
+      <origin xyz="0.015147 -0.053653 0" rpy="1.5708 1.5708 0"/>
+      <parent link="${prefix}link4"/>
+      <child link="${prefix}link5"/>
+      <axis xyz="0 0 1"/>
+      <limit lower="-3.1416" upper="3.1416" effort="10" velocity="3.14" />
+      <dynamics damping="0.1" friction="0.05"/>
+    </joint>
+
+    <link name="${prefix}link5">
+      <inertial>
+        <origin xyz="-0.0078 0 0.0595" rpy="0 0 0"/>
+        <mass value="0.0153928"/>
+        <inertia ixx="2.02869E-05" iyy="2.14427E-05" izz="4.39495E-06" ixy="0" iyz="0" ixz="0"/>
+      </inertial>
+      <visual>
+        <geometry><mesh filename="${mesh_path}/link5.stl" scale="0.001 0.001 0.001"/></geometry>
+      </visual>
+      <collision>
+        <geometry><mesh filename="${mesh_path}/link5.stl" scale="0.001 0.001 0.001"/></geometry>
+      </collision>
+    </link>
+
+    <joint name="${prefix}link5_to_gripper_link" type="revolute">
+      <origin xyz="0.00 0.018821 0.052035" rpy="-1.5708 -1.5708 0"/>
+      <parent link="${prefix}link5"/>
+      <child link="${prefix}gripper_link"/>
+      <axis xyz="0 0 1"/>
+      <limit lower="0" upper="1.5" effort="10" velocity="3.14" />
+      <dynamics damping="0.1" friction="0.05"/>
+    </joint>
+
+    <link name="${prefix}gripper_link">
+      <inertial>
+        <origin xyz="0.027 0.0027 -0.018935" rpy="0 0 0"/>
+        <mass value="0.0028708" />
+        <inertia ixx="5.23216E-07" ixy="0" ixz="0" iyy="1.82071E-06" iyz="0" izz="1.60231E-06" />
+      </inertial>
+      <visual>
+        <geometry><mesh filename="${mesh_path}/gripper_link.stl" scale="0.001 0.001 0.001"/></geometry>
+      </visual>
+      <collision>
+        <geometry><mesh filename="${mesh_path}/gripper_link.stl" scale="0.001 0.001 0.001"/></geometry>
+      </collision>
+    </link>
+
+  </xacro:macro>
+</robot>
