@@ -1,6 +1,6 @@
 # Gibbon-like robotic ape simulation
 
-Four ROARM M3 arms on one torso. Added 26 April 2026, commit `62b599e`. The directory name is `simulation_code_jade`.
+Four ROARM M3 arms on one torso. Tony added this on 26 April 2026, commit `62b599e`. The directory name is `simulation_code_jade`, from the commit message “JADE design”. Jade Leurs is the person who later committed the pose study and the Go2 setup, under [gibbonBot-RL/branches](../../gibbonBot-RL/README.md). The project overview is [Gibbon Bot](../../../README.md).
 
 ## Structure Overview
 

@@ -1,8 +1,8 @@
 # gibbon-console
 
-Django sitting UI for the RoArm ESP32. The laptop owns USB and BLE. The phone is a browser on the same Wi-Fi. Part of [Gibbon Bot](https://olivabot.com/en/projects/gibbon-bot.html).
+The laptop screen for [Gibbon Bot](../README.md), Olivabot’s laboratory robot in Amsterdam. The robot does not walk. This program owns the USB cable and Bluetooth to the arm. A phone on the same Wi-Fi is just a browser. Tony wrote it. Jade Leurs’s simulation work is in [`archive/`](../archive/README.md).
 
-Firmware: [gibbon-roarm-fw](https://github.com/tonycurra/gibbon-roarm-fw). One-arm model: [gibbon-digital-twin](https://github.com/tonycurra/gibbon-digital-twin). Laboratory map: [gibbon-bot](https://github.com/tonycurra/gibbon-bot).
+Firmware: [`roarm-fw`](../roarm-fw/readme.md). One-arm model: [`digital-twin`](../digital-twin/readme.md).
 
 Firefox has no Web Serial and no Web Bluetooth, so this process is the bridge. It logs a trial as commands, motor samples, notes, and limits. The chip still owns `estop`. This page cannot save the arm if the radio dies.
 
@@ -20,4 +20,4 @@ Bind it to localhost unless the phone on your own LAN needs it. Do not put this 
 
 Docs: [`docs/README.md`](docs/README.md). Code is [Apache-2.0](LICENSE). Report a stop-button or limit bug via [SECURITY](SECURITY.md).
 
-Pages: home, calibration, imitation. Chromium `/monitor/` is BLE listen-only (packed `g1`). Unplug USB and flash `bringup/02-ble-monitor` from [gibbon-roarm-fw](https://github.com/tonycurra/gibbon-roarm-fw) first. Doc map: [`docs/README.md`](docs/README.md).
+Pages: home, calibration, imitation. Chromium `/monitor/` is BLE listen-only (packed `g1`). Unplug USB and flash `bringup/02-ble-monitor` from [`roarm-fw`](../roarm-fw/readme.md) first. Doc map: [`docs/README.md`](docs/README.md).

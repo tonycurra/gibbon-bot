@@ -1,6 +1,8 @@
 # olivabot-mujoco-cpu
 
-**Parked, April–May 2026.** CPU PPO (Stable Baselines 3) aimed at lifting a four-limb torso and holding it level. No retained success metric. The result of this season is in [gibbon-archive](https://github.com/tonycurra/gibbon-archive). The live path is [gibbon-bot](https://github.com/tonycurra/gibbon-bot).
+A smaller CPU trainer inside [Gibbon Bot](../../README.md), April–May 2026. PPO (Stable Baselines 3) aimed at lifting a four-limb torso and holding it level. No success number was kept. The season result is [EVALUATION.md](../EVALUATION.md). The arm in the lab is [roarm-fw](../../roarm-fw/readme.md).
+
+Tony opened the repository. Jade Leurs added telemetry logs on 1 May 2026, and the same day added tensorboard under the name `jajayumei`. That is the same person.
 
 ---
 

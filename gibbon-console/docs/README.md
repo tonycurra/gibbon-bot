@@ -1,6 +1,6 @@
-# gibbon-console
+# gibbon-console docs
 
-Laptop UI for the RoArm ESP32 ([gibbon-roarm-fw](https://github.com/tonycurra/gibbon-roarm-fw)). Same text pipe on USB and BLE. Django serves the pages and logs trials. Project map: [gibbon-bot](https://github.com/tonycurra/gibbon-bot).
+Notes for the laptop screen in [Gibbon Bot](../../README.md). The program talks to the chip in [`roarm-fw`](../../roarm-fw/readme.md) over the same text on USB and Bluetooth. Django serves the pages and logs trials. Start here: [`../readme.md`](../readme.md).
 
 Firefox (no Web Bluetooth). The **laptop** is the BLE central and USB owner. Phone: same WiFi, this server.
 

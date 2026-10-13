@@ -1,10 +1,10 @@
-# gibbon-digital-twin
+# digital-twin
 
-One Waveshare RoArm-M3 in CPU MuJoCo, bolted to a table. Part of [Gibbon Bot](https://olivabot.com/en/projects/gibbon-bot.html). There is no torso, no second limb, and no policy in this repository.
+A computer model of the arm in [Gibbon Bot](../README.md), Olivabot’s laboratory robot in Amsterdam. The robot does not walk. This folder is one Waveshare RoArm-M3 in MuJoCo, bolted to a table: one limb, no torso, no second arm, no trained policy. Tony wrote the scene. Jade Leurs’s four-limb experiments are in [`archive/`](../archive/README.md).
 
 The mesh and the joint names come from Waveshare [`roarm_description`](https://github.com/waveshareteam/roarm_ws) (`src/roarm_main/roarm_description`, MIT). The scene file that welds the arm to the floor is Olivabot’s. Damping is datasheet damping. Homes and signs are not matched to a sitting CSV yet, so this is not a digital twin of the metal until that identification is done.
 
-Live firmware: [gibbon-roarm-fw](https://github.com/tonycurra/gibbon-roarm-fw). Sitting UI: [gibbon-console](https://github.com/tonycurra/gibbon-console). The earlier four-limb simulation is parked: [gibbon-rl](https://github.com/tonycurra/gibbon-rl), with the result written in [gibbon-archive](https://github.com/tonycurra/gibbon-archive).
+Firmware: [`roarm-fw`](../roarm-fw/readme.md). Laptop screen: [`gibbon-console`](../gibbon-console/readme.md). The earlier four-limb simulation, and Jade Leurs’s pose and Go2 work, are in [`archive/`](../archive/README.md).
 
 ```bash
 python3 -m venv .venv

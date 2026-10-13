@@ -1,6 +1,6 @@
 # roarm-fw
 
-ESP-IDF firmware for one Waveshare RoArm-M3 Pro on a Bus Servo Driver HAT (A). Part of [Gibbon Bot](https://olivabot.com/en/projects/gibbon-bot.html), Olivabot’s laboratory robot. The arm does not walk. This repository is the chip that sits on the metal.
+Firmware for the arm in [Gibbon Bot](../README.md), Olivabot’s laboratory robot in Amsterdam. The robot does not walk. This folder is the chip on one Waveshare RoArm-M3 Pro: an ESP32 on a Bus Servo Driver HAT (A). Tony wrote it. Jade Leurs’s simulation work is in [`archive/`](../archive/README.md).
 
 The chip speaks the same text on USB (`/dev/ttyACM0`, 115200) and BLE (Nordic UART, name `gibbon-XXXX`). It does not move on boot. It owns `estop`. Servos 12 and 13 are one shoulder and move only together, with `raise`.
 
@@ -8,7 +8,7 @@ The chip speaks the same text on USB (`/dev/ttyACM0`, 115200) and BLE (Nordic UA
 browser ── HTTP/SSE ── gibbon-console :8080 ── USB or BLE ── ESP32 ── Feetech bus ── servos 11–17
 ```
 
-Laptop UI: [gibbon-console](https://github.com/tonycurra/gibbon-console). One-arm MuJoCo model: [gibbon-digital-twin](https://github.com/tonycurra/gibbon-digital-twin). Map of the whole laboratory: [gibbon-bot](https://github.com/tonycurra/gibbon-bot).
+Laptop screen: [`gibbon-console`](../gibbon-console/readme.md). One-arm model: [`digital-twin`](../digital-twin/readme.md). Project overview: [`README`](../README.md).
 
 **Status, September 2026.** Safety bring-up is done: no motion at boot, `estop`, and `raise` as a SyncWrite of 12 and 13. Hand walls are gold (open 609, close 2088). The image on the metal is `fw=20260912`. The tree here is stamped `20260915` (`mat`, `sweep`, `lim`) and was not the image on the chip at that date. Wrist and elbow limits are still host notes. This is research equipment, one limb at a time, body supported.
 

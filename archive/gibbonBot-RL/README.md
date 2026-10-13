@@ -1,10 +1,10 @@
 # GibbonBot-RL
 
-**Parked, April–July 2026.** A four-limb MuJoCo / MJX simulation: four Waveshare RoArm-M3 arms on one torso, PPO, a CPG, and the LIANA dashboard. The goal was a walk to an olive tree on command. That walk was not achieved. There is no keeper policy in this tree. The “demo walk” is scripted kinematics. The plant was not identified on the hardware. Read the result first: [gibbon-archive](https://github.com/tonycurra/gibbon-archive).
+The main simulation in [Gibbon Bot](../../README.md), April–July 2026. Four Waveshare RoArm-M3 arms on one torso, trained with PPO, a gait clock, and a dashboard called LIANA. The aim was a walk to an olive tree on command. The walk was not learned. The short “demo walk” is scripted motion. No trained weights are in this folder. The written result is [EVALUATION.md](../EVALUATION.md). The arm in the lab is [roarm-fw](../../roarm-fw/readme.md).
 
-The live laboratory is the sitting firmware and console, not this stack: [gibbon-bot](https://github.com/tonycurra/gibbon-bot). Do not train a gait from these weights. There are no weights here.
+Tony wrote the trainer. Jade Leurs’s own additions are beside it, under [`branches/apenapepose_integration`](branches/apenapepose_integration/) (pose priors from ape video, May–June 2026) and [`branches/unigree-go2`](branches/unigree-go2/) (a quadruped practice environment, then a Unitree Go2 scene, June–July 2026).
 
-Code is Apache-2.0. Waveshare meshes stay MIT. See [NOTICE](NOTICE). Rented GPU hosts are not stored in the scripts; set `REMOTE` or `HOST` yourself.
+Code is Apache-2.0. Waveshare meshes stay MIT. See [NOTICE](NOTICE). Point a remote training script at your own machine with `REMOTE` or `HOST`.
 
 > **Demo north star (historical, 2026-05-15):** Robot walks to the olive tree on command, reliably. That target was not met. The notes below are the training stack as it stood, kept so the attempt can be read.
 >

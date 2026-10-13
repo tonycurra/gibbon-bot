@@ -1,8 +1,8 @@
 # gibbon-brain
 
-**Parked, July 2026.** Cartesian PD experiments on the four-limb model. Joint commands were a linear map from Cartesian error, with no inverse kinematics and no clamp to the joint limits. The workspace was not checked against the arm. This did not become a controller.
+July 2026 experiments in [Gibbon Bot](../../README.md). They try to move a hand in Cartesian space on the four-limb model. Joint commands are a straight map from that error, with no inverse kinematics and no clamp to the joint limits. The reachable space was not checked against the arm. This did not become a controller.
 
-The season result is in [gibbon-archive](https://github.com/tonycurra/gibbon-archive). The one-arm model that replaced the four-limb scene is [gibbon-digital-twin](https://github.com/tonycurra/gibbon-digital-twin). The live laboratory is [gibbon-bot](https://github.com/tonycurra/gibbon-bot).
+Tony wrote it. Jade Leurs’s pose and Go2 work is in [gibbonBot-RL](../gibbonBot-RL/README.md). The season result is [EVALUATION.md](../EVALUATION.md). The one-arm table model is [digital-twin](../../digital-twin/readme.md). The arm in the lab is [roarm-fw](../../roarm-fw/readme.md).
 
 ## What is here
 

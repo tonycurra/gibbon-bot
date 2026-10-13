@@ -1,6 +1,6 @@
 # Gibbon RL MuJoCo
 
-**Parked, April 2026.** Early four-arm URDF / xacro and a Gymnasium simulation. This is not the live robot. The walk-to-tree attempt that followed is recorded in [gibbon-archive](..). The laboratory that replaced it is [gibbon-bot](https://github.com/tonycurra/gibbon-bot).
+The first four-arm model in [Gibbon Bot](../../README.md), 26 April 2026. A URDF, xacro, and a Gymnasium simulation. Tony wrote it, including the folder `simulation_code_jade` (the commit message says “JADE design”). Jade Leurs’s own commits came later, in [gibbonBot-RL/branches](../gibbonBot-RL/README.md). The walk attempt that followed is in [EVALUATION.md](../EVALUATION.md). The arm in the lab is [roarm-fw](../../roarm-fw/readme.md).
 
 ---
 
