@@ -30,6 +30,7 @@ Olivabot publishes this so the work can be read. Firmware, device software, and 
 | [`gibbon-console/`](gibbon-console/readme.md) | Laptop screen. USB, Bluetooth, trial log |
 | [`digital-twin/`](digital-twin/readme.md) | One arm in MuJoCo, on a table |
 | [`archive/`](archive/README.md) | The 2026 walk attempt, and Jade Leurs’s simulation work |
+| [`recap/`](recap/README.md) | Short recordings: mk.1 in 2025, mk.2 in 2026 |
 
 ## Left out on purpose
 
