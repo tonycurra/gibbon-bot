@@ -1,0 +1,13 @@
+.venv/
+venv/
+build/
+sdkconfig
+sdkconfig.old
+__pycache__/
+*.pyc
+.env
+.env.*
+db.sqlite3
+sittings/
+.ble-addr
+*.log

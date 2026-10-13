@@ -1,6 +1,6 @@
-# Gibbon-like Robotic Ape Simulation (JADE Design)
+# Gibbon-like robotic ape simulation
 
-This folder contains the implementation of a unique "gibbon-like" robotic ape structure designed by Jade. The design combines four ROARM M3 robotic arms into a single mobile structure that mimics the mobility and dexterity of a gibbon.
+Four ROARM M3 arms on one torso. Tony built this scene and added the folder on 26 April 2026, commit `62b599e`. The directory name is from that season. Jade Leurs’s commits are listed in the repository `CONTRIBUTORS.md`. They are not the history of these files.
 
 ## Structure Overview
 

@@ -242,7 +242,7 @@ Community size: Waveshare wiki + a small GitHub repo. It is not Universal Robots
 | Published joint names / approx link lengths | Cross-check against our count→deg table after walls exist |
 | Nothing else as runtime | Not JSON driver, not their WiFi AP, not VirtualBox, not display.launch as a control path |
 
-Do **not** steal Jade’s ape from `archive/` as the metal model. Do **not** put MuJoCo in the phone.
+Do **not** use the four-arm archive scene as the metal model. Do **not** put MuJoCo in the phone.
 
 ---
 

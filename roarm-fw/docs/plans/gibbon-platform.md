@@ -110,7 +110,7 @@ phone / laptop  --WiFi-->  gibbon-console (one process)
 
 **Then twin, then four on a chassis:**
 
-7. `digital-twin/`: **one arm** MuJoCo from `roarm_description` URDF (not Jade’s ape from `archive/`). Validate *counts → deg* against a sitting CSV. Collision **explore in sim** after walls exist (`digital-twin/readme.md`). Safe box goes back to chip NVS — planner cannot override.
+7. `digital-twin/`: **one arm** MuJoCo from `roarm_description` URDF (the four-arm scene stays in `archive/`). Validate *counts → deg* against a sitting CSV. Collision **explore in sim** after walls exist (`digital-twin/readme.md`). Safe box goes back to chip NVS — planner cannot override.
 8. RL for energy/collision: **sim only**, after the twin matches. Do not PPO on metal. Archive `gibbon-rl-mujoco` / `olivabot-mujoco-cpu` are parked experiments, not this firmware.
 9. Four HATs on the torso, **four 3S packs**, console overview — **southern Italy** after the two-pack lab is good enough. Navigate **top-down** (gibbon → limb → joint). Build **bottom-up** (motor → joint → limb → body). One pack = one limb. Do not Y-split. Do not buy the extra two 3S until two limbs pass ESTOP + hold/nudge. `docs/hardware/lipo.md`. `docs/plans/now.md`.
 

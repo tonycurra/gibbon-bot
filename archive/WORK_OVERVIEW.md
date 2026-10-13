@@ -308,10 +308,11 @@ Archive tags (Tony, 2026-05-15) marking old experiment tips so they could be del
 
 ---
 
-## 2. `gibbon-rl-mujoco` — early MuJoCo / Jade ape URDF
+## 2. `gibbon-rl-mujoco` — early four-arm URDF
 
 **What it is.** Earlier, smaller RL+MuJoCo project: Waveshare `roarm_ws` descriptions
-plus Jade’s four-arm “gibbon-like” ape (`simulation_code_jade/`: xacro, URDF, `ape_simulation.py`).
+plus Tony’s four-arm ape (`simulation_code_jade/`: xacro, URDF, `ape_simulation.py`).
+The folder name is from that season. He placed the torso and the four arms.
 Predecessor / sibling of `gibbonBot-RL`, not the live training stack.
 
 **Remote:** `ssh://git@codeberg.org/tonycurra/gibbon-rl-mujoco.git`
@@ -398,10 +399,10 @@ If you want history for this folder later, `git init` here (excluding `.venv` an
 
 | Line of work | Where to look | Who | Outcome to evaluate |
 |---|---|---|---|
-| Live ape RL + LIANA | `gibbonBot-RL` `main` | Tony (primary), Jade (later branches) | Walk-to-tree, MJX, brain, dashboard |
+| Live ape RL + LIANA | `gibbonBot-RL` `main` | Tony | Walk-to-tree, MJX, brain, dashboard. Scene with torso and four arms is his |
 | Archived sim experiments | `gibbonBot-RL` `archive/*` tags + named branches | Tony | Capsules, lean MJX, grove, html viewer, dlab demo, rewards |
 | Jade: Go2 / quadruped / pose | `gibbonBot-RL` `unigree-go2`, `quadruped_training`, `apenapepose_integration` | Jade Leurs | Separate from the ape demo; latest activity in the repo |
-| Jade ape URDF (early) | `gibbon-rl-mujoco` `main` | Tony packing Jade’s sim code | Four-arm xacro/URDF |
+| Four-arm URDF (early) | `gibbon-rl-mujoco` `main` | Tony | Torso and four arms in `simulation_code_jade/` |
 | CPU stand-up PPO | `olivabot-mujoco-cpu` `jade` (not `main`) | tony_olivabot, Jade, jajayumei | Simpler CPU trainer |
 | Hardware / arm | `Roarm-…battery` | tony_olivabot | Reference PDF |
 | Brain control scripts | `gibbon-brain` files only | unversioned | Control/eval scripts + notes |

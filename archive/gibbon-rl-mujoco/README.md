@@ -1,6 +1,6 @@
 # Gibbon RL MuJoCo
 
-**Parked, April 2026.** Early four-arm URDF / xacro and a Gymnasium simulation. This is not the live robot. The walk-to-tree attempt that followed is recorded in [gibbon-archive](https://github.com/tonycurra/gibbon-archive). The laboratory that replaced it is [gibbon-bot](https://github.com/tonycurra/gibbon-bot).
+**Parked, April 2026.** Early four-arm URDF / xacro and a Gymnasium simulation. This is not the live robot. The walk-to-tree attempt that followed is recorded in [gibbon-archive](..). The laboratory that replaced it is [gibbon-bot](https://github.com/tonycurra/gibbon-bot).
 
 ---
 
@@ -49,8 +49,8 @@ This will open a visualizer window showing a red ball falling onto a plane. For 
 ### Robot Description
 The `/roarm_ws` folder contains the official content from the [Waveshare ROARM repository](https://github.com/waveshareteam/roarm_ws/tree/ros2-humble). This includes the robot description and characteristics used for simulation. While the original repository uses ROS and MoveIt, this project focuses on using the robot description for MuJoCo simulations without ROS dependencies. So we dont need all the files in this folder roarmws
 
-### Gibbon-like Robotic Ape (JADE Design)
-The `/simulation_code_jade` folder contains a unique robotic structure designed by Jade, combining four ROARM robotic arms into a mobile "gibbon-like" ape robot:
+### Gibbon-like robotic ape
+`/simulation_code_jade` is Tony’s scene: a torso and four ROARM arms, added 26 April 2026 (`62b599e`). The folder name is from that season. Jade Leurs’s own commits are on the repository credit page, not in this folder’s history:
 
 - **Structure**: Four ROARM M3 arms attached to a central torso
 - **Configuration**: 
