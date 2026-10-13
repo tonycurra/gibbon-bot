@@ -1,0 +1,39 @@
+{
+  "date": "2026-09-05",
+  "id": 16,
+  "name": "twist",
+  "writeup": "docs/baselines/twist-sitting-2026-09-05.md",
+  "home_raw": 4068,
+  "walls": {
+    "cw": {"pos": 978, "un": 978, "who": "user", "tq": 0},
+    "ccw": {"pos": 3030, "un": 7126, "who": "user", "tq": 0}
+  },
+  "soft_un": [1058, 7046],
+  "load_cruise": {"minus": [109, 117], "plus": [1133, 1141]},
+  "bind_seen": {
+    "t_s": [50.0, 51.14],
+    "load": [1220, 1300],
+    "cur": [9, 19],
+    "un": [5599, 5919],
+    "note": "plus cruise was ~1137; this rise is the taut cable. host abort was 1600 so it kept going"
+  },
+  "trials": [
+    {"id": "T1", "ok": true, "what": "user walls tq=0", "csv": "twist-user-ccw-cw.csv"},
+    {"id": "T2", "ok": false, "what": "early wheel jogs; home drifted after free/coast"},
+    {"id": "T3", "ok": false, "what": "fast speed 520; CW miss mode=-1; free parked 457", "end": 457},
+    {"id": "T4", "ok": false, "what": "live.py --check twist; auto-here at 40; wound cable; bus dead", "csv": "twist-commanded.csv", "end_un": 6285, "you": "disconnected XT60"}
+  ],
+  "errors": [
+    {"id": "E1", "msg": "listen and move in two processes; turns reset"},
+    {"id": "E2", "msg": "twist free coasts ~60deg; park saved as home"},
+    {"id": "E3", "msg": "called 50/3890/40/391 mid"},
+    {"id": "E4", "msg": "auto-here at pos 40; next CW was user CCW"},
+    {"id": "E5", "msg": "abort absolute load>=1600 not delta from cruise"},
+    {"id": "E6", "msg": "chip does not poll during twist speed; bus die = keep spinning"},
+    {"id": "E7", "msg": "wheel/servo miss once; speed abort mode=-1"},
+    {"id": "E8", "msg": "full get of 7 IDs ~1s starves bus"},
+    {"id": "E9", "msg": "fast sample across 0 fools unwrap"},
+    {"id": "E10", "msg": "firmware twist mid 4050/2460 is not slack 4068"}
+  ],
+  "no_command_until": "flash chip ESTOP guard; loom slack at 4068; get answers"
+}

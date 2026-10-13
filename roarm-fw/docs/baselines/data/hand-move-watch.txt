@@ -1,0 +1,204 @@
+=== open /dev/ttyACM0 ===
+state t=107030 heap=297940 reset=poweron tasks=5 bus_rx=0 dump=1
+state mac=44:1d:64:86:3f:54
+state bus=uart1 gpio18/19 1Mbps rx-only until ping
+tasks:
+main           	X	1	1880	3
+IDLE1          	R	0	1024	5
+IDLE0          	R	0	1028	4
+ipc0           	S	24	504	1
+ipc1           	S	24	496	2
+gpio 18(rx)=1 19(tx)=1 (uart1, not remuxed)
+t=108010 heap=297940 bus_rx=0
+=== ping ===
+ping uart1 gpio18/19 1Mbps (UART switch = ESP32)
+ping FOUND id=11
+ping FOUND id=12
+ping FOUND id=13
+ping FOUND id=14
+ping FOUND id=15
+ping FOUND id=16
+ping FOUND id=17
+ping done found=7
+t=110010 heap=297940 bus_rx=0
+=== batt ===
+batt READ servo VIN (same rail as XT60). 0.1V LSB. no INA219
+batt id=11 v=11.5
+batt id=12 v=11.4
+batt id=13 v=11.4
+batt id=14 v=11.4
+batt id=15 v=11.4
+batt id=16 v=11.4
+batt id=17 v=11.4
+batt pack=11.4V est=25% cells=3 n=7 ok
+batt note=rest-voltage guess, not a BMS. HAT does not charge XT60; USB is not a charger.
+=== get rest ===
+id=11 base         pos=1131 speed=0 load=0 v=11.5 temp=25 cur=0 moving=0 tq=0
+id=12 shoulder-A   pos=1921 speed=0 load=0 v=11.4 temp=26 cur=0 moving=0 tq=0
+id=13 shoulder-B   pos=2173 speed=0 load=0 v=11.4 temp=28 cur=0 moving=0 tq=0
+id=14 elbow        pos=1904 speed=0 load=0 v=11.4 temp=27 cur=0 moving=0 tq=0
+id=15 wrist-pitch  pos=2147 speed=0 load=0 v=11.4 temp=27 cur=0 moving=0 tq=0
+id=16 wrist-roll   pos=2893 speed=0 load=0 v=11.3 temp=25 cur=0 moving=0 tq=0
+id=17 gripper      pos=2088 speed=0 load=0 v=11.4 temp=27 cur=0 moving=0 tq=0
+=== watching get every 0.35s — move one joint at a time ===
+t=   9.7s still 11:1131 12:1921 13:2173 14:1904 15:2147 16:2893 17:2088
+t=  19.5s still 11:1131 12:1921 13:2173 14:1904 15:2147 16:2893 17:2088
+t=  25.9s id=11 base         pos=1127 Δ-4 | id=13 shoulder-B   pos=2176 Δ+3 | id=17 gripper      pos=1991 Δ-97 speed=-950
+t=  27.1s id=13 shoulder-B   pos=2174 Δ-2 | id=17 gripper      pos= 932 Δ-1059
+t=  28.3s id=16 wrist-roll   pos=2893 Δ+2 | id=17 gripper      pos= 934 Δ+2
+t=  29.6s id=11 base         pos=1128 Δ+2
+t=  32.1s id=15 wrist-pitch  pos=2144 Δ-3 | id=16 wrist-roll   pos=2888 Δ-4 | id=17 gripper      pos=1400 Δ+467 speed=1100
+t=  33.3s id=11 base         pos=1127 Δ-2 | id=15 wrist-pitch  pos=2146 Δ+2 | id=16 wrist-roll   pos=2892 Δ+4 | id=17 gripper      pos=2087 Δ+687
+t=  34.5s id=11 base         pos=1129 Δ+2
+t=  35.8s id=13 shoulder-B   pos=2173 Δ+0 cur=1
+t=  37.0s id=11 base         pos=1144 Δ+14 cur=1 | id=12 shoulder-A   pos=2272 Δ+351 speed=700 | id=13 shoulder-B   pos=1806 Δ-367 speed=-700 | id=16 wrist-roll   pos=2889 Δ-2
+t=  38.2s id=12 shoulder-A   pos=2557 Δ+285 | id=13 shoulder-B   pos=1529 Δ-277
+t=  39.5s still 11:1143 12:2557 13:1529 14:1903 15:2147 16:2888 17:2088
+t=  40.7s id=11 base         pos=1287 Δ+144 speed=950 | id=12 shoulder-A   pos=2050 Δ-507 | id=13 shoulder-B   pos=2044 Δ+515 | id=14 elbow        pos=2290 Δ+387 | id=15 wrist-pitch  pos=2146 Δ-1 speed=50 | id=16 wrist-roll   pos=2892 Δ+4 | id=17 gripper      pos=2086 Δ-2 speed=50
+t=  41.9s id=11 base         pos=1535 Δ+248 | id=12 shoulder-A   pos=1966 Δ-84 speed=-450 | id=13 shoulder-B   pos=2145 Δ+101 speed=600 | id=14 elbow        pos=2627 Δ+337 speed=350 | id=15 wrist-pitch  pos=1999 Δ-147 speed=-950 | id=16 wrist-roll   pos=2895 Δ+3 | id=17 gripper      pos=2085 Δ-1 speed=100
+t=  43.2s id=11 base         pos=1510 Δ-25 | id=12 shoulder-A   pos=1866 Δ-100 | id=13 shoulder-B   pos=2231 Δ+86 | id=14 elbow        pos=3038 Δ+411 speed=50 | id=15 wrist-pitch  pos=1483 Δ-516 | id=17 gripper      pos=2087 Δ+2
+t=  49.4s still 11:1510 12:1866 13:2231 14:3038 15:1483 16:2894 17:2087
+t=  59.2s still 11:1510 12:1865 13:2231 14:3038 15:1483 16:2894 17:2087
+t=  61.7s id=11 base         pos=1510 Δ+0 cur=1
+t=  65.4s id=12 shoulder-A   pos=1865 Δ+0 cur=1
+t=  69.1s still 11:1510 12:1865 13:2231 14:3038 15:1483 16:2894 17:2087
+t=  79.1s still 11:1510 12:1865 13:2231 14:3038 15:1483 16:2894 17:2087
+t=  88.9s still 11:1510 12:1865 13:2231 14:3038 15:1483 16:2894 17:2087
+t=  98.8s still 11:1510 12:1865 13:2231 14:3038 15:1483 16:2894 17:2087
+t= 106.2s id=12 shoulder-A   pos=1865 Δ+0 speed=-50
+t= 108.7s still 11:1510 12:1865 13:2231 14:3038 15:1483 16:2894 17:2087
+t= 118.6s still 11:1510 12:1865 13:2231 14:3038 15:1483 16:2894 17:2087
+t= 122.3s id=12 shoulder-A   pos=1865 Δ-1 speed=-50
+t= 128.5s still 11:1510 12:1865 13:2231 14:3038 15:1483 16:2894 17:2087
+t= 137.3s id=11 base MISS
+t= 138.5s id=11 base pos=1510 (first live)
+t= 144.7s id=11 base         pos=1510 Δ+0 cur=1
+t= 148.4s still 11:1510 12:1865 13:2231 14:3038 15:1483 16:2894 17:2087
+t= 158.3s still 11:1511 12:1865 13:2231 14:3038 15:1483 16:2894 17:2087
+t= 168.2s still 11:1511 12:1865 13:2231 14:3038 15:1483 16:2894 17:2087
+t= 175.7s id=16 wrist-roll   pos=2894 Δ+0 cur=1
+t= 178.2s still 11:1511 12:1865 13:2231 14:3038 15:1483 16:2894 17:2087
+t= 186.9s id=12 shoulder-A   pos=1865 Δ+0 cur=1
+t= 188.1s still 11:1511 12:1865 13:2231 14:3038 15:1483 16:2894 17:2087
+t= 198.0s still 11:1511 12:1865 13:2231 14:3038 15:1483 16:2894 17:2087
+t= 208.1s still 11:1511 12:1865 13:2231 14:3038 15:1483 16:2894 17:2087
+t= 213.2s id=13 shoulder-B   pos=2231 Δ+0 cur=1
+t= 218.1s still 11:1511 12:1865 13:2231 14:3038 15:1483 16:2894 17:2087
+t= 221.8s id=11 base         pos=1511 Δ+0 cur=1
+t= 228.0s still 11:1511 12:1865 13:2231 14:3038 15:1483 16:2894 17:2087
+t= 237.9s still 11:1511 12:1865 13:2231 14:3038 15:1483 16:2894 17:2087
+t= 242.8s id=17 gripper      pos=2081 Δ-6
+t= 245.3s id=11 base         pos=1510 Δ-1 cur=1
+t= 246.6s id=12 shoulder-A   pos=1869 Δ+3 | id=14 elbow        pos=2877 Δ-161 speed=-350 | id=17 gripper      pos=2079 Δ-1 speed=-50
+t= 247.8s id=11 base         pos=1257 Δ-252 | id=12 shoulder-A   pos=2399 Δ+530 | id=13 shoulder-B   pos=1691 Δ-538 | id=14 elbow        pos=2273 Δ-604 | id=15 wrist-pitch  pos=1478 Δ-3
+t= 249.1s id=11 base         pos=1222 Δ-35 speed=-50 | id=12 shoulder-A   pos=2540 Δ+141 speed=50 | id=13 shoulder-B   pos=1547 Δ-144 speed=-50 | id=14 elbow        pos=2284 Δ+11 | id=15 wrist-pitch  pos=1480 Δ+2 | id=16 wrist-roll   pos=2893 Δ-1 speed=50 | id=17 gripper      pos=2086 Δ+7
+t= 250.3s id=11 base         pos=1226 Δ+4 | id=12 shoulder-A   pos=2490 Δ-50 speed=-550 | id=13 shoulder-B   pos=1610 Δ+63 speed=550 | id=14 elbow        pos=2209 Δ-75 speed=-250 | id=15 wrist-pitch  pos=1477 Δ-3 | id=17 gripper      pos=2080 Δ-6
+t= 251.5s id=12 shoulder-A   pos=2220 Δ-270 | id=13 shoulder-B   pos=1871 Δ+261 speed=-50 | id=14 elbow        pos=1936 Δ-273 speed=-1200 | id=16 wrist-roll   pos=2891 Δ-3
+t= 252.8s id=11 base         pos=1241 Δ+14 | id=12 shoulder-A   pos=2126 Δ-94 speed=-550 | id=13 shoulder-B   pos=1984 Δ+113 speed=550 | id=14 elbow        pos=1867 Δ-69 speed=1500 | id=15 wrist-pitch  pos=1479 Δ+2 | id=17 gripper      pos=2081 Δ+2
+t= 254.1s id=11 base         pos=1239 Δ-2 | id=12 shoulder-A   pos=1888 Δ-238 | id=13 shoulder-B   pos=2209 Δ+225 | id=14 elbow        pos=2894 Δ+1027 speed=50 | id=15 wrist-pitch  pos=1482 Δ+3 | id=17 gripper      pos=2079 Δ-2
+t= 255.4s id=11 base         pos=1396 Δ+157 speed=1250 | id=12 shoulder-A   pos=2067 Δ+179 | id=13 shoulder-B   pos=2026 Δ-183 | id=14 elbow        pos=2892 Δ-2 | id=15 wrist-pitch  pos=1479 Δ-3 speed=-50 | id=16 wrist-roll   pos=2893 Δ+3
+t= 256.6s id=11 base         pos=2020 Δ+624 speed=-550 | id=14 elbow        pos=2894 Δ+2 | id=15 wrist-pitch  pos=1481 Δ+2 | id=16 wrist-roll   pos=2890 Δ-3
+t= 257.9s id=11 base         pos=1218 Δ-802 | id=14 elbow        pos=2889 Δ-5 | id=15 wrist-pitch  pos=1479 Δ-2 | id=16 wrist-roll   pos=2894 Δ+4 speed=50
+t= 259.1s id=12 shoulder-A   pos=2064 Δ-4 | id=13 shoulder-B   pos=2030 Δ+4 | id=16 wrist-roll   pos=2889 Δ-5 | id=17 gripper      pos=1068 Δ-1012 speed=-700
+t= 260.3s id=12 shoulder-A   pos=2067 Δ+3 | id=13 shoulder-B   pos=2027 Δ-3 | id=17 gripper      pos= 965 Δ-103
+t= 261.6s id=17 gripper      pos=1949 Δ+984 speed=500
+t= 262.8s id=13 shoulder-B   pos=2029 Δ+1 speed=100 | id=14 elbow        pos=2890 Δ+2 speed=50 | id=17 gripper      pos=2088 Δ+139
+t= 264.0s id=11 base         pos=1220 Δ+3 | id=12 shoulder-A   pos=2074 Δ+7 | id=13 shoulder-B   pos=2025 Δ-4 | id=14 elbow        pos=2940 Δ+50 speed=100 | id=15 wrist-pitch  pos=1181 Δ-297 | id=16 wrist-roll   pos=2895 Δ+6
+t= 265.3s id=11 base         pos=1244 Δ+24 | id=12 shoulder-A   pos=2147 Δ+73 | id=13 shoulder-B   pos=1947 Δ-78 | id=14 elbow        pos=2759 Δ-181 speed=-150 | id=15 wrist-pitch  pos=1269 Δ+88 speed=900 | id=16 wrist-roll   pos=3032 Δ+137 speed=-50
+t= 266.5s id=11 base         pos=1234 Δ-10 | id=12 shoulder-A   pos=2151 Δ+4 | id=13 shoulder-B   pos=1943 Δ-4 | id=14 elbow        pos=2734 Δ-25 | id=15 wrist-pitch  pos=2239 Δ+970 | id=16 wrist-roll   pos=3028 Δ-4 | id=17 gripper      pos=2088 Δ-2
+t= 267.7s id=12 shoulder-A   pos=2149 Δ-2 speed=-50 | id=13 shoulder-B   pos=1947 Δ+4 speed=50 | id=14 elbow        pos=2457 Δ-277 speed=450 | id=17 gripper      pos=2082 Δ-6
+t= 269.0s id=11 base         pos=1236 Δ+2 speed=50 | id=12 shoulder-A   pos=1982 Δ-167 speed=50 | id=13 shoulder-B   pos=2111 Δ+164 speed=-50 | id=14 elbow        pos=2836 Δ+379 speed=100 | id=15 wrist-pitch  pos=1478 Δ-760 speed=-100 | id=16 wrist-roll   pos=3033 Δ+4 | id=17 gripper      pos=2080 Δ-2
+t= 270.2s id=11 base         pos=1238 Δ+2 | id=12 shoulder-A   pos=1984 Δ+2 | id=17 gripper      pos=2086 Δ+6
+t= 277.6s still 11:1238 12:1984 13:2110 14:2836 15:1478 16:3033 17:2086
+t= 287.5s still 11:1238 12:1984 13:2110 14:2836 15:1478 16:3033 17:2086
+t= 291.3s id=13 shoulder-B   pos=2110 Δ+0 cur=1
+t= 292.5s id=16 wrist-roll   pos=3033 Δ+0 cur=1
+t= 297.5s still 11:1238 12:1984 13:2110 14:2836 15:1478 16:3033 17:2086
+t= 307.5s still 11:1238 12:1984 13:2110 14:2836 15:1478 16:3033 17:2086
+t= 317.4s still 11:1238 12:1984 13:2110 14:2836 15:1478 16:3033 17:2086
+t= 327.2s still 11:1238 12:1984 13:2110 14:2836 15:1478 16:3033 17:2086
+t= 332.2s id=13 shoulder-B   pos=2110 Δ+0 cur=1
+t= 337.3s still 11:1238 12:1984 13:2110 14:2836 15:1478 16:3033 17:2086
+t= 347.2s still 11:1238 12:1984 13:2110 14:2836 15:1478 16:3033 17:2086
+t= 354.6s id=11 base         pos=1237 Δ-1 speed=-50
+t= 357.1s still 11:1237 12:1984 13:2110 14:2836 15:1478 16:3033 17:2086
+t= 358.3s id=11 base         pos=1237 Δ+0 cur=1
+t= 366.9s still 11:1237 12:1984 13:2110 14:2836 15:1478 16:3033 17:2086
+t= 376.8s still 11:1237 12:1984 13:2110 14:2836 15:1478 16:3033 17:2086
+t= 386.9s still 11:1237 12:1984 13:2110 14:2836 15:1478 16:3033 17:2086
+t= 396.8s still 11:1237 12:1984 13:2110 14:2836 15:1478 16:3033 17:2086
+t= 406.7s still 11:1237 12:1984 13:2110 14:2836 15:1478 16:3033 17:2086
+t= 411.6s id=16 wrist-roll   pos=3033 Δ+0 cur=1
+t= 416.7s still 11:1237 12:1984 13:2110 14:2836 15:1478 16:3033 17:2086
+t= 426.6s still 11:1237 12:1984 13:2110 14:2836 15:1478 16:3033 17:2086
+t= 436.5s still 11:1237 12:1984 13:2110 14:2836 15:1478 16:3033 17:2086
+t= 438.9s id=13 shoulder-B   pos=2110 Δ+0 cur=1
+t= 446.4s still 11:1237 12:1984 13:2110 14:2836 15:1478 16:3033 17:2086
+t= 452.5s id=11 base         pos=1237 Δ+0 cur=1
+t= 456.2s still 11:1237 12:1984 13:2110 14:2836 15:1478 16:3033 17:2086
+t= 457.5s id=11 base         pos=1237 Δ+0 cur=1
+t= 466.1s still 11:1237 12:1984 13:2110 14:2836 15:1478 16:3033 17:2086
+t= 476.1s id=16 wrist-roll   pos=3033 Δ+0 cur=1
+t= 485.9s still 11:1237 12:1984 13:2110 14:2836 15:1478 16:3033 17:2086
+t= 490.9s id=12 shoulder-A   pos=1981 Δ-3 speed=-50 | id=13 shoulder-B   pos=2114 Δ+4 | id=14 elbow        pos=2834 Δ-2 speed=-50 | id=15 wrist-pitch  pos=1474 Δ-4 | id=17 gripper      pos=1811 Δ-275 speed=-950
+t= 492.1s id=12 shoulder-A   pos=1984 Δ+3 | id=13 shoulder-B   pos=2110 Δ-4 | id=15 wrist-pitch  pos=1478 Δ+4 | id=17 gripper      pos=1012 Δ-799
+t= 495.8s still 11:1235 12:1984 13:2110 14:2835 15:1478 16:3034 17:1012
+t= 503.2s id=11 base         pos=1238 Δ+2
+t= 505.7s id=14 elbow        pos=3040 Δ+205
+t= 515.6s still 11:1238 12:1984 13:2110 14:3040 15:1478 16:3034 17:1012
+t= 525.6s still 11:1238 12:1984 13:2110 14:3040 15:1478 16:3034 17:1012
+t= 535.6s still 11:1238 12:1984 13:2110 14:3040 15:1478 16:3034 17:1012
+t= 545.5s still 11:1238 12:1984 13:2110 14:3040 15:1478 16:3034 17:1012
+t= 555.4s still 11:1238 12:1984 13:2110 14:3040 15:1478 16:3034 17:1012
+t= 565.3s still 11:1238 12:1984 13:2110 14:3040 15:1478 16:3034 17:1012
+t= 567.8s id=15 wrist-pitch  pos=1478 Δ+0 cur=1
+t= 575.2s still 11:1238 12:1984 13:2110 14:3040 15:1478 16:3034 17:1012
+t= 578.9s id=11 base MISS
+t= 580.2s id=11 base pos=1238 (first live)
+t= 585.1s still 11:1238 12:1984 13:2110 14:3040 15:1478 16:3034 17:1012
+t= 591.3s id=16 wrist-roll   pos=3034 Δ+0 cur=1
+t= 592.6s id=16 wrist-roll   pos=3032 Δ-2 | id=17 gripper      pos=1021 Δ+9
+t= 593.8s id=16 wrist-roll   pos=3032 Δ+0 speed=-50
+t= 595.0s id=16 wrist-roll   pos=3030 Δ-2
+t= 599.9s id=17 gripper      pos=1245 Δ+222 speed=800
+t= 601.2s id=11 base         pos=1236 Δ-2 | id=17 gripper      pos=1998 Δ+753 speed=600
+t= 602.4s id=17 gripper      pos=2088 Δ+90
+t= 603.6s id=17 gripper      pos=2085 Δ-3
+t= 604.9s still 11:1236 12:1984 13:2111 14:3040 15:1478 16:3031 17:2085
+t= 606.1s id=13 shoulder-B   pos=2113 Δ+2 | id=14 elbow        pos=3037 Δ-3 | id=15 wrist-pitch  pos=1475 Δ-3 | id=16 wrist-roll   pos=3035 Δ+4 | id=17 gripper      pos=2057 Δ-28 speed=-500
+t= 607.4s id=12 shoulder-A   pos=1982 Δ-1 cur=1 | id=16 wrist-roll   pos=3030 Δ-5 | id=17 gripper      pos=1586 Δ-471 speed=-350
+t= 608.6s id=12 shoulder-A   pos=1980 Δ-2 | id=14 elbow        pos=3036 Δ-2 | id=17 gripper      pos=1103 Δ-483 speed=-550
+t= 609.8s id=17 gripper      pos= 681 Δ-422 speed=-250
+t= 611.1s id=12 shoulder-A   pos=1982 Δ+2 | id=17 gripper      pos= 593 Δ-88
+t= 612.3s id=12 shoulder-A   pos=1984 Δ+2 | id=13 shoulder-B   pos=2111 Δ-2 | id=14 elbow        pos=3040 Δ+5 | id=15 wrist-pitch  pos=1478 Δ+4 | id=16 wrist-roll   pos=3031 Δ+2
+t= 614.8s still 11:1234 12:1984 13:2111 14:3040 15:1478 16:3031 17:593
+t= 616.0s id=11 base         pos=1236 Δ+2 | id=16 wrist-roll   pos=3029 Δ-2 | id=17 gripper      pos= 701 Δ+108 speed=700
+t= 617.3s id=14 elbow        pos=3036 Δ-4 | id=17 gripper      pos=1686 Δ+985 speed=750
+t= 618.5s id=14 elbow        pos=3040 Δ+4 | id=17 gripper      pos=2088 Δ+402
+t= 619.7s id=17 gripper      pos=2086 Δ-2
+t= 623.5s id=12 shoulder-A   pos=1981 Δ-3 | id=13 shoulder-B   pos=2114 Δ+2 | id=14 elbow        pos=3039 Δ-1 speed=50 | id=15 wrist-pitch  pos=1475 Δ-3 | id=17 gripper      pos=1604 Δ-480 speed=-900
+t= 624.7s id=12 shoulder-A   pos=1984 Δ+3 | id=13 shoulder-B   pos=2112 Δ-2 | id=15 wrist-pitch  pos=1478 Δ+3 | id=17 gripper      pos= 756 Δ-848 speed=-500
+t= 625.9s id=17 gripper      pos= 569 Δ-187
+t= 627.2s id=16 wrist-roll   pos=3031 Δ+2
+t= 628.4s id=16 wrist-roll   pos=3029 Δ-2
+t= 630.9s id=12 shoulder-A   pos=1982 Δ-2 | id=13 shoulder-B   pos=2113 Δ+2 | id=17 gripper      pos= 579 Δ+10
+t= 632.1s id=12 shoulder-A   pos=1984 Δ+2 | id=13 shoulder-B   pos=2111 Δ-2 | id=17 gripper      pos= 761 Δ+182 speed=500
+t= 633.3s id=14 elbow        pos=3036 Δ-4 | id=17 gripper      pos=1567 Δ+806 speed=600
+t= 634.6s id=17 gripper      pos=2088 Δ+521
+t= 635.8s id=14 elbow        pos=3040 Δ+4 | id=16 wrist-roll   pos=3031 Δ+2 speed=50 | id=17 gripper      pos=2081 Δ-7
+t= 638.3s id=16 wrist-roll   pos=3034 Δ+3
+t= 639.5s id=17 gripper      pos=1777 Δ-302 speed=-650
+t= 640.8s id=12 shoulder-A   pos=1981 Δ-2 | id=16 wrist-roll   pos=3029 Δ-6 | id=17 gripper      pos= 899 Δ-878 speed=-500
+t= 642.0s id=12 shoulder-A   pos=1983 Δ+2 | id=17 gripper      pos= 596 Δ-303
+t= 643.2s id=13 shoulder-B   pos=2111 Δ-2
+t= 644.5s still 11:1235 12:1984 13:2111 14:3040 15:1478 16:3031 17:596
+t= 646.9s id=14 elbow        pos=3038 Δ-2 | id=17 gripper      pos= 609 Δ+13
+t= 648.2s id=17 gripper      pos= 609 Δ+0 speed=-50
+t= 649.4s id=16 wrist-roll   pos=3032 Δ+2
+t= 654.4s still 11:1236 12:1984 13:2111 14:3039 15:1478 16:3033 17:609
+t= 664.2s still 11:1236 12:1984 13:2111 14:3040 15:1478 16:3033 17:609
+t= 674.2s still 11:1236 12:1984 13:2111 14:3040 15:1478 16:3033 17:609
+t= 684.2s still 11:1236 12:1984 13:2111 14:3040 15:1478 16:3033 17:609
+t= 694.0s still 11:1236 12:1984 13:2111 14:3040 15:1478 16:3033 17:609
+t= 700.2s id=14 elbow        pos=3040 Δ+0 cur=1
+t= 703.9s still 11:1236 12:1984 13:2111 14:3040 15:1478 16:3033 17:609

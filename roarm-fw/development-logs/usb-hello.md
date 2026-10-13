@@ -1,0 +1,75 @@
+# USB hello
+
+Firmware folder created. Chip is ESP32-WROOM-32 on Bus Servo Driver HAT (A), battery-mod RoArm-M3 Pro.
+
+## Naming
+
+Repo: **`roarm-fw`**. One ESP32, one limb. Four copies later (roles, not four repos). Coordinator is a different project. Details: `docs/framework/naming.md`.
+
+## Framework
+
+Morning: PlatformIO + Arduino — fastest reupload vs Arduino IDE (`pio`, no venv).
+
+Afternoon: WROOM-32 + low-level + BLE + grow + security later. That is **native ESP-IDF** (`idf.py`), not PIO wrapping IDF (SDK lag). Canonical: `docs/framework/framework.md`.
+
+USB first, BLE later as the same text commands. No auto-move. `docs/plans/usb-then-ble.md`.
+
+## Git
+
+Local repo initialized in `roarm-fw/` (not the parent `gibbon-bot` tree). First commit: hello USB (`5ce7db2`).
+
+## Host / serial
+
+Board enumerates as **`/dev/ttyACM0`**, 115200. UART switch = **ESP32**.
+
+- `t` added to `dialout`; **this login still needs** `sudo chmod 666 /dev/ttyACM0` until a full desktop logout. `newgrp` is not installed. Agent sudo has no TTY.
+- New shell: `. scripts/idf-env.sh` or `idf.py: command not found`.
+- **Ctrl+] does not quit the monitor** (Italian keyboard + Cursor). IDF 5.4 process is `esp_idf_monitor`, not `idf_monitor.py`. Second terminal: `pkill -f esp_idf_monitor` or `scripts/stop-monitor.sh`.
+- Do not run two monitors on ACM0.
+
+Every-time loop: `docs/framework/espidf.md`. Once-on-this-machine: `development-logs/espidf-start.md`.
+
+## Bring-up tries
+
+### 1. USB hello — worked
+
+Flashed print-loop firmware. Serial showed `roarm-fw usb hello`, chip ESP32-D0WD-V3 rev 3.1, dual core, 4 MB flash, MAC `44:1d:64:86:3f:54`, then `alive`. Proved USB, flash, and the WROOM-32. Servo bus not started.
+
+### 2. Blink an LED — no lamp on this HAT
+
+Wanted a visible blink plus serial `hz` / `tick` so we could set frequency from the monitor.
+
+Approach:
+
+- GPIO **2**, the usual ESP32-DevKit user LED.
+- Separate FreeRTOS `blink` task toggling the pin and printing `tick 1` / `tick 0`.
+- Commands: `hz`, `off`, `on`, `status`, `help`.
+
+What actually happened:
+
+- **Stack overflow in task `blink`**, reboot loop. Cause: `printf` on a 2 KB task stack. Fix: keep UART + ticks on the **main** task.
+- Still **no light**. “What’s On Board” on the HAT lists no user LED. Schematic **LED3** is on 3.3 V (power), not a GPIO. Tiny LEDs by USB-C are UART TX/RX activity, not ours to PWM. The RoArm kit LED was on the **old** General Driver PH2.0, which this HAT replaced.
+
+Dropped GPIO blink. Serial ticks were a valid USB test; they are no longer the firmware on the chip.
+
+### 3. Battery unplugged — `info` + `ping`
+
+USB still powers the ESP32. Servos need XT60, so position/load/voltage cannot come back yet. The HAT also has **no INA219 / IMU** (those were on the old board).
+
+Approach: USB line protocol, UART1 on GPIO 18/19 @ 1 Mbps, Feetech ping (`FF FF ID 02 01 checksum`) for IDs 11–17. No motion.
+
+Flashed and ran with battery **off**:
+
+```
+info chip=ESP32 cores=2 rev=301 flash=4096KB reset=poweron
+info mac=44:1d:64:86:3f:54 heap=298976 uptime_ms=10550
+info idf=v5.4.2 usb=115200 bus=gpio18/19@1Mbps ids=11-17
+ping miss id=11 … 17
+ping none 11-17 — expected if battery is off
+```
+
+`info` is what we can read on USB alone. `ping` miss is the bus test in this state (also looks the same if the UART switch is not ESP32).
+
+Gold copy for later plug-in checks: `docs/baselines/usb-no-battery.md`. Type `bench` and match `found=0/7`.
+
+Commands now: `info`, `ping`, `pingall`, `bench`, `help`. Next: battery on, same `bench`, then `get` (pos/load/V). Still no auto-move.

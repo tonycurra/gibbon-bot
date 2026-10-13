@@ -1,0 +1,20 @@
+{
+  "id": 16,
+  "name": "twist",
+  "raw": 2189,
+  "turns": 1,
+  "un": 6285,
+  "home_raw": 4068,
+  "home_un": 4068,
+  "stale": true,
+  "cable": "unknown",
+  "cw": {
+    "pos": 978,
+    "un": 978
+  },
+  "ccw": {
+    "un": 7126,
+    "pos": 3030
+  },
+  "note": "2026-09-05 --check twist FAILED. Auto-here at pos=40 (seam, not 4068) then bus wedged mid-CCW at un~6285 still spinning. home restored to 4068. Look at loom after pack recover."
+}

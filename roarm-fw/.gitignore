@@ -1,0 +1,29 @@
+# ESP-IDF output (rebuilt on the machine that flashes)
+build/
+bringup/build/
+managed_components/
+sdkconfig
+sdkconfig.old
+dependencies.lock
+.cache/
+
+# Local bring-up symlink (flash.sh points app.c at one test)
+bringup/main/app.c
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Secrets and machine junk
+.env
+.env.*
+*.log
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
