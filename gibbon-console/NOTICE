@@ -1,0 +1,8 @@
+gibbon-console
+Copyright 2025-2026 Olivabot
+
+Django and its dependencies are BSD-licensed by their own projects.
+This repository does not vendor them.
+
+Documentation under docs/ is CC BY 4.0 unless a file says otherwise.
+https://creativecommons.org/licenses/by/4.0/

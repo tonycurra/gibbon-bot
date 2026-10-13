@@ -28,7 +28,7 @@ Traces: pos@56, un, speed@58, load@60, cur@69, V@62, temp@63. Load is PWM effort
 
 ## Files
 
-- SQLite: `db.sqlite3` (gitignored; the VPS starts empty and migrates)
+- SQLite: `db.sqlite3` (gitignored; a fresh checkout starts empty and migrates)
 - Old line dumps: `sittings/*.jsonl` (pre-Django, gitignored)
 - BLE addr cache: `.ble-addr` (this machine, gitignored)
 
