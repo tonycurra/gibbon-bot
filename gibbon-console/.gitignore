@@ -1,0 +1,25 @@
+# Local runtime (recreate on the server)
+.venv/
+sittings/
+.ble-addr
+db.sqlite3
+*.sqlite3
+db.sqlite3-*
+staticfiles/
+
+# Python
+__pycache__/
+*.pyc
+console/migrations/__pycache__/
+
+# Secrets and machine junk
+.env
+.env.*
+*.log
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp

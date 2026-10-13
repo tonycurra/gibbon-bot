@@ -1,0 +1,31 @@
+{% extends "console/base.html" %}
+{% load static %}
+{% block main %}
+<p class="hint">one shot on the bus. hop limits: 11–15 ≤80, twist ≤900, hand 689–2075. shoulder a/b is dual-drive — do not fight.</p>
+<form id="actForm" class="act">
+  <label>joint
+    <select id="joint"></select>
+  </label>
+  <label>do
+    <select id="op"></select>
+  </label>
+  <label id="valWrap" hidden>value
+    <input id="val" type="number" step="1">
+  </label>
+  <button type="submit">send</button>
+</form>
+<div class="row">
+  <label>write speed
+    <input id="mvSpeed" type="number" value="300" min="1" max="3073">
+  </label>
+  <label>write acc
+    <input id="mvAcc" type="number" value="20" min="0" max="150">
+  </label>
+  <button type="button" id="btnMoveSet">set</button>
+</div>
+<p id="actHint" class="mut"></p>
+<pre id="log" class="short"></pre>
+{% endblock %}
+{% block js %}
+<script src="{% static 'console/js/act.js' %}"></script>
+{% endblock %}

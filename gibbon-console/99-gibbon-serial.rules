@@ -1,0 +1,2 @@
+# Chrome Web Serial — WCH CH343 on this HAT (1a86:55d3)
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55d3", MODE="0666", GROUP="dialout", TAG+="uaccess"

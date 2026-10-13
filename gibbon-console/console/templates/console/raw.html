@@ -1,0 +1,57 @@
+{% extends "console/base.html" %}
+{% load static %}
+{% block main %}
+<p class="hint">Hand only. Open, close, hold, or free. Graphs are the servo’s own sensors. Pack on. jaws clear. Header <strong>STOP</strong> still cuts everything.</p>
+<p id="handSay" class="say">free — turn by hand, or open / close</p>
+<div class="calTrio">
+  <div><span class="k">position</span><b id="lvPos">—</b><i id="lvBand">encoder counts</i></div>
+  <div class="now"><span class="k">effort</span><b id="lvLoad">—</b><i id="lvTq">torque off</i></div>
+  <div><span class="k">current</span><b id="lvCur">—</b><i id="lvVT">—</i></div>
+</div>
+<div class="act" id="rawAct">
+  <button type="button" id="btnOpen">open</button>
+  <button type="button" id="btnClose">close</button>
+  <button type="button" id="btnHold">hold</button>
+  <button type="button" id="btnFree">free</button>
+  <label class="grow">grip
+    <input id="goal" type="range" min="689" max="2075" value="1400">
+  </label>
+  <b id="goalVal">1400</b>
+  <button type="button" id="btnGo">go</button>
+  <label>speed <input id="mvSpeed" type="number" value="300" min="1" max="3073" title="WritePos max speed, servo units"></label>
+  <label>acc <input id="mvAcc" type="number" value="20" min="0" max="150" title="WritePos acceleration, servo units"></label>
+</div>
+<div class="tripBox">
+  <p class="tripHead">STOP if the hand pushes this hard</p>
+  <div class="tripScale"><span>light touch</span><span>only a jam</span></div>
+  <input id="sense" type="range" min="0" max="1350" step="10" value="400">
+  <div class="loadMeter" id="loadMeter" title="live |effort| vs STOP line">
+    <i id="loadFill"></i>
+    <em id="loadTrip"></em>
+  </div>
+  <p class="calQuiet">
+    <span>now <i id="loadNow">0</i></span>
+    <span>STOP at <i id="senseVal">400</i></span>
+    <span class="mut">effort = servo PID load counts (~0–1000, not N·m). 0 on the slider = page does not trip (chip guard still can).</span>
+  </p>
+</div>
+<p id="tripEl" class="guard">watching off — torque is free</p>
+<div id="charts" class="chartGrid"></div>
+<details class="more">
+  <summary>servo dump — only if the hand looks dead</summary>
+  <p class="hint"><code>who</code> is EEPROM (name, PID). <code>raw 17</code> is the bus ping hex. You do not need these to open and close.</p>
+  <div class="act">
+    <button type="button" id="btnWho">read EEPROM</button>
+    <button type="button" id="btnRaw">dump bus bytes</button>
+  </div>
+  <p class="calQuiet">
+    <span>mode <i id="lvMode">—</i></span>
+    <span>kp/kd/ki <i id="lvPid">—</i></span>
+    <span>spd <i id="lvSpd">—</i></span>
+  </p>
+  <pre id="labDump">—</pre>
+</details>
+{% endblock %}
+{% block js %}
+<script src="{% static 'console/js/raw.js' %}"></script>
+{% endblock %}

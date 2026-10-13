@@ -1,0 +1,25 @@
+{% extends "console/base.html" %}
+{% load static %}
+{% block main %}
+<ul class="menu" id="homeMenu">
+  <li><a class="ctaGo" id="calGo" href="/calibration/">calibration</a></li>
+  <li><a class="ctaGo" href="/imitation/">imitation</a></li>
+</ul>
+<details class="more">
+  <summary>jog after walls exist</summary>
+  <p id="powerEl" class="sense"><span class="senseRow"><span><b>bus</b> <i id="pwrBus">—</i></span><span><b>Σ mA</b> <i id="pwrMa">—</i></span><span><b>W</b> <i id="pwrW">—</i></span></span></p>
+  <div id="armWrap">
+  <table class="ov home">
+    <thead>
+      <tr>
+        <th>joint</th><th>load</th><th>mA</th><th></th>
+      </tr>
+    </thead>
+    <tbody id="homeBody"></tbody>
+  </table>
+  </div>
+</details>
+{% endblock %}
+{% block js %}
+<script src="{% static 'console/js/home.js' %}"></script>
+{% endblock %}

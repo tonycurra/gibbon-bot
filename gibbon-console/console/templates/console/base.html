@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>gibbon / {{ crumb }}</title>
+{% load static %}
+<link rel="icon" href="{% static 'console/icon.svg' %}">
+<link rel="stylesheet" href="{% static 'console/app.css' %}">
+</head>
+<body class="page-{{ page }}">
+<header class="bar">
+  <span id="dot" class="dot off"></span>
+  <a class="brand" href="/">gibbon</a>
+  <span id="usbEl" class="pill mut">usb</span>
+  <span id="bleEl" class="pill mut">ble</span>
+  <span id="packEl" class="mut">pack —</span>
+  <span class="sp"></span>
+  <button type="button" id="btnHost">connect</button>
+  <button type="button" id="btnDisc" hidden>drop</button>
+  <button type="button" class="huge lockpose" id="btnLockPose" disabled>LOCK</button>
+  <button type="button" class="stop huge" id="btnStop">STOP</button>
+</header>
+<nav>
+  {% for key, label in pages %}
+  <a href="{% url key %}"{% if page == key %} class="on"{% endif %}>{{ label }}</a>
+  {% endfor %}
+  <details class="navMore">
+    <summary>more</summary>
+    {% for key, label in more %}
+    <a href="{% url key %}"{% if page == key %} class="on"{% endif %}>{{ label }}</a>
+    {% endfor %}
+  </details>
+</nav>
+{% if motor_nav %}
+<nav class="joints">
+  {% for j in joints %}
+  <a href="{{ nav_prefix }}{{ j.slug }}/"{% if joint_slug == j.slug %} class="on"{% endif %}>{{ j.name }}</a>
+  {% endfor %}
+</nav>
+{% endif %}
+<details class="more statusMore">
+  <summary>status</summary>
+  <p class="statusRow">
+    <span id="foundEl" class="mut">motors —</span>
+    <span id="fwEl" class="mut">fw —</span>
+    <span id="boardEl" class="mut">board —</span>
+    <span id="tqEl" class="mut">tq off</span>
+  </p>
+</details>
+<main>
+{% block main %}{% endblock %}
+</main>
+<footer class="foot">
+  <button type="button" id="footToggle">log</button>
+  <pre id="footLog">—</pre>
+</footer>
+<script>window.CATALOG = {{ catalog_json }};</script>
+<script src="{% static 'console/js/core.js' %}"></script>
+{% block js %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,41 @@
+{% extends "console/base.html" %}
+{% load static %}
+{% block main %}
+<p class="hint">STOP, rec, move the arm by hand, stop rec, play. Replay is hop-limited <code>to</code> / <code>raise to</code> — never 12 or 13 alone. Unexpected |load| trips STOP. Arm can drop. Yaw / wrist roll cannot play through 0/4095.</p>
+<p id="imiSay" class="say">free the arm, rec, then move by hand</p>
+<div class="calActs" id="imiActs">
+  <button type="button" id="btnRec">rec</button>
+  <button type="button" id="btnPlay" disabled>play</button>
+  <button type="button" id="btnClear" disabled>clear</button>
+  <b id="recN" class="mut">0 pts</b>
+  <b id="playN" class="mut"></b>
+</div>
+<div class="tripBox">
+  <p class="tripHead">STOP if a joint pushes this hard</p>
+  <div class="tripScale"><span>light touch</span><span>only a jam</span></div>
+  <input id="sense" type="range" min="0" max="1350" step="10" value="400">
+  <div class="loadMeter" id="loadMeter" title="live max |load| vs STOP line">
+    <i id="loadFill"></i>
+    <em id="loadTrip"></em>
+  </div>
+  <p class="calQuiet">
+    <span>now <i id="loadNow">0</i></span>
+    <span>STOP at <i id="senseVal">400</i></span>
+    <span>hottest <i id="hotJoint">—</i></span>
+    <span class="mut">|load| is PID effort (~0–1000, not N·m). 0 = page does not trip (chip guard still can). Play also sets chip <code>guard load</code> / <code>dload</code>.</span>
+  </p>
+</div>
+<p id="tripEl" class="guard">watching off — rec with torque free</p>
+<table class="ov" id="imiTable">
+  <thead>
+    <tr>
+      <th></th><th>joint</th><th>pos</th><th>load</th>
+    </tr>
+  </thead>
+  <tbody id="imiBody"></tbody>
+</table>
+<canvas id="imiPath" class="imiPath" width="640" height="96" hidden></canvas>
+{% endblock %}
+{% block js %}
+<script src="{% static 'console/js/imitate.js' %}"></script>
+{% endblock %}

@@ -1,0 +1,23 @@
+{% extends "console/base.html" %}
+{% load static %}
+{% block main %}
+<p class="hint">chip + EEPROM + full serial since this page opened.</p>
+<section id="meta"></section>
+<div id="armWrap">
+<table>
+  <thead>
+    <tr>
+      <th>motor</th><th>id</th>
+      <th>fw</th><th>mode<b>33</b></th><th>st<b>65</b></th><th>type</th>
+      <th>kp</th><th>kd</th><th>ki</th>
+      <th>amin</th><th>amax</th><th>goal</th>
+    </tr>
+  </thead>
+  <tbody id="whoBody"></tbody>
+</table>
+</div>
+<pre id="log"></pre>
+{% endblock %}
+{% block js %}
+<script src="{% static 'console/js/chip.js' %}"></script>
+{% endblock %}

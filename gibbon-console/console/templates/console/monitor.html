@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>gibbon monitor</title>
+<style>
+  :root { --bg:#000; --fg:#c8d4d6; --mut:#5a6c6e; --line:#142022; --cyan:#7ec4c8; --mag:#d45a8c; --amber:#d4b06a; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg);
+    font: 13px/1.4 ui-sans-serif, system-ui, sans-serif; }
+  header { display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+    padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  .brand { font-weight: 650; letter-spacing: .14em; text-transform: uppercase; font-size: 12px; color: var(--cyan); }
+  .sp { flex: 1; }
+  .pill { color: var(--mut); font-variant-numeric: tabular-nums; }
+  .pill.on { color: var(--cyan); }
+  .warn { color: var(--amber); }
+  .bad { color: var(--mag); }
+  button { font: inherit; background: #000; color: var(--fg); border: 1px solid var(--line);
+    padding: 7px 12px; cursor: pointer; letter-spacing: .04em; }
+  button:hover { border-color: var(--cyan); color: var(--cyan); }
+  button:disabled { opacity: .35; cursor: not-allowed; }
+  .hint { margin: 0; padding: 10px 14px; color: var(--mut); font-size: 12px; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { text-align: right; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { color: var(--mut); font-weight: 500; font-size: 11px; letter-spacing: .02em; }
+  th .u { display: block; font-size: 10px; color: #3d4c4e; font-weight: 400; letter-spacing: 0; text-transform: none; }
+  td:nth-child(1), th:nth-child(1), td:nth-child(2), th:nth-child(2) { text-align: left; }
+  tbody tr.miss td { color: var(--mut); }
+  tbody tr.hot td { color: var(--mag); }
+  tbody tr.move td { color: var(--cyan); }
+  tbody tr.effort td { color: var(--amber); }
+  #say { margin: 0; padding: 8px 14px; color: var(--mut); font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <span class="brand">gibbon</span>
+  <span id="link" class="pill">ble off</span>
+  <span id="pack" class="pill">pack —</span>
+  <span id="hz" class="pill">— Hz</span>
+  <span class="sp"></span>
+  <button type="button" id="btn">connect</button>
+</header>
+<p class="hint">Chrome / Chromium. Unplug USB. Pack on. UART switch ESP32. Chip only notifies a packed matrix — this page does not send commands.</p>
+<p id="say">idle</p>
+<table>
+  <thead>
+    <tr>
+      <th>id</th>
+      <th>joint<span class="u">label</span></th>
+      <th>pos<span class="u">counts 0–4095</span></th>
+      <th>speed<span class="u">step/s</span></th>
+      <th>load<span class="u">effort</span></th>
+      <th>current<span class="u">mA</span></th>
+      <th>moving<span class="u">0 / 1</span></th>
+      <th>torque<span class="u">0 / 1</span></th>
+      <th>VIN<span class="u">volt</span></th>
+      <th>temp<span class="u">°C</span></th>
+    </tr>
+  </thead>
+  <tbody id="tb"></tbody>
+</table>
+<script>
+const NUS = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
+const NUS_TX = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
+const JOINT = [
+  [11, "turn", "shoulder yaw"],
+  [12, "raise-A", "shoulder pitch"],
+  [13, "raise-B", "shoulder pitch"],
+  [14, "bend", "elbow"],
+  [15, "wrist", "wrist pitch"],
+  [16, "twist", "wrist roll"],
+  [17, "hand", "gripper"],
+];
+const $ = id => document.getElementById(id);
+const cells = {};
+let device = null, buf = "", nFrame = 0, tHz = Date.now();
+
+function rowHtml(id, short, long) {
+  return `<tr id="r${id}" class="miss" title="${long}">
+    <td>${id}</td><td>${short}</td>
+    <td data-k="pos">—</td><td data-k="spd">—</td><td data-k="load">—</td>
+    <td data-k="cur">—</td><td data-k="mv">—</td><td data-k="tq">—</td>
+    <td data-k="v">—</td><td data-k="temp">—</td></tr>`;
+}
+
+$("tb").innerHTML = JOINT.map(([id, s, l]) => rowHtml(id, s, l)).join("");
+JOINT.forEach(([id]) => {
+  const tr = $("r" + id);
+  cells[id] = { tr, pos: tr.querySelector('[data-k=pos]'), spd: tr.querySelector('[data-k=spd]'),
+    load: tr.querySelector('[data-k=load]'), cur: tr.querySelector('[data-k=cur]'),
+    mv: tr.querySelector('[data-k=mv]'), tq: tr.querySelector('[data-k=tq]'),
+    v: tr.querySelector('[data-k=v]'), temp: tr.querySelector('[data-k=temp]') };
+});
+
+function parseG1(line) {
+  if (!line.startsWith("g1 ")) return null;
+  const h = line.slice(3).replace(/\s/g, "");
+  if (h.length < 10 || h.length % 2) return null;
+  const b = new Uint8Array(h.length / 2);
+  for (let i = 0; i < b.length; i++) b[i] = parseInt(h.substr(i * 2, 2), 16);
+  const dv = new DataView(b.buffer);
+  const miss = b[4];
+  const rows = [];
+  let o = 5;
+  for (let i = 0; i < 7 && o + 11 <= b.length; i++) {
+    if (miss & (1 << i)) { rows.push(null); o += 11; continue; }
+    rows.push({
+      pos: dv.getUint16(o, true),
+      spd: dv.getInt16(o + 2, true),
+      load: dv.getInt16(o + 4, true),
+      cur: dv.getInt16(o + 6, true),
+      v10: b[o + 8],
+      temp: b[o + 9],
+      tq: b[o + 10] & 1,
+      mv: (b[o + 10] & 2) ? 1 : 0,
+    });
+    o += 11;
+  }
+  return rows;
+}
+
+function paint(rows) {
+  const vs = [];
+  rows.forEach((r, i) => {
+    const id = 11 + i;
+    const c = cells[id];
+    if (!r) {
+      c.tr.className = "miss";
+      ["pos","spd","load","cur","mv","tq","v","temp"].forEach(k => { c[k].textContent = "—"; });
+      return;
+    }
+    c.tr.className = r.tq ? "hot" : (Math.abs(r.load) >= 400 || Math.abs(r.cur) >= 80 ? "effort" : (r.spd || r.mv ? "move" : ""));
+    c.pos.textContent = r.pos;
+    c.spd.textContent = r.spd;
+    c.load.textContent = r.load;
+    c.cur.textContent = r.cur;
+    c.mv.textContent = r.mv;
+    c.tq.textContent = r.tq;
+    c.v.textContent = (r.v10 / 10).toFixed(1);
+    c.temp.textContent = r.temp;
+    vs.push(r.v10);
+  });
+  nFrame++;
+  const now = Date.now();
+  if (now - tHz >= 1000) {
+    $("hz").textContent = (nFrame * 1000 / (now - tHz)).toFixed(0) + " Hz";
+    nFrame = 0; tHz = now;
+  }
+  if (!vs.length) {
+    $("pack").textContent = "pack off";
+    $("pack").className = "pill bad";
+    $("say").textContent = "servos miss — pack / HAT switch";
+    return;
+  }
+  vs.sort((a, b) => a - b);
+  const v = vs[vs.length >> 1] / 10;
+  $("pack").textContent = "pack " + v.toFixed(1) + " V";
+  $("pack").className = "pill " + (v >= 10.5 ? "on" : (v > 6 ? "warn" : "bad"));
+  $("say").textContent = vs.length + "/7  ·  VIN " + v.toFixed(1) + " V  ·  3S rest is ~11.1–12.6 V";
+}
+
+function onChunk(u8) {
+  buf += new TextDecoder().decode(u8);
+  let n;
+  while ((n = buf.indexOf("\n")) >= 0) {
+    const line = buf.slice(0, n).replace(/\r/g, "").trim();
+    buf = buf.slice(n + 1);
+    const rows = parseG1(line);
+    if (rows) paint(rows);
+  }
+}
+
+function setLink(on, name) {
+  $("link").textContent = on ? ("ble " + (name || "on")) : "ble off";
+  $("link").className = "pill " + (on ? "on" : "");
+  $("btn").textContent = on ? "drop" : "connect";
+}
+
+async function connect() {
+  if (!navigator.bluetooth) {
+    $("say").textContent = "no Web Bluetooth — use Chrome / Chromium on localhost";
+    return;
+  }
+  const dev = await navigator.bluetooth.requestDevice({
+    filters: [{ namePrefix: "gibbon" }, { services: [NUS] }],
+    optionalServices: [NUS],
+  });
+  device = dev;
+  dev.addEventListener("gattserverdisconnected", () => {
+    setLink(false);
+    $("say").textContent = "disconnected";
+  });
+  const server = await dev.gatt.connect();
+  const svc = await server.getPrimaryService(NUS);
+  const tx = await svc.getCharacteristic(NUS_TX);
+  await tx.startNotifications();
+  tx.addEventListener("characteristicvaluechanged", ev => {
+    const v = ev.target.value;
+    onChunk(new Uint8Array(v.buffer, v.byteOffset, v.byteLength));
+  });
+  setLink(true, dev.name || "gibbon");
+  $("say").textContent = "subscribed — waiting for g1 (no commands sent)";
+}
+
+async function drop() {
+  try { if (device && device.gatt.connected) device.gatt.disconnect(); } catch {}
+  device = null;
+  setLink(false);
+}
+
+$("btn").onclick = () => {
+  if (device && device.gatt && device.gatt.connected) drop();
+  else connect().catch(e => { $("say").textContent = String(e.message || e); });
+};
+</script>
+</body>
+</html>

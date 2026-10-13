@@ -1,0 +1,86 @@
+{% extends "console/base.html" %}
+{% load static %}
+{% block main %}
+{% if joint.slug == "hand" %}
+<div id="handAct" class="act">
+  <button type="button" id="btnOpen">open</button>
+  <button type="button" id="btnClose">close</button>
+  <label class="grow">grip
+    <input id="grip" type="range" min="689" max="2075" value="1400">
+  </label>
+  <b id="gripVal">—</b>
+  <button type="button" id="btnFree">free</button>
+  <label>speed <input id="mvSpeed" type="number" value="300" min="1" max="3073"></label>
+  <label>trip Δload <input id="gdload" type="number" value="400" min="0" max="4000" title="cut if |load| rises this much above cruise. 0 = off"></label>
+</div>
+{% else %}
+<form id="actForm" class="act">
+  <label>do
+    <select id="op"></select>
+  </label>
+  <label id="valWrap" hidden>value
+    <input id="val" type="number" step="1">
+  </label>
+  <button type="submit">send</button>
+  <button type="button" id="btnFree">free</button>
+  <label>speed <input id="mvSpeed" type="number" value="300" min="1" max="3073"></label>
+  <label>acc <input id="mvAcc" type="number" value="20" min="0" max="150"></label>
+</form>
+{% endif %}
+<p id="actHint" class="hint"></p>
+<div id="sense" class="sense"></div>
+<p id="guardEl" class="guard">{% if joint.slug == "hand" %}guard idle — trip Δload is settable. 0 = only hard |load| / mA{% else %}guard idle — move is cut if load jumps +100 over cruise, or |mA| ≥ 80{% endif %}</p>
+<div id="charts" class="chartGrid"></div>
+<details class="more" open>
+  <summary>what the numbers are</summary>
+  <p class="legend">Four <b>sensors</b> live in the servo: encoder (<code>pos</code>), VIN (<code>V</code>), temperature (<code>°C</code>), winding current (<code>mA</code>). Speed and load are computed inside the motor — not extra chips. Charts are those four plus load and speed. No force cell, no IMU, nothing extra on the HAT.</p>
+  <table class="ov">
+    <thead><tr><th>column</th><th>kind</th><th></th></tr></thead>
+    <tbody>
+      <tr><td>id</td><td>label</td><td>bus ID, not a sensor</td></tr>
+      <tr><td>pos</td><td>sensor</td><td>12-bit magnetic encoder on the horn (0–4095, wraps)</td></tr>
+      <tr><td>un</td><td>derived (ESP)</td><td>pos unwrapped across turns — we compute this</td></tr>
+      <tr><td>spd</td><td>derived (motor)</td><td>speed from that encoder, inside the servo</td></tr>
+      <tr><td>load</td><td>derived (motor)</td><td>PID effort / how hard it is pushing. not a torque cell. 0 if tq off</td></tr>
+      <tr><td>mA</td><td>sensor (estimate)</td><td>winding current inside the servo. light hits often stay 0</td></tr>
+      <tr><td>V</td><td>sensor</td><td>pack voltage at this servo</td></tr>
+      <tr><td>°C</td><td>sensor</td><td>case / driver temperature</td></tr>
+      <tr><td>mv</td><td>flag</td><td>moving — motor thinks it is tracking a goal</td></tr>
+      <tr><td>tq</td><td>flag</td><td>torque enable (on/off), not a measurement</td></tr>
+    </tbody>
+  </table>
+</details>
+<details class="more">
+  <summary>raw + walls</summary>
+  <div id="armWrap">
+  <table>
+    <thead>
+      <tr>
+        <th>id</th><th>pos</th><th>un</th><th>spd</th><th>load</th>
+        <th>mA</th><th>V</th><th>°C</th><th>mv</th><th>tq</th>
+      </tr>
+    </thead>
+    <tbody id="armBody"></tbody>
+  </table>
+  </div>
+  <pre id="rawGets">get —</pre>
+  <div class="row" id="markRow">
+    <span class="mut">mark live pos</span>
+    <button type="button" data-k="home">home</button>
+    <button type="button" data-k="amin">min</button>
+    <button type="button" data-k="amax">max</button>
+    <label>speed <input id="testSpeed" type="number" value="300" min="1" max="3073"></label>
+    <label>acc <input id="testAcc" type="number" value="20" min="0" max="150"></label>
+    <button type="button" id="btnTest" disabled>test band</button>
+    {% if joint.slug == "hand" %}
+    <button type="button" id="btnFactory">factory 689–2075</button>
+    {% endif %}
+    <span id="markState" class="mut">—</span>
+  </div>
+  <p id="markMsg" class="hint next"></p>
+</details>
+{% endblock %}
+{% block js %}
+<script>window.JOINT_SLUG = "{{ joint.slug }}";</script>
+<script src="{% static 'console/js/joint.js' %}"></script>
+{% endblock %}

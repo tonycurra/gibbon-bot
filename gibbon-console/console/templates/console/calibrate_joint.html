@@ -1,0 +1,66 @@
+{% extends "console/base.html" %}
+{% load static %}
+{% block main %}
+<p class="nowline">
+  <b id="degNow">—</b>
+  {% if not joint.paired %}
+  <span>pos <i id="posLive">—</i></span>
+  <span>un <i id="unLive">—</i></span>
+  <span>load <i id="loadLive">—</i></span>
+  <span>mA <i id="curLive">—</i></span>
+  {% else %}
+  <span id="pairNow">pair <i id="pairState">unset</i></span>
+  <b id="fightEl">FIGHT</b>
+  {% endif %}
+</p>
+{% if joint.paired %}
+<div class="calLive" id="pairLive">
+  <article class="calMotor wizMeter" id="meter-12">
+    <h2>12 <i id="pos-12">—</i></h2>
+    <div class="calNums">
+      <span><b>now</b><i id="deg-12">—</i></span>
+      <span><b>load</b><i id="load-12">—</i></span>
+    </div>
+  </article>
+  <article class="calMotor wizMeter" id="meter-13">
+    <h2>13 <i id="pos-13">—</i></h2>
+    <div class="calNums">
+      <span><b>now</b><i id="deg-13">—</i></span>
+      <span><b>load</b><i id="load-13">—</i></span>
+    </div>
+  </article>
+</div>
+{% endif %}
+<p id="calMsg" class="hint next" role="status" aria-live="polite"></p>
+<div class="lims" id="calSet">
+  {% if joint.paired %}
+  <button type="button" id="btnPairMirror" aria-pressed="false">mirror −</button>
+  <button type="button" id="btnPairSame" aria-pressed="false">same +</button>
+  {% endif %}
+  <button type="button" class="set home" aria-label="{% if joint.slug == "hand" %}closed = 0°{% else %}set this pose as 0°{% endif %}">{% if joint.slug == "hand" %}closed{% else %}home{% endif %}</button>
+  <button type="button" class="set min" aria-label="set this pose as min">{% if joint.slug == "hand" %}closed{% else %}min{% endif %}</button>
+  <button type="button" class="set max" aria-label="set this pose as max">{% if joint.slug == "hand" %}open{% else %}max{% endif %}</button>
+  <button type="button" class="go test" id="btnTest">test</button>
+  <span class="goRow">
+    <input id="inGo" type="number" step="0.5" aria-label="degrees">
+    <button type="button" id="btnGo">go</button>
+  </span>
+  {% if next_joint %}
+  <a class="nextJ" href="/calibration/{{ next_joint.slug }}/">{{ next_joint.name }}</a>
+  {% endif %}
+</div>
+{% if joint.paired %}
+<details class="more">
+  <summary>rec / play</summary>
+  <p class="row" id="pathBar">
+    <button type="button" id="btnRec">rec</button>
+    <button type="button" id="btnPlay" disabled>play</button>
+    <b id="recN" class="mut">0 pts</b>
+  </p>
+</details>
+{% endif %}
+{% endblock %}
+{% block js %}
+<script>window.JOINT_SLUG = "{{ joint.slug }}";</script>
+<script src="{% static 'console/js/calibrate.js' %}"></script>
+{% endblock %}

@@ -1,0 +1,22 @@
+{% extends "console/base.html" %}
+{% load static %}
+{% block main %}
+<p class="hint">{{ trial.title|default:"trial" }} · {{ trial.started|date:"Y-m-d H:i" }}{% if trial.ended %} – {{ trial.ended|date:"H:i" }}{% else %} · <span class="ok">open</span>{% endif %} · {{ trial.via|default:"—" }} · {% if trial.pack_v %}{{ trial.pack_v }}V{% else %}pack —{% endif %} · {{ n_cmd }} clicks · {{ n_samp }} samples · {{ n_note }} marks</p>
+{% if trial.note %}<pre class="note">{{ trial.note }}</pre>{% endif %}
+<div class="row">
+  <label>joint <select id="gJoint"></select></label>
+</div>
+<div id="gVars" class="row"></div>
+<div id="charts"></div>
+<ul class="cmds">
+  {% for e in events %}
+  <li class="{{ e.kind }}"><span class="mut">{{ e.t_ms }}</span> {{ e.text }}</li>
+  {% empty %}
+  <li class="mut">no clicks or marks yet — charts still load from samples</li>
+  {% endfor %}
+</ul>
+{% endblock %}
+{% block js %}
+<script>window.TRIAL_ID = {{ trial.pk }};</script>
+<script src="{% static 'console/js/graphs.js' %}"></script>
+{% endblock %}
